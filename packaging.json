@@ -1,0 +1,24 @@
+{
+  "ProductName": "ReviewG33k",
+  "CompanyName": "Dean Edis (DeanTheCoder)",
+  "PublisherUrl": "https://github.com/deanthecoder",
+  "BundleIdentifier": "com.deanthecoder.reviewg33k",
+  "Executable": "ReviewG33k",
+  "Project": "ReviewG33k.csproj",
+  "Version": "1.0",
+  "Win": {
+    "InnoScript": "Installer/templates/inno.iss",
+    "IconIco": "Assets/app.ico",
+    "GUID": "{7D28F261-44DC-4FD6-B184-126A12CCC09F}",
+    "RuntimeIdentifier": "win-x64",
+    "InstallOpenAL": false
+  },
+  "Mac": {
+    "RuntimeIdentifiers": [
+      "osx-arm64",
+      "osx-x64"
+    ],
+    "IconIcns": "",
+    "InfoPlist": "Installer/templates/Info.plist"
+  }
+}
