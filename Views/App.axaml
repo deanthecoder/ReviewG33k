@@ -1,0 +1,70 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ReviewG33k.Views.App"
+             RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <SolidColorBrush x:Key="AppGradientStartBrush">#FF0D1521</SolidColorBrush>
+    <SolidColorBrush x:Key="AppGradientEndBrush">#FF141B2A</SolidColorBrush>
+    <LinearGradientBrush x:Key="AppGradientBrush" StartPoint="0,0" EndPoint="1,1">
+      <GradientStop Offset="0" Color="#FF0D1521" />
+      <GradientStop Offset="1" Color="#FF141B2A" />
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="ZonePrimaryBrush">#CC1B2636</SolidColorBrush>
+    <SolidColorBrush x:Key="ZoneSecondaryBrush">#CC1A2432</SolidColorBrush>
+    <SolidColorBrush x:Key="ZoneTertiaryBrush">#CC19202D</SolidColorBrush>
+    <SolidColorBrush x:Key="ZoneBorderBrush">#FF364A64</SolidColorBrush>
+    <SolidColorBrush x:Key="AccentBrush">#FF4F8FD8</SolidColorBrush>
+    <SolidColorBrush x:Key="AccentHoverBrush">#FF5A9BE5</SolidColorBrush>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{DynamicResource AppGradientBrush}" />
+    </Style>
+
+    <Style Selector="Border.zone">
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="14" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ZoneBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style Selector="Button">
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="Background" Value="#FF2A3A4F" />
+      <Setter Property="BorderBrush" Value="#FF4B627E" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style Selector="Button:pointerover">
+      <Setter Property="Background" Value="#FF314661" />
+    </Style>
+
+    <Style Selector="Button.accent">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Button.accent:pointerover">
+      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
+    </Style>
+
+    <Style Selector="TextBox">
+      <Setter Property="Background" Value="#FF111A28" />
+      <Setter Property="BorderBrush" Value="#FF405774" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="17" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </Application.Styles>
+</Application>
