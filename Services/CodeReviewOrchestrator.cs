@@ -51,7 +51,7 @@ public sealed class CodeReviewOrchestrator
         return new PrepareReviewResult(localRepository, reviewFolder, solutionPath);
     }
 
-    public async Task ClearCodeReviewFolderAsync(string repositoryRoot, Action<string> log)
+    public async Task ClearCodeReviewFolderAsync(string repositoryRoot, Action<string> log, bool logWhenMissing = true)
     {
         if (string.IsNullOrWhiteSpace(repositoryRoot) || !Directory.Exists(repositoryRoot))
             throw new DirectoryNotFoundException("Repository root folder does not exist.");
@@ -59,7 +59,8 @@ public sealed class CodeReviewOrchestrator
         var codeReviewRoot = Path.Combine(repositoryRoot, CodeReviewFolderName);
         if (!Directory.Exists(codeReviewRoot))
         {
-            log("CodeReview folder does not exist, nothing to clear.");
+            if (logWhenMissing)
+                log("CodeReview folder does not exist, nothing to clear.");
             return;
         }
 

@@ -297,14 +297,32 @@ public partial class MainWindow : Window
     private void RepositoryRootTextBox_OnLostFocus(object sender, RoutedEventArgs e) =>
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
 
-    private async void MainWindow_OnOpened(object sender, EventArgs e) =>
+    private async void MainWindow_OnOpened(object sender, EventArgs e)
+    {
+        await RunStartupCodeReviewCleanupAsync();
         await TryPrefillPullRequestUrlFromClipboardAsync();
+    }
 
     private async void MainWindow_OnActivated(object sender, EventArgs e) =>
         await TryPrefillPullRequestUrlFromClipboardAsync();
 
     private void MainWindow_OnClosing(object sender, WindowClosingEventArgs e) =>
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
+
+    private async Task RunStartupCodeReviewCleanupAsync()
+    {
+        var repositoryRoot = RepositoryRootTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(repositoryRoot) || !Directory.Exists(repositoryRoot))
+            return;
+
+        await ExecuteBusyActionAsync(
+            "Clearing previous CodeReview folders...",
+            async () =>
+            {
+                await m_orchestrator.ClearCodeReviewFolderAsync(repositoryRoot, AppendLog, logWhenMissing: false);
+                SetStatus("Ready.");
+            });
+    }
 
     private async Task TryPrefillPullRequestUrlFromClipboardAsync()
     {
