@@ -28,6 +28,8 @@ public partial class MainWindow : Window
         PullRequestUrlTextBox.AddHandler(DragDrop.DragOverEvent, PullRequestUrlTextBox_OnDragOver);
         PullRequestUrlTextBox.AddHandler(DragDrop.DropEvent, PullRequestUrlTextBox_OnDrop);
         RepositoryRootTextBox.LostFocus += RepositoryRootTextBox_OnLostFocus;
+        Opened += MainWindow_OnOpened;
+        Activated += MainWindow_OnActivated;
         Closing += MainWindow_OnClosing;
 
         m_userSettings = m_userSettingsStore.Load();
@@ -240,8 +242,40 @@ public partial class MainWindow : Window
     private void RepositoryRootTextBox_OnLostFocus(object sender, RoutedEventArgs e) =>
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
 
+    private async void MainWindow_OnOpened(object sender, EventArgs e) =>
+        await TryPrefillPullRequestUrlFromClipboardAsync();
+
+    private async void MainWindow_OnActivated(object sender, EventArgs e) =>
+        await TryPrefillPullRequestUrlFromClipboardAsync();
+
     private void MainWindow_OnClosing(object sender, WindowClosingEventArgs e) =>
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
+
+    private async Task TryPrefillPullRequestUrlFromClipboardAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(PullRequestUrlTextBox.Text))
+            return;
+
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.Clipboard == null)
+            return;
+
+        string clipboardText;
+        try
+        {
+            clipboardText = await topLevel.Clipboard.GetTextAsync();
+        }
+        catch
+        {
+            return;
+        }
+
+        if (!BitbucketPrUrlParser.TryParse(clipboardText, out var pullRequest, out _))
+            return;
+
+        PullRequestUrlTextBox.Text = pullRequest.SourceUrl;
+        SetStatus("Pull request URL loaded from clipboard.");
+    }
 
     private void PersistRepositoryRootPath(string repositoryRootPath)
     {
