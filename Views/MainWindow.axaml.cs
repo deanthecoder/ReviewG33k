@@ -15,6 +15,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -23,6 +24,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using DTC.Core.UI;
 using ReviewG33k.Models;
 using ReviewG33k.Services;
@@ -32,6 +34,7 @@ namespace ReviewG33k.Views;
 
 public partial class MainWindow : Window
 {
+    private static readonly Regex LogLocationRegex = new(@"\[(?<path>.+?\.[^:\]]+):(?<line>\d+)\]", RegexOptions.Compiled);
     private static readonly IBrush TimestampedLogBrush = Brushes.Gainsboro;
     private static readonly IBrush DetailLogBrush = Brushes.Gray;
     private static readonly IBrush ErrorLogBrush = Brushes.IndianRed;
@@ -45,9 +48,13 @@ public partial class MainWindow : Window
     private readonly Settings m_settings = Settings.Instance;
     private readonly ObservableCollection<LogLineEntry> m_logLines = [];
     private CancellationTokenSource m_previewUpdateCancellation;
+    private string m_latestReviewWorktreePath;
+    private string m_vsCodeExecutablePath;
     private bool m_busy;
     private bool m_isGitAvailable = true;
     private bool m_gitAvailabilityChecked;
+    private bool m_vsCodeDetectionAttempted;
+    private bool m_vsCodeUsesCommandShell;
     private bool m_normalizingPullRequestUrl;
 
     public MainWindow()
@@ -61,6 +68,7 @@ public partial class MainWindow : Window
         RepositoryRootTextBox.TextChanged += RepositoryRootTextBox_OnTextChanged;
         AutoOpenSolutionCheckBox.IsCheckedChanged += AutoOpenSolutionCheckBox_OnIsCheckedChanged;
         RepositoryRootTextBox.LostFocus += RepositoryRootTextBox_OnLostFocus;
+        LogListBox.AddHandler(InputElement.PointerPressedEvent, LogListBox_OnPointerPressed, RoutingStrategies.Bubble);
         Opened += MainWindow_OnOpened;
         Activated += MainWindow_OnActivated;
         Closing += MainWindow_OnClosing;
@@ -151,6 +159,7 @@ public partial class MainWindow : Window
                 AppendLog($"PR modified files: {(changedPaths.Count > 0 ? changedPaths.Count.ToString() : "N/A")}");
 
                 var result = await m_orchestrator.PrepareReviewAsync(repositoryRoot, pullRequest, changedPaths, AppendLog);
+                m_latestReviewWorktreePath = result.ReviewWorktreePath;
 
                 AppendLog($"Review worktree ready: {result.ReviewWorktreePath}");
 
@@ -499,6 +508,215 @@ public partial class MainWindow : Window
         {
             AppendLog($"WARNING: Could not copy log line. {exception.Message}");
         }
+    }
+
+    private void LogListBox_OnPointerPressed(object sender, PointerPressedEventArgs e)
+    {
+        if (e.ClickCount < 2 || !TryGetLogEntryFromSource(e.Source, out var entry))
+            return;
+
+        if (IsClickInsideCopyButton(e.Source))
+            return;
+
+        if (!TryParseLogLocation(entry.Text, out var filePath, out var lineNumber))
+            return;
+
+        if (!TryResolveLogPath(filePath, out var resolvedPath))
+        {
+            SetStatus($"Could not resolve file path: {filePath}");
+            return;
+        }
+
+        if (!TryLaunchVsCodeAtLine(resolvedPath, lineNumber, out var launchError))
+        {
+            SetStatus(launchError);
+            return;
+        }
+
+        SetStatus($"Opened in VS Code: {Path.GetFileName(resolvedPath)}:{lineNumber}");
+        e.Handled = true;
+    }
+
+    private static bool IsClickInsideCopyButton(object source)
+    {
+        if (source is not InputElement sourceElement)
+            return false;
+
+        var button = sourceElement.FindAncestorOfType<Button>() ?? sourceElement as Button;
+        return button?.Classes.Contains("logCopyButton") == true;
+    }
+
+    private static bool TryGetLogEntryFromSource(object source, out LogLineEntry entry)
+    {
+        entry = null;
+
+        if (source is not InputElement sourceElement)
+            return false;
+
+        if (sourceElement.DataContext is LogLineEntry directEntry)
+        {
+            entry = directEntry;
+            return true;
+        }
+
+        var listBoxItem = sourceElement.FindAncestorOfType<ListBoxItem>();
+        if (listBoxItem?.DataContext is not LogLineEntry ancestorEntry)
+            return false;
+
+        entry = ancestorEntry;
+        return true;
+    }
+
+    private static bool TryParseLogLocation(string text, out string filePath, out int lineNumber)
+    {
+        filePath = null;
+        lineNumber = 0;
+
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var match = LogLocationRegex.Match(text);
+        if (!match.Success)
+            return false;
+
+        var pathValue = match.Groups["path"].Value.Trim();
+        if (!int.TryParse(match.Groups["line"].Value, out lineNumber) || lineNumber < 1)
+            return false;
+
+        filePath = pathValue;
+        return true;
+    }
+
+    private bool TryResolveLogPath(string pathFromLog, out string resolvedPath)
+    {
+        resolvedPath = null;
+
+        if (string.IsNullOrWhiteSpace(pathFromLog))
+            return false;
+
+        var normalizedRelativePath = pathFromLog
+            .Replace('/', Path.DirectorySeparatorChar)
+            .Replace('\\', Path.DirectorySeparatorChar);
+
+        if (Path.IsPathRooted(normalizedRelativePath))
+        {
+            if (!File.Exists(normalizedRelativePath))
+                return false;
+
+            resolvedPath = normalizedRelativePath;
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(m_latestReviewWorktreePath))
+            return false;
+
+        var candidatePath = Path.Combine(m_latestReviewWorktreePath, normalizedRelativePath);
+        if (!File.Exists(candidatePath))
+            return false;
+
+        resolvedPath = candidatePath;
+        return true;
+    }
+
+    private bool TryLaunchVsCodeAtLine(string filePath, int lineNumber, out string error)
+    {
+        error = null;
+        if (!TryDetectVsCode(out var vsCodePath, out var useCommandShell))
+        {
+            error = "VS Code was not detected. Install VS Code and add 'code' to PATH.";
+            return false;
+        }
+
+        var target = $"{filePath}:{lineNumber}";
+        ProcessStartInfo startInfo;
+        if (useCommandShell)
+        {
+            startInfo = new ProcessStartInfo("cmd.exe")
+            {
+                Arguments = $"/c \"\"{vsCodePath}\" -g \"{target}\"\"",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+        }
+        else
+        {
+            startInfo = new ProcessStartInfo(vsCodePath)
+            {
+                Arguments = $"-g \"{target}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+        }
+
+        try
+        {
+            var process = Process.Start(startInfo);
+            if (process != null)
+                return true;
+        }
+        catch
+        {
+            // fall through to error below
+        }
+
+        error = "VS Code was detected but could not be launched.";
+        return false;
+    }
+
+    private bool TryDetectVsCode(out string vsCodePath, out bool useCommandShell)
+    {
+        if (m_vsCodeDetectionAttempted)
+        {
+            vsCodePath = m_vsCodeExecutablePath;
+            useCommandShell = m_vsCodeUsesCommandShell;
+            return !string.IsNullOrWhiteSpace(vsCodePath);
+        }
+
+        m_vsCodeDetectionAttempted = true;
+        foreach (var candidatePath in GetVsCodeCandidates())
+        {
+            if (!File.Exists(candidatePath))
+                continue;
+
+            m_vsCodeExecutablePath = candidatePath;
+            m_vsCodeUsesCommandShell = candidatePath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) ||
+                                       candidatePath.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
+            break;
+        }
+
+        vsCodePath = m_vsCodeExecutablePath;
+        useCommandShell = m_vsCodeUsesCommandShell;
+        return !string.IsNullOrWhiteSpace(vsCodePath);
+    }
+
+    private static IEnumerable<string> GetVsCodeCandidates()
+    {
+        var pathValue = Environment.GetEnvironmentVariable("PATH");
+        if (!string.IsNullOrWhiteSpace(pathValue))
+        {
+            foreach (var directory in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var trimmedDirectory = directory.Trim().Trim('"');
+                if (string.IsNullOrWhiteSpace(trimmedDirectory))
+                    continue;
+
+                yield return Path.Combine(trimmedDirectory, "code.exe");
+                yield return Path.Combine(trimmedDirectory, "code.cmd");
+                yield return Path.Combine(trimmedDirectory, "code.bat");
+            }
+        }
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrWhiteSpace(localAppData))
+            yield return Path.Combine(localAppData, "Programs", "Microsoft VS Code", "Code.exe");
+
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        if (!string.IsNullOrWhiteSpace(programFiles))
+            yield return Path.Combine(programFiles, "Microsoft VS Code", "Code.exe");
+
+        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        if (!string.IsNullOrWhiteSpace(programFilesX86))
+            yield return Path.Combine(programFilesX86, "Microsoft VS Code", "Code.exe");
     }
     
     private sealed class LogLineEntry
