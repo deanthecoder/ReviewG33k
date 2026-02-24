@@ -8,7 +8,6 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-using System;
 using System.Diagnostics;
 using System.Text;
 using System.Threading.Tasks;
@@ -47,37 +46,5 @@ public sealed class GitCommandRunner
         errorBuilder.Append(await errorTask);
 
         return new GitCommandResult(process.ExitCode, outputBuilder.ToString(), errorBuilder.ToString(), string.Join(" ", arguments));
-    }
-}
-
-public sealed class GitCommandResult
-{
-    public GitCommandResult(int exitCode, string standardOutput, string standardError, string commandText)
-    {
-        ExitCode = exitCode;
-        StandardOutput = standardOutput ?? string.Empty;
-        StandardError = standardError ?? string.Empty;
-        CommandText = commandText ?? string.Empty;
-    }
-
-    public int ExitCode { get; }
-
-    public string StandardOutput { get; }
-
-    public string StandardError { get; }
-
-    public string CommandText { get; }
-
-    public bool IsSuccess => ExitCode == 0;
-
-    public string GetCombinedOutput()
-    {
-        if (string.IsNullOrWhiteSpace(StandardError))
-            return StandardOutput.Trim();
-
-        if (string.IsNullOrWhiteSpace(StandardOutput))
-            return StandardError.Trim();
-
-        return $"{StandardOutput.Trim()}{Environment.NewLine}{StandardError.Trim()}";
     }
 }

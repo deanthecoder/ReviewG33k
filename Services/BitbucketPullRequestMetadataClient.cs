@@ -66,7 +66,7 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
     public async Task<IReadOnlyList<string>> TryGetChangedPathsAsync(BitbucketPullRequestReference pullRequest, CancellationToken cancellationToken = default)
     {
         if (pullRequest == null)
-            return Array.Empty<string>();
+            return [];
 
         if (m_changedPathsCache.TryGetValue(pullRequest.SourceUrl, out var cachedPaths))
             return cachedPaths;
@@ -103,7 +103,7 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
 
     private async Task<string> TryGetResponseTextAsync(BitbucketPullRequestReference pullRequest, string apiUrl, CancellationToken cancellationToken)
     {
-        HttpResponseMessage response = null;
+        HttpResponseMessage response;
         try
         {
             response = await m_httpClient.GetAsync(apiUrl, cancellationToken);
@@ -397,7 +397,7 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
         if (string.IsNullOrWhiteSpace(output))
             return false;
 
-        foreach (var rawLine in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        foreach (var rawLine in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
         {
             var separatorIndex = rawLine.IndexOf('=');
             if (separatorIndex <= 0)

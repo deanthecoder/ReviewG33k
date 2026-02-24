@@ -35,12 +35,15 @@ public partial class MainWindow : Window
     private static readonly IBrush TimestampedLogBrush = Brushes.Gainsboro;
     private static readonly IBrush DetailLogBrush = Brushes.Gray;
     private static readonly IBrush ErrorLogBrush = Brushes.IndianRed;
+    private static readonly IBrush WarningLogBrush = Brushes.Orange;
+    private static readonly IBrush PassLogBrush = Brushes.LimeGreen;
 
     private readonly GitCommandRunner m_gitCommandRunner = new();
     private readonly CodeReviewOrchestrator m_orchestrator;
+    private readonly CodeSmellReportAnalyzer m_codeSmellReportAnalyzer;
     private readonly BitbucketPullRequestMetadataClient m_pullRequestMetadataClient = new();
     private readonly Settings m_settings = Settings.Instance;
-    private readonly ObservableCollection<LogLineEntry> m_logLines = new();
+    private readonly ObservableCollection<LogLineEntry> m_logLines = [];
     private CancellationTokenSource m_previewUpdateCancellation;
     private bool m_busy;
     private bool m_isGitAvailable = true;
@@ -50,6 +53,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         m_orchestrator = new CodeReviewOrchestrator(m_gitCommandRunner);
+        m_codeSmellReportAnalyzer = new CodeSmellReportAnalyzer(m_gitCommandRunner);
         InitializeComponent();
         PullRequestUrlTextBox.AddHandler(DragDrop.DragOverEvent, PullRequestUrlTextBox_OnDragOver);
         PullRequestUrlTextBox.AddHandler(DragDrop.DropEvent, PullRequestUrlTextBox_OnDrop);
@@ -165,8 +169,45 @@ public partial class MainWindow : Window
                     AppendLog("No .sln file found in review checkout.");
                 }
 
+                await RunCodeSmellScanAsync(result.ReviewWorktreePath, metadata?.TargetBranch);
+
                 SetStatus("Review checkout is ready.");
             });
+    }
+
+    private async Task RunCodeSmellScanAsync(string reviewWorktreePath, string targetBranch)
+    {
+        AppendLog("Code review scan starting...");
+        var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(reviewWorktreePath, targetBranch);
+
+        foreach (var info in report.Info)
+            AppendLog(info);
+
+        LogCodeSmellCheckStatuses(report);
+
+        if (report.Findings.Count == 0)
+        {
+            AppendLog("Code review scan: no findings.");
+            return;
+        }
+
+        AppendLog($"Code review scan: {report.Findings.Count} finding(s).");
+        foreach (var finding in report.Findings)
+        {
+            var severity = finding.Severity.ToString().ToUpperInvariant();
+            var location = finding.LineNumber > 0 ? $"{finding.FilePath}:{finding.LineNumber}" : finding.FilePath;
+            AppendLog($"{severity}: [{location}] {finding.Message}");
+        }
+    }
+
+    private void LogCodeSmellCheckStatuses(CodeSmellReport report)
+    {
+        foreach (var check in m_codeSmellReportAnalyzer.Checks)
+        {
+            var count = report.Findings.Count(finding => finding.RuleId.Equals(check.RuleId, StringComparison.OrdinalIgnoreCase));
+            if (count == 0)
+                AppendLog($"CHECK PASS: {check.DisplayName}");
+        }
     }
 
     private async Task ExecuteBusyActionAsync(string statusText, Func<Task> action)
@@ -346,6 +387,7 @@ public partial class MainWindow : Window
     private void SetBusyState(bool isBusy)
     {
         m_busy = isBusy;
+        BusyIndicatorSpinner.IsVisible = isBusy;
         UpdateActionButtonStates();
     }
 
@@ -412,6 +454,10 @@ public partial class MainWindow : Window
     {
         if (ContainsErrorMarker(line))
             return ErrorLogBrush;
+        if (ContainsPassMarker(line))
+            return PassLogBrush;
+        if (ContainsWarningMarker(line))
+            return WarningLogBrush;
 
         return HasTimestampPrefix(line) ? TimestampedLogBrush : DetailLogBrush;
     }
@@ -420,6 +466,13 @@ public partial class MainWindow : Window
         line?.Contains("ERROR", StringComparison.OrdinalIgnoreCase) == true ||
         line?.Contains("fatal", StringComparison.OrdinalIgnoreCase) == true;
 
+    private static bool ContainsWarningMarker(string line) =>
+        line?.Contains("CHECK WARNING:", StringComparison.OrdinalIgnoreCase) == true ||
+        line?.Contains("WARNING:", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool ContainsPassMarker(string line) =>
+        line?.Contains("CHECK PASS:", StringComparison.OrdinalIgnoreCase) == true;
+
     private static bool HasTimestampPrefix(string line) =>
         !string.IsNullOrEmpty(line) &&
         line.Length >= 10 &&
@@ -427,6 +480,26 @@ public partial class MainWindow : Window
         line[3] == ':' &&
         line[6] == ':' &&
         line[9] == ']';
+
+    private async void CopyLogLineButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: LogLineEntry entry })
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard == null)
+            return;
+
+        try
+        {
+            await clipboard.SetTextAsync(entry.Text ?? string.Empty);
+            SetStatus("Log line copied to clipboard.");
+        }
+        catch (Exception exception)
+        {
+            AppendLog($"WARNING: Could not copy log line. {exception.Message}");
+        }
+    }
     
     private sealed class LogLineEntry
     {

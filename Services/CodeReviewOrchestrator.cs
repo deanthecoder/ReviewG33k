@@ -272,7 +272,7 @@ public sealed class CodeReviewOrchestrator
 
     private static IEnumerable<string> ParseWorktreePaths(string output)
     {
-        var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var lines = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         foreach (var line in lines)
         {
             if (line.StartsWith("worktree ", StringComparison.OrdinalIgnoreCase))
@@ -449,20 +449,4 @@ public sealed class CodeReviewOrchestrator
 
         throw new InvalidOperationException($"{message}{Environment.NewLine}git {result.CommandText}{Environment.NewLine}{result.GetCombinedOutput()}");
     }
-}
-
-public sealed class PrepareReviewResult
-{
-    public PrepareReviewResult(string localRepositoryPath, string reviewWorktreePath, string solutionPath)
-    {
-        LocalRepositoryPath = localRepositoryPath;
-        ReviewWorktreePath = reviewWorktreePath;
-        SolutionPath = solutionPath;
-    }
-
-    public string LocalRepositoryPath { get; }
-
-    public string ReviewWorktreePath { get; }
-
-    public string SolutionPath { get; }
 }
