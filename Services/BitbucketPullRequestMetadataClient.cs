@@ -12,7 +12,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -28,6 +28,7 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
 {
     private readonly HttpClient m_httpClient;
     private readonly ConcurrentDictionary<string, BitbucketPullRequestMetadata> m_metadataCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, string[]> m_changedPathsCache = new(StringComparer.OrdinalIgnoreCase);
 
     public BitbucketPullRequestMetadataClient()
     {
@@ -50,9 +51,59 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
         if (m_metadataCache.TryGetValue(pullRequest.SourceUrl, out var cachedInfo))
             return cachedInfo;
 
-        var apiUrl = BuildApiUrl(pullRequest);
+        var apiUrl = BuildMetadataApiUrl(pullRequest);
+        var json = await TryGetResponseTextAsync(pullRequest, apiUrl, cancellationToken);
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
 
-        HttpResponseMessage response;
+        if (!TryParseMetadata(json, out var metadata))
+            return null;
+
+        m_metadataCache[pullRequest.SourceUrl] = metadata;
+        return metadata;
+    }
+
+    public async Task<IReadOnlyList<string>> TryGetChangedPathsAsync(BitbucketPullRequestReference pullRequest, CancellationToken cancellationToken = default)
+    {
+        if (pullRequest == null)
+            return Array.Empty<string>();
+
+        if (m_changedPathsCache.TryGetValue(pullRequest.SourceUrl, out var cachedPaths))
+            return cachedPaths;
+
+        var paths = new List<string>();
+        var start = 0;
+
+        while (true)
+        {
+            var apiUrl = BuildChangesApiUrl(pullRequest, start, 500);
+            var json = await TryGetResponseTextAsync(pullRequest, apiUrl, cancellationToken);
+            if (string.IsNullOrWhiteSpace(json))
+                break;
+
+            if (!TryParseChangesPage(json, paths, out var isLastPage, out var nextPageStart))
+                break;
+
+            if (isLastPage || !nextPageStart.HasValue || nextPageStart.Value <= start)
+                break;
+
+            start = nextPageStart.Value;
+        }
+
+        var uniquePaths = paths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        m_changedPathsCache[pullRequest.SourceUrl] = uniquePaths;
+        return uniquePaths;
+    }
+
+    public void Dispose() => m_httpClient.Dispose();
+
+    private async Task<string> TryGetResponseTextAsync(BitbucketPullRequestReference pullRequest, string apiUrl, CancellationToken cancellationToken)
+    {
+        HttpResponseMessage response = null;
         try
         {
             response = await m_httpClient.GetAsync(apiUrl, cancellationToken);
@@ -99,17 +150,14 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
             response.Dispose();
         }
 
-        if (!TryParseMetadata(json, out var metadata))
-            return null;
-
-        m_metadataCache[pullRequest.SourceUrl] = metadata;
-        return metadata;
+        return json;
     }
 
-    public void Dispose() => m_httpClient.Dispose();
-
-    private static string BuildApiUrl(BitbucketPullRequestReference pullRequest) =>
+    private static string BuildMetadataApiUrl(BitbucketPullRequestReference pullRequest) =>
         $"https://{pullRequest.Host}/rest/api/1.0/projects/{Uri.EscapeDataString(pullRequest.ProjectKey)}/repos/{Uri.EscapeDataString(pullRequest.RepoSlug)}/pull-requests/{pullRequest.PullRequestId}";
+
+    private static string BuildChangesApiUrl(BitbucketPullRequestReference pullRequest, int start, int limit) =>
+        $"https://{pullRequest.Host}/rest/api/1.0/projects/{Uri.EscapeDataString(pullRequest.ProjectKey)}/repos/{Uri.EscapeDataString(pullRequest.RepoSlug)}/pull-requests/{pullRequest.PullRequestId}/changes?start={start}&limit={limit}";
 
     private static bool TryParseMetadata(string json, out BitbucketPullRequestMetadata metadata)
     {
@@ -203,6 +251,78 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
             return refName[headsPrefix.Length..];
 
         return refName;
+    }
+
+    private static bool TryParseChangesPage(string json, List<string> paths, out bool isLastPage, out int? nextPageStart)
+    {
+        isLastPage = true;
+        nextPageStart = null;
+        if (string.IsNullOrWhiteSpace(json))
+            return false;
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+
+            if (root.TryGetProperty("isLastPage", out var isLastPageElement) &&
+                (isLastPageElement.ValueKind == JsonValueKind.True || isLastPageElement.ValueKind == JsonValueKind.False))
+            {
+                isLastPage = isLastPageElement.GetBoolean();
+            }
+
+            if (root.TryGetProperty("nextPageStart", out var nextPageStartElement) &&
+                nextPageStartElement.ValueKind == JsonValueKind.Number &&
+                nextPageStartElement.TryGetInt32(out var nextStart))
+            {
+                nextPageStart = nextStart;
+            }
+
+            if (!root.TryGetProperty("values", out var valuesElement) || valuesElement.ValueKind != JsonValueKind.Array)
+                return true;
+
+            foreach (var changeElement in valuesElement.EnumerateArray())
+            {
+                if (TryGetChangedPath(changeElement, out var path))
+                    paths.Add(path);
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryGetChangedPath(JsonElement changeElement, out string path)
+    {
+        path = null;
+
+        if (!changeElement.TryGetProperty("path", out var pathElement) || pathElement.ValueKind != JsonValueKind.Object)
+            return false;
+
+        if (pathElement.TryGetProperty("toString", out var toStringElement) && toStringElement.ValueKind == JsonValueKind.String)
+        {
+            path = toStringElement.GetString();
+            return !string.IsNullOrWhiteSpace(path);
+        }
+
+        if (!pathElement.TryGetProperty("components", out var componentsElement) || componentsElement.ValueKind != JsonValueKind.Array)
+            return false;
+
+        var components = componentsElement
+            .EnumerateArray()
+            .Where(c => c.ValueKind == JsonValueKind.String)
+            .Select(c => c.GetString())
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .ToArray();
+
+        if (components.Length == 0)
+            return false;
+
+        path = string.Join("/", components);
+        return true;
     }
 
     private static AuthenticationHeaderValue BuildBasicAuthHeader(string username, string password)

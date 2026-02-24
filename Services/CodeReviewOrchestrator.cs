@@ -30,7 +30,11 @@ public sealed class CodeReviewOrchestrator
         m_gitCommandRunner = gitCommandRunner ?? throw new ArgumentNullException(nameof(gitCommandRunner));
     }
 
-    public async Task<PrepareReviewResult> PrepareReviewAsync(string repositoryRoot, BitbucketPullRequestReference pullRequest, Action<string> log)
+    public async Task<PrepareReviewResult> PrepareReviewAsync(
+        string repositoryRoot,
+        BitbucketPullRequestReference pullRequest,
+        IReadOnlyCollection<string> changedPaths,
+        Action<string> log)
     {
         if (string.IsNullOrWhiteSpace(repositoryRoot))
             throw new InvalidOperationException("Repository root folder is required.");
@@ -59,7 +63,7 @@ public sealed class CodeReviewOrchestrator
         var addResult = await m_gitCommandRunner.RunAsync(localRepository, "worktree", "add", "--force", "-B", reviewBranch, reviewFolder, reviewRef);
         EnsureSuccess(addResult, "Failed to create review worktree.");
 
-        var solutionPath = FindTopLevelSolutionFile(reviewFolder);
+        var solutionPath = FindBestSolutionFile(reviewFolder, changedPaths);
 
         return new PrepareReviewResult(localRepository, reviewFolder, solutionPath);
     }
@@ -325,6 +329,89 @@ public sealed class CodeReviewOrchestrator
             .ToArray();
 
         return solutions.FirstOrDefault()?.Path;
+    }
+
+    private static string FindBestSolutionFile(string rootFolder, IReadOnlyCollection<string> changedPaths)
+    {
+        if (changedPaths != null && changedPaths.Count > 0)
+        {
+            var candidates = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var changedPath in changedPaths)
+            {
+                var closest = FindClosestSolutionForPath(rootFolder, changedPath);
+                if (closest == null)
+                    continue;
+
+                candidates.TryGetValue(closest, out var currentScore);
+                candidates[closest] = currentScore + 1;
+            }
+
+            if (candidates.Count > 0)
+            {
+                return candidates
+                    .OrderByDescending(entry => entry.Value)
+                    .ThenByDescending(entry => GetDepth(Path.GetRelativePath(rootFolder, entry.Key)))
+                    .ThenBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase)
+                    .First()
+                    .Key;
+            }
+        }
+
+        return FindTopLevelSolutionFile(rootFolder);
+    }
+
+    private static string FindClosestSolutionForPath(string rootFolder, string changedPath)
+    {
+        if (string.IsNullOrWhiteSpace(changedPath))
+            return null;
+
+        var normalizedRelativePath = NormalizeRelativePath(changedPath);
+        if (string.IsNullOrWhiteSpace(normalizedRelativePath))
+            return null;
+
+        var fullPath = Path.GetFullPath(Path.Combine(rootFolder, normalizedRelativePath));
+        if (!IsChildPathOf(fullPath, rootFolder))
+            return null;
+
+        var currentDirectory = Directory.Exists(fullPath) ? fullPath : Path.GetDirectoryName(fullPath);
+        if (string.IsNullOrWhiteSpace(currentDirectory))
+            return null;
+
+        while (!string.IsNullOrWhiteSpace(currentDirectory) && IsChildPathOf(currentDirectory, rootFolder))
+        {
+            var matches = Directory
+                .EnumerateFiles(currentDirectory, "*.sln", SearchOption.TopDirectoryOnly)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (matches.Length > 0)
+                return matches[0];
+
+            if (AreSamePath(currentDirectory, rootFolder))
+                break;
+
+            currentDirectory = Path.GetDirectoryName(currentDirectory);
+        }
+
+        return null;
+    }
+
+    private static string NormalizeRelativePath(string path)
+    {
+        var normalized = path.Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+            return string.Empty;
+
+        normalized = normalized.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+        return normalized.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    private static bool AreSamePath(string firstPath, string secondPath)
+    {
+        static string NormalizeFullPath(string path) =>
+            Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return string.Equals(NormalizeFullPath(firstPath), NormalizeFullPath(secondPath), GetPathComparison());
     }
 
     private static int GetDepth(string relativePath)

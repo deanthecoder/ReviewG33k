@@ -138,19 +138,21 @@ public partial class MainWindow : Window
             async () =>
             {
                 var metadata = await m_pullRequestMetadataClient.TryGetMetadataAsync(pullRequest);
+                var changedPaths = await m_pullRequestMetadataClient.TryGetChangedPathsAsync(pullRequest);
 
                 AppendLog($"PR detected: {pullRequest.SourceUrl}");
                 AppendLog($"PR title: {FormatMetadataText(metadata?.Title)}");
                 AppendLog($"PR author: {FormatMetadataText(metadata?.Author)}");
                 AppendLog($"PR updated: {FormatMetadataUpdated(metadata?.UpdatedAt)}");
+                AppendLog($"PR modified files: {(changedPaths.Count > 0 ? changedPaths.Count.ToString() : "N/A")}");
 
-                var result = await m_orchestrator.PrepareReviewAsync(repositoryRoot, pullRequest, AppendLog);
+                var result = await m_orchestrator.PrepareReviewAsync(repositoryRoot, pullRequest, changedPaths, AppendLog);
 
                 AppendLog($"Review worktree ready: {result.ReviewWorktreePath}");
 
                 if (!string.IsNullOrWhiteSpace(result.SolutionPath))
                 {
-                    AppendLog($"Top-level solution found: {result.SolutionPath}");
+                    AppendLog($"Solution selected: {result.SolutionPath}");
 
                     if (AutoOpenSolutionCheckBox.IsChecked == true)
                     {
