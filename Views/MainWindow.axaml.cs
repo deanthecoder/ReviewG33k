@@ -27,6 +27,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         PullRequestUrlTextBox.AddHandler(DragDrop.DragOverEvent, PullRequestUrlTextBox_OnDragOver);
         PullRequestUrlTextBox.AddHandler(DragDrop.DropEvent, PullRequestUrlTextBox_OnDrop);
+        PullRequestUrlTextBox.TextChanged += PullRequestUrlTextBox_OnTextChanged;
+        RepositoryRootTextBox.TextChanged += RepositoryRootTextBox_OnTextChanged;
         RepositoryRootTextBox.LostFocus += RepositoryRootTextBox_OnLostFocus;
         Opened += MainWindow_OnOpened;
         Activated += MainWindow_OnActivated;
@@ -35,6 +37,9 @@ public partial class MainWindow : Window
         m_userSettings = m_userSettingsStore.Load();
         if (!string.IsNullOrWhiteSpace(m_userSettings.RepositoryRootPath))
             RepositoryRootTextBox.Text = m_userSettings.RepositoryRootPath;
+
+        UpdatePullRequestPreview();
+        UpdateActionButtonStates();
     }
 
     private async void BrowseRepositoryRootButton_OnClick(object sender, RoutedEventArgs e)
@@ -78,6 +83,12 @@ public partial class MainWindow : Window
 
         e.Handled = true;
     }
+
+    private void PullRequestUrlTextBox_OnTextChanged(object sender, TextChangedEventArgs e) =>
+        OnInputTextChanged();
+
+    private void RepositoryRootTextBox_OnTextChanged(object sender, TextChangedEventArgs e) =>
+        UpdateActionButtonStates();
 
     private async void PrepareReviewButton_OnClick(object sender, RoutedEventArgs e)
     {
@@ -148,7 +159,6 @@ public partial class MainWindow : Window
 
         try
         {
-            m_busy = true;
             SetBusyState(true);
             SetStatus(statusText);
             await action();
@@ -161,7 +171,6 @@ public partial class MainWindow : Window
         finally
         {
             SetBusyState(false);
-            m_busy = false;
         }
     }
 
@@ -199,10 +208,56 @@ public partial class MainWindow : Window
         return true;
     }
 
+    private void UpdatePullRequestPreview()
+    {
+        var urlText = PullRequestUrlTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(urlText))
+        {
+            PullRequestPreviewTextBlock.IsVisible = false;
+            PullRequestPreviewTextBlock.Text = string.Empty;
+            return;
+        }
+
+        if (BitbucketPrUrlParser.TryParse(urlText, out var pullRequest, out _))
+        {
+            PullRequestPreviewTextBlock.Text = $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId}";
+            PullRequestPreviewTextBlock.IsVisible = true;
+            return;
+        }
+
+        PullRequestPreviewTextBlock.Text = "Preview: Invalid Bitbucket PR URL";
+        PullRequestPreviewTextBlock.IsVisible = true;
+    }
+
+    private void OnInputTextChanged()
+    {
+        UpdatePullRequestPreview();
+        UpdateActionButtonStates();
+    }
+
     private void SetBusyState(bool isBusy)
     {
-        PrepareReviewButton.IsEnabled = !isBusy;
-        ClearCodeReviewButton.IsEnabled = !isBusy;
+        m_busy = isBusy;
+        UpdateActionButtonStates();
+    }
+
+    private void UpdateActionButtonStates()
+    {
+        PrepareReviewButton.IsEnabled = !m_busy && HasValidPrepareInputs();
+        ClearCodeReviewButton.IsEnabled = !m_busy;
+    }
+
+    private bool HasValidPrepareInputs()
+    {
+        var repositoryRoot = RepositoryRootTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(repositoryRoot) || !Directory.Exists(repositoryRoot))
+            return false;
+
+        var prUrlText = PullRequestUrlTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(prUrlText))
+            return false;
+
+        return BitbucketPrUrlParser.TryParse(prUrlText, out _, out _);
     }
 
     private void SetStatus(string status)

@@ -18,7 +18,7 @@
       <StackPanel Spacing="6">
         <TextBlock Classes="sectionTitle"
                    Text="ReviewG33k" />
-        <TextBlock Text="Prepare a clean review checkout with git worktree so your current repo state stays untouched."
+        <TextBlock Text="Prepare Bitbucket pull requests for local review by creating an isolated checkout without changing your current working repo."
                    Opacity="0.9"
                    TextWrapping="Wrap" />
       </StackPanel>
@@ -28,7 +28,7 @@
             Margin="0,0,0,12"
             Classes="zone"
             Background="{DynamicResource ZoneSecondaryBrush}">
-      <Grid RowDefinitions="Auto,Auto,Auto"
+      <Grid RowDefinitions="Auto,Auto,Auto,Auto"
             ColumnDefinitions="Auto,*,Auto">
         <TextBlock Grid.Row="0"
                    Grid.Column="0"
@@ -39,7 +39,7 @@
                  Grid.Row="0"
                  Grid.Column="1"
                  MinWidth="480"
-                 Watermark="Example: C:\\dtcsource" />
+                 Watermark="Example: C:\source" />
         <Button Grid.Row="0"
                 Grid.Column="2"
                 Margin="10,0,0,0"
@@ -60,7 +60,15 @@
                  DragDrop.AllowDrop="True"
                  Watermark="Paste or drop a Bitbucket PR URL" />
 
-        <StackPanel Grid.Row="2"
+        <TextBlock x:Name="PullRequestPreviewTextBlock"
+                   Grid.Row="2"
+                   Grid.Column="1"
+                   Grid.ColumnSpan="2"
+                   Margin="0,8,0,0"
+                   Opacity="0.9"
+                   IsVisible="False" />
+
+        <StackPanel Grid.Row="3"
                     Grid.Column="0"
                     Grid.ColumnSpan="3"
                     Margin="0,12,0,0"

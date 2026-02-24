@@ -18,7 +18,7 @@ Instead of touching your existing working tree, it creates a dedicated review ch
 - **Persisted repo root** - Remembers your repo root between sessions.
 
 ## Typical workflow
-1. Set your repo root folder (for example, `C:\dtcsource` or `C:\ggsource`).
+1. Set your repo root folder (for example, `C:\source`).
 2. Paste/drop a Bitbucket PR URL.
 3. Click **Prepare Review Checkout**.
 4. Review in the opened solution from the isolated worktree.
