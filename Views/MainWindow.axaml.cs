@@ -12,14 +12,14 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using ReviewG33k.Services;
+using ReviewG33k.ViewModels;
 
 namespace ReviewG33k.Views;
 
 public partial class MainWindow : Window
 {
     private readonly CodeReviewOrchestrator m_orchestrator = new(new GitCommandRunner());
-    private readonly UserSettingsStore m_userSettingsStore = new();
-    private UserSettings m_userSettings;
+    private readonly Settings m_settings = Settings.Instance;
     private bool m_busy;
 
     public MainWindow()
@@ -29,14 +29,15 @@ public partial class MainWindow : Window
         PullRequestUrlTextBox.AddHandler(DragDrop.DropEvent, PullRequestUrlTextBox_OnDrop);
         PullRequestUrlTextBox.TextChanged += PullRequestUrlTextBox_OnTextChanged;
         RepositoryRootTextBox.TextChanged += RepositoryRootTextBox_OnTextChanged;
+        AutoOpenSolutionCheckBox.IsCheckedChanged += AutoOpenSolutionCheckBox_OnIsCheckedChanged;
         RepositoryRootTextBox.LostFocus += RepositoryRootTextBox_OnLostFocus;
         Opened += MainWindow_OnOpened;
         Activated += MainWindow_OnActivated;
         Closing += MainWindow_OnClosing;
 
-        m_userSettings = m_userSettingsStore.Load();
-        if (!string.IsNullOrWhiteSpace(m_userSettings.RepositoryRootPath))
-            RepositoryRootTextBox.Text = m_userSettings.RepositoryRootPath;
+        if (!string.IsNullOrWhiteSpace(m_settings.RepositoryRootPath))
+            RepositoryRootTextBox.Text = m_settings.RepositoryRootPath;
+        AutoOpenSolutionCheckBox.IsChecked = m_settings.AutoOpenSolutionFile;
 
         UpdatePullRequestPreview();
         UpdateActionButtonStates();
@@ -132,26 +133,6 @@ public partial class MainWindow : Window
             });
     }
 
-    private async void ClearCodeReviewButton_OnClick(object sender, RoutedEventArgs e)
-    {
-        var repositoryRoot = RepositoryRootTextBox.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(repositoryRoot))
-        {
-            SetStatus("Set repo root folder first.");
-            return;
-        }
-
-        PersistRepositoryRootPath(repositoryRoot);
-
-        await ExecuteBusyActionAsync(
-            "Clearing CodeReview folder...",
-            async () =>
-            {
-                await m_orchestrator.ClearCodeReviewFolderAsync(repositoryRoot, AppendLog);
-                SetStatus("CodeReview folder cleared.");
-            });
-    }
-
     private async Task ExecuteBusyActionAsync(string statusText, Func<Task> action)
     {
         if (m_busy)
@@ -244,7 +225,6 @@ public partial class MainWindow : Window
     private void UpdateActionButtonStates()
     {
         PrepareReviewButton.IsEnabled = !m_busy && HasValidPrepareInputs();
-        ClearCodeReviewButton.IsEnabled = !m_busy;
     }
 
     private bool HasValidPrepareInputs()
@@ -297,6 +277,9 @@ public partial class MainWindow : Window
     private void RepositoryRootTextBox_OnLostFocus(object sender, RoutedEventArgs e) =>
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
 
+    private void AutoOpenSolutionCheckBox_OnIsCheckedChanged(object sender, RoutedEventArgs e) =>
+        PersistAutoOpenSolutionPreference(AutoOpenSolutionCheckBox.IsChecked);
+
     private async void MainWindow_OnOpened(object sender, EventArgs e)
     {
         await RunStartupCodeReviewCleanupAsync();
@@ -306,8 +289,12 @@ public partial class MainWindow : Window
     private async void MainWindow_OnActivated(object sender, EventArgs e) =>
         await TryPrefillPullRequestUrlFromClipboardAsync();
 
-    private void MainWindow_OnClosing(object sender, WindowClosingEventArgs e) =>
+    private void MainWindow_OnClosing(object sender, WindowClosingEventArgs e)
+    {
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
+        PersistAutoOpenSolutionPreference(AutoOpenSolutionCheckBox.IsChecked);
+        m_settings.Dispose();
+    }
 
     private async Task RunStartupCodeReviewCleanupAsync()
     {
@@ -353,17 +340,32 @@ public partial class MainWindow : Window
     private void PersistRepositoryRootPath(string repositoryRootPath)
     {
         var normalizedPath = repositoryRootPath?.Trim();
-        if (m_userSettings == null)
-            m_userSettings = new UserSettings();
-
-        if (string.Equals(m_userSettings.RepositoryRootPath, normalizedPath, StringComparison.Ordinal))
+        if (string.Equals(m_settings.RepositoryRootPath, normalizedPath, StringComparison.Ordinal))
             return;
 
-        m_userSettings.RepositoryRootPath = normalizedPath;
+        m_settings.RepositoryRootPath = normalizedPath;
 
         try
         {
-            m_userSettingsStore.Save(m_userSettings);
+            m_settings.Save();
+        }
+        catch (Exception exception)
+        {
+            AppendLog($"Warning: could not save app settings. {exception.Message}");
+        }
+    }
+
+    private void PersistAutoOpenSolutionPreference(bool? autoOpenSolution)
+    {
+        var normalizedValue = autoOpenSolution != false;
+        if (m_settings.AutoOpenSolutionFile == normalizedValue)
+            return;
+
+        m_settings.AutoOpenSolutionFile = normalizedValue;
+
+        try
+        {
+            m_settings.Save();
         }
         catch (Exception exception)
         {

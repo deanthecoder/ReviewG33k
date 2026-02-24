@@ -14,7 +14,7 @@ Instead of touching your existing working tree, it creates a dedicated review ch
 - **Isolated review checkout** - Fetches PR source ref and creates a separate worktree (`CodeReview/<repo>/PR-<id>`).
 - **Branch-based review state** - Uses a local review branch (`review/pr-<id>`) instead of detached HEAD.
 - **Fast handoff to IDE** - Finds the highest-level `.sln` and opens it with your default solution app.
-- **Cleanup option** - Clears all `CodeReview` worktrees/folders in one click.
+- **Automatic startup cleanup** - Clears previous `CodeReview` worktrees/folders when the app starts.
 - **Persisted repo root** - Remembers your repo root between sessions.
 
 ## Typical workflow
@@ -22,7 +22,6 @@ Instead of touching your existing working tree, it creates a dedicated review ch
 2. Paste/drop a Bitbucket PR URL.
 3. Click **Prepare Review Checkout**.
 4. Review in the opened solution from the isolated worktree.
-5. Click **Clear CodeReview Folder** when done.
 
 ## Build and run
 ```bash

@@ -79,10 +79,6 @@
                   Padding="14,8"
                   Click="PrepareReviewButton_OnClick"
                   Content="Prepare Review Checkout" />
-          <Button x:Name="ClearCodeReviewButton"
-                  Padding="14,8"
-                  Click="ClearCodeReviewButton_OnClick"
-                  Content="Clear CodeReview Folder" />
           <CheckBox x:Name="AutoOpenSolutionCheckBox"
                     VerticalAlignment="Center"
                     IsChecked="True"
