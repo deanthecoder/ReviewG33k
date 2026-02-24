@@ -1,5 +1,6 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
              x:Class="ReviewG33k.Views.App"
              RequestedThemeVariant="Dark">
   <Application.Resources>
@@ -20,6 +21,7 @@
 
   <Application.Styles>
     <FluentTheme />
+    <dialogHostAvalonia:DialogHostStyles />
 
     <Style Selector="Window">
       <Setter Property="Background" Value="{DynamicResource AppGradientBrush}" />

@@ -14,13 +14,14 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using DTC.Core.UI;
 using ReviewG33k.Services;
 using ReviewG33k.ViewModels;
 
@@ -28,12 +29,19 @@ namespace ReviewG33k.Views;
 
 public partial class MainWindow : Window
 {
-    private readonly CodeReviewOrchestrator m_orchestrator = new(new GitCommandRunner());
+    private readonly GitCommandRunner m_gitCommandRunner = new();
+    private readonly CodeReviewOrchestrator m_orchestrator;
+    private readonly BitbucketPullRequestMetadataClient m_pullRequestMetadataClient = new();
     private readonly Settings m_settings = Settings.Instance;
+    private CancellationTokenSource m_previewUpdateCancellation;
     private bool m_busy;
+    private bool m_isGitAvailable = true;
+    private bool m_gitAvailabilityChecked;
+    private bool m_normalizingPullRequestUrl;
 
     public MainWindow()
     {
+        m_orchestrator = new CodeReviewOrchestrator(m_gitCommandRunner);
         InitializeComponent();
         PullRequestUrlTextBox.AddHandler(DragDrop.DragOverEvent, PullRequestUrlTextBox_OnDragOver);
         PullRequestUrlTextBox.AddHandler(DragDrop.DropEvent, PullRequestUrlTextBox_OnDrop);
@@ -49,13 +57,13 @@ public partial class MainWindow : Window
             RepositoryRootTextBox.Text = m_settings.RepositoryRootPath;
         AutoOpenSolutionCheckBox.IsChecked = m_settings.AutoOpenSolutionFile;
 
-        UpdatePullRequestPreview();
+        _ = UpdatePullRequestPreviewAsync();
         UpdateActionButtonStates();
     }
 
     private async void BrowseRepositoryRootButton_OnClick(object sender, RoutedEventArgs e)
     {
-        var topLevel = TopLevel.GetTopLevel(this);
+        var topLevel = GetTopLevel(this);
         if (topLevel == null)
             return;
 
@@ -112,6 +120,7 @@ public partial class MainWindow : Window
         {
             SetStatus(parseError);
             AppendLog($"Input error: {parseError}");
+            DialogService.Instance.ShowMessage("Invalid pull request URL", parseError, null);
             return;
         }
 
@@ -158,6 +167,7 @@ public partial class MainWindow : Window
         {
             SetStatus("Operation failed. See log for details.");
             AppendLog($"ERROR: {exception.Message}");
+            DialogService.Instance.ShowMessage("Operation failed", exception.Message, null);
         }
         finally
         {
@@ -181,26 +191,68 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(repositoryRoot))
         {
             SetStatus("Set repo root folder first.");
+            DialogService.Instance.ShowMessage("Repository root required", "Set the repo root folder before preparing a review checkout.", null);
             return false;
         }
 
         if (!Directory.Exists(repositoryRoot))
         {
             SetStatus($"Repo root folder does not exist: {repositoryRoot}");
+            DialogService.Instance.ShowMessage("Repository root not found", repositoryRoot, null);
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(prUrlText))
         {
             SetStatus("Paste or drop a Bitbucket pull request URL.");
+            DialogService.Instance.ShowMessage("Pull request URL required", "Paste or drop a Bitbucket pull request URL.", null);
             return false;
         }
 
         return true;
     }
 
-    private void UpdatePullRequestPreview()
+    private void OnInputTextChanged()
     {
+        NormalizePullRequestUrlInTextBoxIfNeeded();
+        _ = UpdatePullRequestPreviewAsync();
+        UpdateActionButtonStates();
+    }
+
+    private void NormalizePullRequestUrlInTextBoxIfNeeded()
+    {
+        if (m_normalizingPullRequestUrl)
+            return;
+
+        var urlText = PullRequestUrlTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(urlText))
+            return;
+
+        if (!BitbucketPrUrlParser.TryParse(urlText, out var pullRequest, out _))
+            return;
+
+        if (string.Equals(urlText, pullRequest.SourceUrl, StringComparison.Ordinal))
+            return;
+
+        m_normalizingPullRequestUrl = true;
+        try
+        {
+            PullRequestUrlTextBox.Text = pullRequest.SourceUrl;
+            PullRequestUrlTextBox.CaretIndex = pullRequest.SourceUrl.Length;
+        }
+        finally
+        {
+            m_normalizingPullRequestUrl = false;
+        }
+    }
+
+    private async Task UpdatePullRequestPreviewAsync()
+    {
+        m_previewUpdateCancellation?.Cancel();
+        m_previewUpdateCancellation?.Dispose();
+        m_previewUpdateCancellation = new CancellationTokenSource();
+        var cancellationToken = m_previewUpdateCancellation.Token;
+
         var urlText = PullRequestUrlTextBox.Text?.Trim();
         if (string.IsNullOrWhiteSpace(urlText))
         {
@@ -209,21 +261,25 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (BitbucketPrUrlParser.TryParse(urlText, out var pullRequest, out _))
+        if (!BitbucketPrUrlParser.TryParse(urlText, out var pullRequest, out _))
         {
-            PullRequestPreviewTextBlock.Text = $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId}";
+            PullRequestPreviewTextBlock.Text = "Preview: Invalid Bitbucket PR URL";
             PullRequestPreviewTextBlock.IsVisible = true;
             return;
         }
 
-        PullRequestPreviewTextBlock.Text = "Preview: Invalid Bitbucket PR URL";
+        PullRequestPreviewTextBlock.Text = $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId} (loading branches...)";
         PullRequestPreviewTextBlock.IsVisible = true;
-    }
 
-    private void OnInputTextChanged()
-    {
-        UpdatePullRequestPreview();
-        UpdateActionButtonStates();
+        var branchInfo = await m_pullRequestMetadataClient.TryGetBranchInfoAsync(pullRequest, cancellationToken);
+        if (cancellationToken.IsCancellationRequested)
+            return;
+
+        PullRequestPreviewTextBlock.Text =
+            branchInfo == null
+                ? $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId}"
+                : $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId} ({branchInfo.SourceBranch} -> {branchInfo.TargetBranch})";
+        PullRequestPreviewTextBlock.IsVisible = true;
     }
 
     private void SetBusyState(bool isBusy)
@@ -234,7 +290,15 @@ public partial class MainWindow : Window
 
     private void UpdateActionButtonStates()
     {
-        PrepareReviewButton.IsEnabled = !m_busy && HasValidPrepareInputs();
+        PrepareReviewButton.IsEnabled = !m_busy && m_isGitAvailable && HasValidPrepareInputs();
+        OpenPullRequestButton.IsEnabled = !m_busy && HasValidPullRequestInput();
+    }
+
+    private bool HasValidPullRequestInput()
+    {
+        var prUrlText = PullRequestUrlTextBox.Text?.Trim();
+        return !string.IsNullOrWhiteSpace(prUrlText) &&
+               BitbucketPrUrlParser.TryParse(prUrlText, out _, out _);
     }
 
     private bool HasValidPrepareInputs()
@@ -292,6 +356,10 @@ public partial class MainWindow : Window
 
     private async void MainWindow_OnOpened(object sender, EventArgs e)
     {
+        await EnsureGitIsAvailableOnStartupAsync();
+        if (!m_isGitAvailable)
+            return;
+
         await RunStartupCodeReviewCleanupAsync();
         await TryPrefillPullRequestUrlFromClipboardAsync();
     }
@@ -301,9 +369,53 @@ public partial class MainWindow : Window
 
     private void MainWindow_OnClosing(object sender, WindowClosingEventArgs e)
     {
+        m_previewUpdateCancellation?.Cancel();
+        m_previewUpdateCancellation?.Dispose();
+        m_previewUpdateCancellation = null;
+        m_pullRequestMetadataClient.Dispose();
+
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
         PersistAutoOpenSolutionPreference(AutoOpenSolutionCheckBox.IsChecked);
         m_settings.Dispose();
+    }
+
+    private async Task EnsureGitIsAvailableOnStartupAsync()
+    {
+        if (m_gitAvailabilityChecked)
+            return;
+
+        m_gitAvailabilityChecked = true;
+
+        string failureDetails;
+        try
+        {
+            var versionResult = await m_gitCommandRunner.RunAsync(AppContext.BaseDirectory, "--version");
+            if (versionResult.IsSuccess)
+            {
+                m_isGitAvailable = true;
+                return;
+            }
+
+            failureDetails = versionResult.GetCombinedOutput();
+        }
+        catch (Exception exception)
+        {
+            failureDetails = exception.Message;
+        }
+
+        m_isGitAvailable = false;
+        UpdateActionButtonStates();
+
+        const string actionText = "Install Git for Windows (https://git-scm.com/download/win), ensure git.exe is on PATH, then restart ReviewG33k.";
+        SetStatus("Git is missing. Install Git and restart ReviewG33k.");
+        AppendLog("ERROR: Git is not available.");
+        if (!string.IsNullOrWhiteSpace(failureDetails))
+            AppendLog($"Details: {failureDetails}");
+
+        var dialogDetail = string.IsNullOrWhiteSpace(failureDetails)
+            ? actionText
+            : $"{actionText}{Environment.NewLine}{Environment.NewLine}Details: {failureDetails}";
+        DialogService.Instance.ShowMessage("Git not found", dialogDetail, null);
     }
 
     private async Task RunStartupCodeReviewCleanupAsync()
@@ -326,7 +438,7 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(PullRequestUrlTextBox.Text))
             return;
 
-        var topLevel = TopLevel.GetTopLevel(this);
+        var topLevel = GetTopLevel(this);
         if (topLevel?.Clipboard == null)
             return;
 
@@ -381,6 +493,21 @@ public partial class MainWindow : Window
         {
             AppendLog($"Warning: could not save app settings. {exception.Message}");
         }
+    }
+
+    private void OpenPullRequestButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var prUrlText = PullRequestUrlTextBox.Text?.Trim();
+        if (!BitbucketPrUrlParser.TryParse(prUrlText, out var pullRequest, out var parseError))
+        {
+            SetStatus(parseError);
+            AppendLog($"Input error: {parseError}");
+            DialogService.Instance.ShowMessage("Invalid pull request URL", parseError, null);
+            return;
+        }
+
+        OpenFileWithShell(pullRequest.SourceUrl);
+        SetStatus("Pull request opened in browser.");
     }
 
     private static void OpenFileWithShell(string filePath)

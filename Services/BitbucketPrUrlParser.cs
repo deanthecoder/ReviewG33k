@@ -67,10 +67,14 @@ public static class BitbucketPrUrlParser
 
         var projectKey = segments[1];
         var repoSlug = segments[3];
+        var canonicalUrl = BuildCanonicalPullRequestUrl(uri, projectKey, repoSlug, pullRequestId);
 
-        pullRequest = new BitbucketPullRequestReference(uri.Host, projectKey, repoSlug, pullRequestId, matchedUrl);
+        pullRequest = new BitbucketPullRequestReference(uri.Host, projectKey, repoSlug, pullRequestId, canonicalUrl);
         return true;
     }
+
+    private static string BuildCanonicalPullRequestUrl(Uri uri, string projectKey, string repoSlug, int pullRequestId) =>
+        $"{uri.Scheme}://{uri.Authority}/projects/{projectKey}/repos/{repoSlug}/pull-requests/{pullRequestId}";
 
     private static string ExtractUrl(string text)
     {

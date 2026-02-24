@@ -9,12 +9,15 @@ Instead of touching your existing working tree, it creates a dedicated review ch
 
 ## Highlights
 - **Paste or drop PR URL** - Supports Bitbucket PR links directly from clipboard or drag/drop.
+- **PR branch preview** - Uses Bitbucket REST API to show `source -> target` branch names in the preview line.
+- **Canonical PR URLs** - Normalizes links by stripping `/overview` and query-string noise.
 - **Smart local repo matching** - Reuses your existing local repository when available.
 - **Clone on demand** - Clones missing repos automatically into your chosen repo root.
 - **Isolated review checkout** - Fetches PR source ref and creates a separate worktree (`CodeReview/<repo>/PR-<id>`).
 - **Branch-based review state** - Uses a local review branch (`review/pr-<id>`) instead of detached HEAD.
 - **Fast handoff to IDE** - Finds the highest-level `.sln` and opens it with your default solution app.
 - **Automatic startup cleanup** - Clears previous `CodeReview` worktrees/folders when the app starts.
+- **Startup git validation** - Detects missing `git` once on startup and shows a clear install/fix message.
 - **Persisted repo root** - Remembers your repo root between sessions.
 
 ## Typical workflow
