@@ -24,6 +24,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using DTC.Core.UI;
+using ReviewG33k.Models;
 using ReviewG33k.Services;
 using ReviewG33k.ViewModels;
 
@@ -136,7 +137,13 @@ public partial class MainWindow : Window
             "Preparing review checkout...",
             async () =>
             {
+                var metadata = await m_pullRequestMetadataClient.TryGetMetadataAsync(pullRequest);
+
                 AppendLog($"PR detected: {pullRequest.SourceUrl}");
+                AppendLog($"PR title: {FormatMetadataText(metadata?.Title)}");
+                AppendLog($"PR author: {FormatMetadataText(metadata?.Author)}");
+                AppendLog($"PR updated: {FormatMetadataUpdated(metadata?.UpdatedAt)}");
+
                 var result = await m_orchestrator.PrepareReviewAsync(repositoryRoot, pullRequest, AppendLog);
 
                 AppendLog($"Review worktree ready: {result.ReviewWorktreePath}");
@@ -266,6 +273,8 @@ public partial class MainWindow : Window
         {
             PullRequestPreviewTextBlock.IsVisible = false;
             PullRequestPreviewTextBlock.Text = string.Empty;
+            PullRequestMetadataTextBlock.IsVisible = false;
+            PullRequestMetadataTextBlock.Text = string.Empty;
             return;
         }
 
@@ -273,22 +282,64 @@ public partial class MainWindow : Window
         {
             PullRequestPreviewTextBlock.Text = "Preview: Invalid Bitbucket PR URL";
             PullRequestPreviewTextBlock.IsVisible = true;
+            PullRequestMetadataTextBlock.IsVisible = false;
+            PullRequestMetadataTextBlock.Text = string.Empty;
             return;
         }
 
-        PullRequestPreviewTextBlock.Text = $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId} (loading branches...)";
+        PullRequestPreviewTextBlock.Text = $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId} (loading details...)";
         PullRequestPreviewTextBlock.IsVisible = true;
+        PullRequestMetadataTextBlock.IsVisible = false;
+        PullRequestMetadataTextBlock.Text = string.Empty;
 
-        var branchInfo = await m_pullRequestMetadataClient.TryGetBranchInfoAsync(pullRequest, cancellationToken);
+        var metadata = await m_pullRequestMetadataClient.TryGetMetadataAsync(pullRequest, cancellationToken);
         if (cancellationToken.IsCancellationRequested)
             return;
 
-        PullRequestPreviewTextBlock.Text =
-            branchInfo == null
-                ? $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId}"
-                : $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId} ({branchInfo.SourceBranch} -> {branchInfo.TargetBranch})";
+        var previewPrefix = $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId}";
+
+        if (metadata == null)
+        {
+            PullRequestPreviewTextBlock.Text = previewPrefix;
+            PullRequestPreviewTextBlock.IsVisible = true;
+            PullRequestMetadataTextBlock.IsVisible = false;
+            PullRequestMetadataTextBlock.Text = string.Empty;
+            return;
+        }
+
+        PullRequestPreviewTextBlock.Text = HasBranchInfo(metadata)
+            ? $"{previewPrefix} ({metadata.SourceBranch} -> {metadata.TargetBranch})"
+            : previewPrefix;
         PullRequestPreviewTextBlock.IsVisible = true;
+
+        PullRequestMetadataTextBlock.Text = BuildPullRequestMetadataText(metadata);
+        PullRequestMetadataTextBlock.IsVisible = true;
     }
+
+    private static bool HasBranchInfo(BitbucketPullRequestMetadata metadata) =>
+        metadata != null &&
+        !string.IsNullOrWhiteSpace(metadata.SourceBranch) &&
+        !string.IsNullOrWhiteSpace(metadata.TargetBranch);
+
+    private static string BuildPullRequestMetadataText(BitbucketPullRequestMetadata metadata)
+    {
+        if (metadata == null)
+            return string.Empty;
+
+        var title = string.IsNullOrWhiteSpace(metadata.Title) ? "(no title)" : metadata.Title.Trim();
+        var author = string.IsNullOrWhiteSpace(metadata.Author) ? "Unknown author" : metadata.Author.Trim();
+        var updated = metadata.UpdatedAt.HasValue
+            ? metadata.UpdatedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            : "Unknown";
+
+        return $"Title: {title} | Author: {author} | Updated: {updated}";
+    }
+
+    private static string FormatMetadataText(string value) =>
+        string.IsNullOrWhiteSpace(value) ? "N/A" : value.Trim();
+
+    private static string FormatMetadataUpdated(DateTimeOffset? updatedAt) =>
+        updatedAt.HasValue ? updatedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "N/A";
 
     private void SetBusyState(bool isBusy)
     {

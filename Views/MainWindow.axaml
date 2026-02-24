@@ -30,7 +30,7 @@
                     Margin="0,0,0,12"
                     Classes="zone"
                     Background="{DynamicResource ZoneSecondaryBrush}">
-                <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto"
                       ColumnDefinitions="Auto,*,Auto">
                     <TextBlock Grid.Row="0"
                                Grid.Column="0"
@@ -76,7 +76,16 @@
                                Opacity="0.9"
                                IsVisible="False" />
 
-                    <StackPanel Grid.Row="3"
+                    <TextBlock x:Name="PullRequestMetadataTextBlock"
+                               Grid.Row="3"
+                               Grid.Column="1"
+                               Grid.ColumnSpan="2"
+                               Margin="0,4,0,0"
+                               Opacity="0.78"
+                               IsVisible="False"
+                               TextWrapping="Wrap" />
+
+                    <StackPanel Grid.Row="4"
                                 Grid.Column="0"
                                 Grid.ColumnSpan="3"
                                 Margin="0,12,0,0"
