@@ -22,6 +22,7 @@ namespace ReviewG33k.Services;
 public sealed class CodeReviewOrchestrator
 {
     private const string CodeReviewFolderName = "CodeReview";
+    private const string CodeReviewMarkerFileName = ".reviewg33k";
     private readonly GitCommandRunner m_gitCommandRunner;
 
     public CodeReviewOrchestrator(GitCommandRunner gitCommandRunner)
@@ -47,6 +48,8 @@ public sealed class CodeReviewOrchestrator
         var fetchResult = await m_gitCommandRunner.RunAsync(localRepository, "fetch", "--prune", "origin", fetchSpec);
         EnsureSuccess(fetchResult, "Failed to fetch pull request from origin.");
 
+        EnsureCodeReviewMarker(repositoryRoot);
+
         var reviewFolder = Path.Combine(repositoryRoot, CodeReviewFolderName, pullRequest.RepoSlug, $"PR-{pullRequest.PullRequestId}");
         await RemoveWorktreeIfPresentAsync(localRepository, reviewFolder, log);
 
@@ -66,11 +69,17 @@ public sealed class CodeReviewOrchestrator
         if (string.IsNullOrWhiteSpace(repositoryRoot) || !Directory.Exists(repositoryRoot))
             throw new DirectoryNotFoundException("Repository root folder does not exist.");
 
-        var codeReviewRoot = Path.Combine(repositoryRoot, CodeReviewFolderName);
+        var codeReviewRoot = GetCodeReviewRoot(repositoryRoot);
         if (!Directory.Exists(codeReviewRoot))
         {
             if (logWhenMissing)
                 log("CodeReview folder does not exist, nothing to clear.");
+            return;
+        }
+
+        if (!HasCodeReviewMarker(codeReviewRoot))
+        {
+            log($"Safety check: missing '{CodeReviewMarkerFileName}' marker in '{codeReviewRoot}'. Skipping cleanup.");
             return;
         }
 
@@ -98,6 +107,29 @@ public sealed class CodeReviewOrchestrator
             Directory.Delete(codeReviewRoot, true);
 
         log("CodeReview folder cleared.");
+    }
+
+    private static string GetCodeReviewRoot(string repositoryRoot) =>
+        Path.Combine(repositoryRoot, CodeReviewFolderName);
+
+    private static string GetCodeReviewMarkerPath(string codeReviewRoot) =>
+        Path.Combine(codeReviewRoot, CodeReviewMarkerFileName);
+
+    private static bool HasCodeReviewMarker(string codeReviewRoot) =>
+        File.Exists(GetCodeReviewMarkerPath(codeReviewRoot));
+
+    private static void EnsureCodeReviewMarker(string repositoryRoot)
+    {
+        var codeReviewRoot = GetCodeReviewRoot(repositoryRoot);
+        Directory.CreateDirectory(codeReviewRoot);
+
+        var markerPath = GetCodeReviewMarkerPath(codeReviewRoot);
+        if (File.Exists(markerPath))
+            return;
+
+        File.WriteAllText(
+            markerPath,
+            "This folder is managed by ReviewG33k. Cleanup operations are allowed only when this marker exists.");
     }
 
     private async Task<string> FindOrCloneRepositoryAsync(string repositoryRoot, BitbucketPullRequestReference pullRequest, Action<string> log)
