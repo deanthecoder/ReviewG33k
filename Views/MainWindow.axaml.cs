@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
+using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -19,6 +20,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using DTC.Core.UI;
@@ -29,10 +31,15 @@ namespace ReviewG33k.Views;
 
 public partial class MainWindow : Window
 {
+    private static readonly IBrush TimestampedLogBrush = Brushes.Gainsboro;
+    private static readonly IBrush DetailLogBrush = Brushes.Gray;
+    private static readonly IBrush ErrorLogBrush = Brushes.IndianRed;
+
     private readonly GitCommandRunner m_gitCommandRunner = new();
     private readonly CodeReviewOrchestrator m_orchestrator;
     private readonly BitbucketPullRequestMetadataClient m_pullRequestMetadataClient = new();
     private readonly Settings m_settings = Settings.Instance;
+    private readonly ObservableCollection<LogLineEntry> m_logLines = new();
     private CancellationTokenSource m_previewUpdateCancellation;
     private bool m_busy;
     private bool m_isGitAvailable = true;
@@ -56,6 +63,7 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(m_settings.RepositoryRootPath))
             RepositoryRootTextBox.Text = m_settings.RepositoryRootPath;
         AutoOpenSolutionCheckBox.IsChecked = m_settings.AutoOpenSolutionFile;
+        LogListBox.ItemsSource = m_logLines;
 
         _ = UpdatePullRequestPreviewAsync();
         UpdateActionButtonStates();
@@ -334,18 +342,50 @@ public partial class MainWindow : Window
         }
 
         var timestamp = DateTime.Now.ToString("HH:mm:ss");
-        var line = $"[{timestamp}] {message}";
+        var normalized = (message ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
+        var lines = normalized.Split('\n');
 
-        if (string.IsNullOrWhiteSpace(LogTextBox.Text))
+        for (var index = 0; index < lines.Length; index++)
         {
-            LogTextBox.Text = line;
+            var lineText = index == 0 ? $"[{timestamp}] {lines[index]}" : lines[index];
+            var brush = SelectLogLineBrush(lineText);
+            var entry = new LogLineEntry(lineText, brush);
+            m_logLines.Add(entry);
+            LogListBox.ScrollIntoView(entry);
         }
-        else
+    }
+
+    private static IBrush SelectLogLineBrush(string line)
+    {
+        if (ContainsErrorMarker(line))
+            return ErrorLogBrush;
+
+        return HasTimestampPrefix(line) ? TimestampedLogBrush : DetailLogBrush;
+    }
+
+    private static bool ContainsErrorMarker(string line) =>
+        line?.Contains("ERROR", StringComparison.OrdinalIgnoreCase) == true ||
+        line?.Contains("fatal", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool HasTimestampPrefix(string line) =>
+        !string.IsNullOrEmpty(line) &&
+        line.Length >= 10 &&
+        line[0] == '[' &&
+        line[3] == ':' &&
+        line[6] == ':' &&
+        line[9] == ']';
+    
+    private sealed class LogLineEntry
+    {
+        public LogLineEntry(string text, IBrush foreground)
         {
-            LogTextBox.Text = $"{LogTextBox.Text}{Environment.NewLine}{line}";
+            Text = text;
+            Foreground = foreground;
         }
 
-        LogTextBox.CaretIndex = LogTextBox.Text.Length;
+        public string Text { get; }
+
+        public IBrush Foreground { get; }
     }
 
     private void RepositoryRootTextBox_OnLostFocus(object sender, RoutedEventArgs e) =>
