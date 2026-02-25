@@ -57,6 +57,7 @@ public partial class ReviewResultsWindow : Window
         m_resolveFindingPath = resolveFindingPath;
         InitializeComponent();
         ResultsListBox.SelectionChanged += ResultsListBox_OnSelectionChanged;
+        CommentSelectedButton.IsVisible = canCommentInBitbucket;
 
         m_rows = (findings ?? [])
             .Where(finding => finding != null)
@@ -179,6 +180,34 @@ public partial class ReviewResultsWindow : Window
             SetPreviewText($"Posted {successCount} comment(s). {failureCount} failed. See log for details.", "Preview");
     }
 
+    private async void ExportToClipboardButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard == null)
+        {
+            SetPreviewText("Clipboard is unavailable in this window.", "Preview");
+            return;
+        }
+
+        var exportText = BuildExportText(out var exportedCount, out var exportedIncludedOnly);
+        if (exportedCount == 0)
+        {
+            SetPreviewText("No findings available to export.", "Preview");
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(exportText);
+            var scope = exportedIncludedOnly ? "included" : "all";
+            SetPreviewText($"Copied {exportedCount} {scope} finding(s) to the clipboard.", "Preview");
+        }
+        catch (Exception exception)
+        {
+            SetPreviewText($"Failed to copy to clipboard: {exception.Message}", "Preview");
+        }
+    }
+
     private void UntickSameTypeMenuItem_OnClick(object sender, RoutedEventArgs e)
     {
         if (sender is not MenuItem { DataContext: ReviewResultRow sourceRow } || string.IsNullOrWhiteSpace(sourceRow.RuleId))
@@ -231,6 +260,7 @@ public partial class ReviewResultsWindow : Window
             openToolTipBase,
             canComment,
             commentToolTipBase,
+            canCommentInBitbucket,
             false);
     }
 
@@ -301,9 +331,63 @@ public partial class ReviewResultsWindow : Window
     private void UpdateBatchActionButtonStates()
     {
         ToggleAllButton.IsEnabled = m_rows.Length > 0;
+        ExportToClipboardButton.IsEnabled = m_rows.Length > 0;
         CommentSelectedButton.IsEnabled = !m_isBulkCommenting &&
                                           m_commentFindingAction != null &&
                                           m_rows.Any(row => row.IsIncluded && row.CanCommentActive);
+    }
+
+    private string BuildExportText(out int exportedCount, out bool exportedIncludedOnly)
+    {
+        var rowsToExport = m_rows.Where(row => row.IsIncluded).ToArray();
+        exportedIncludedOnly = rowsToExport.Length > 0;
+        if (!exportedIncludedOnly)
+            rowsToExport = m_rows;
+
+        exportedCount = rowsToExport.Length;
+        if (exportedCount == 0)
+            return string.Empty;
+
+        var builder = new StringBuilder();
+        builder.AppendLine("ReviewG33k Findings");
+        builder.Append("Scope: ")
+            .Append(exportedIncludedOnly ? "Included findings" : "All findings")
+            .AppendLine();
+        builder.Append("Count: ")
+            .Append(exportedCount)
+            .AppendLine();
+        builder.AppendLine();
+
+        for (var index = 0; index < rowsToExport.Length; index++)
+        {
+            var row = rowsToExport[index];
+            var finding = row.Finding;
+            var location = !string.IsNullOrWhiteSpace(finding.FilePath)
+                ? finding.LineNumber > 0
+                    ? $"{finding.FilePath}:{finding.LineNumber}"
+                    : finding.FilePath
+                : "(no file)";
+
+            builder.Append(index + 1)
+                .Append(". [")
+                .Append(row.SeverityText)
+                .Append("] ")
+                .Append(location)
+                .AppendLine();
+
+            if (!string.IsNullOrWhiteSpace(finding.RuleId))
+            {
+                builder.Append("   Rule: ")
+                    .Append(finding.RuleId)
+                    .AppendLine();
+            }
+
+            builder.Append("   ")
+                .AppendLine((finding.Message ?? string.Empty).Trim());
+            builder.AppendLine();
+        }
+
+        return builder.ToString().TrimEnd('\r', '\n');
     }
 
     private static int GetSeveritySortOrder(CodeReviewFindingSeverity severity) =>
@@ -340,6 +424,7 @@ public partial class ReviewResultsWindow : Window
             string openToolTipBase,
             bool canComment,
             string commentToolTipBase,
+            bool showCommentButton,
             bool hasExistingComment)
         {
             Finding = finding;
@@ -350,6 +435,7 @@ public partial class ReviewResultsWindow : Window
             IssueLocation = issueLocation ?? string.Empty;
             CanOpen = canOpen;
             CanComment = canComment;
+            ShowCommentButton = showCommentButton;
             m_openToolTipBase = openToolTipBase ?? string.Empty;
             m_commentToolTipBase = commentToolTipBase ?? string.Empty;
             m_hasPostedComment = hasExistingComment;
@@ -372,6 +458,8 @@ public partial class ReviewResultsWindow : Window
         public bool CanOpen { get; }
 
         public bool CanComment { get; }
+
+        public bool ShowCommentButton { get; }
 
         public bool IsIncluded
         {

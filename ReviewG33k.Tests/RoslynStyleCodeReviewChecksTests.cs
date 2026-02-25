@@ -558,6 +558,27 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void MethodCanBeStaticCheckWhenFileIsTestFileDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class SampleTests
+            {
+                [Test]
+                public int SumAbs(int left, int right)
+                {
+                    return Math.Abs(left) + Math.Abs(right);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MethodCanBeStaticCodeReviewCheck(), "A", source, Enumerable.Range(1, 12), "Tests/SampleTests.cs");
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void UnobservedTaskResultCheckWhenTaskCallIsIgnoredReportsSuggestion()
     {
         const string source = """
@@ -861,14 +882,14 @@ public sealed class RoslynStyleCodeReviewChecksTests
         Assert.That(report.Findings, Is.Empty);
     }
 
-    private static CodeSmellReport AnalyzeSource(ICodeReviewCheck check, string status, string source, IEnumerable<int> addedLines)
+    private static CodeSmellReport AnalyzeSource(ICodeReviewCheck check, string status, string source, IEnumerable<int> addedLines, string path = "Packages/CSharp.Core/Sample.cs")
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
         var lines = normalizedSource.Split('\n');
         var changedFile = new CodeReviewChangedFile(
             status,
-            "Packages/CSharp.Core/Sample.cs",
-            "Packages/CSharp.Core/Sample.cs",
+            path,
+            path,
             normalizedSource,
             lines,
             new HashSet<int>(addedLines ?? []));

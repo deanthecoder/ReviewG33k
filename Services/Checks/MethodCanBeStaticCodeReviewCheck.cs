@@ -31,6 +31,9 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
         SemanticModel semanticModel,
         CodeSmellReport report)
     {
+        if (CodeReviewFileClassification.IsTestFilePath(file.Path))
+            return;
+
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
         foreach (var method in methods)
         {

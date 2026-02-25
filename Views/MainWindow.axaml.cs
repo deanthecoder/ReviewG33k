@@ -1017,11 +1017,18 @@ public partial class MainWindow : Window
                 if (string.IsNullOrWhiteSpace(trimmedDirectory))
                     continue;
 
+                yield return Path.Combine(trimmedDirectory, "code");
                 yield return Path.Combine(trimmedDirectory, "code.exe");
                 yield return Path.Combine(trimmedDirectory, "code.cmd");
                 yield return Path.Combine(trimmedDirectory, "code.bat");
             }
         }
+
+        yield return "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
+        yield return "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code";
+        yield return "/usr/local/bin/code";
+        yield return "/opt/homebrew/bin/code";
+        yield return "/snap/bin/code";
 
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (!string.IsNullOrWhiteSpace(localAppData))

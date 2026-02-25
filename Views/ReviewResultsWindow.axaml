@@ -89,6 +89,7 @@
                                             Content="Open" />
                                     <Button Width="78"
                                             Click="CommentFindingButton_OnClick"
+                                            IsVisible="{Binding ShowCommentButton}"
                                             IsEnabled="{Binding CanCommentActive}"
                                             ToolTip.Tip="{Binding CommentToolTip}"
                                             Content="Comment" />
@@ -125,14 +126,20 @@
 
         <Grid Grid.Row="3"
               Margin="0,10,0,0"
-              ColumnDefinitions="Auto,*,Auto">
+              ColumnDefinitions="Auto,Auto,*,Auto">
             <Button x:Name="ToggleAllButton"
                     Grid.Column="0"
                     Width="110"
                     Click="ToggleAllButton_OnClick"
                     Content="Toggle All" />
+            <Button x:Name="ExportToClipboardButton"
+                    Grid.Column="1"
+                    Margin="8,0,0,0"
+                    Width="150"
+                    Click="ExportToClipboardButton_OnClick"
+                    Content="Export To Clipboard" />
             <Button x:Name="CommentSelectedButton"
-                    Grid.Column="2"
+                    Grid.Column="3"
                     Width="140"
                     Click="CommentSelectedButton_OnClick"
                     Content="Comment Selected" />
