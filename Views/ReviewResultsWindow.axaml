@@ -10,7 +10,7 @@
         MinHeight="420"
         Title="Review Results">
     <Grid Margin="16"
-          RowDefinitions="Auto,Auto,*">
+          RowDefinitions="Auto,Auto,*,Auto">
         <TextBlock x:Name="SummaryTextBlock"
                    Grid.Row="0"
                    FontSize="16"
@@ -114,6 +114,21 @@
                              ScrollViewer.HorizontalScrollBarVisibility="Auto" />
                 </Grid>
             </Border>
+        </Grid>
+
+        <Grid Grid.Row="3"
+              Margin="0,10,0,0"
+              ColumnDefinitions="Auto,*,Auto">
+            <Button x:Name="ToggleAllButton"
+                    Grid.Column="0"
+                    Width="110"
+                    Click="ToggleAllButton_OnClick"
+                    Content="Toggle All" />
+            <Button x:Name="CommentSelectedButton"
+                    Grid.Column="2"
+                    Width="140"
+                    Click="CommentSelectedButton_OnClick"
+                    Content="Comment Selected" />
         </Grid>
     </Grid>
 </Window>

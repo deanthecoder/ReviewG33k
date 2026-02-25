@@ -31,6 +31,8 @@ public partial class ReviewResultsWindow : Window
     private readonly Action<CodeSmellFinding> m_openFindingAction;
     private readonly Func<CodeSmellFinding, Task<bool>> m_commentFindingAction;
     private readonly Func<CodeSmellFinding, string> m_resolveFindingPath;
+    private readonly ReviewResultRow[] m_rows;
+    private bool m_isBulkCommenting;
 
     public ReviewResultsWindow()
         : this(Array.Empty<CodeSmellFinding>(), false, false, null, null, null)
@@ -56,7 +58,7 @@ public partial class ReviewResultsWindow : Window
         InitializeComponent();
         ResultsListBox.SelectionChanged += ResultsListBox_OnSelectionChanged;
 
-        var rows = (findings ?? [])
+        m_rows = (findings ?? [])
             .Where(finding => finding != null)
             .Where(finding => finding.Severity != CodeReviewFindingSeverity.Ok)
             .OrderBy(finding => GetSeveritySortOrder(finding.Severity))
@@ -65,15 +67,19 @@ public partial class ReviewResultsWindow : Window
             .Select(finding => MapToRow(finding, canOpenInVsCode, canCommentInBitbucket))
             .ToArray();
 
-        ResultsListBox.ItemsSource = rows;
-        if (rows.Length > 0)
+        foreach (var row in m_rows)
+            row.PropertyChanged += ReviewResultRow_OnPropertyChanged;
+
+        ResultsListBox.ItemsSource = m_rows;
+        if (m_rows.Length > 0)
             ResultsListBox.SelectedIndex = 0;
         else
             SetPreviewText("Select an issue to preview surrounding file content.", "Preview");
 
-        SummaryTextBlock.Text = rows.Length == 0
+        SummaryTextBlock.Text = m_rows.Length == 0
             ? "No review findings"
-            : $"{rows.Length} finding(s)";
+            : $"{m_rows.Length} finding(s)";
+        UpdateBatchActionButtonStates();
     }
 
     private void OpenFindingButton_OnClick(object sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -106,6 +112,73 @@ public partial class ReviewResultsWindow : Window
         }
     }
 
+    private void ToggleAllButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (m_rows.Length == 0)
+            return;
+
+        var includedCount = m_rows.Count(row => row.IsIncluded);
+        var excludedCount = m_rows.Length - includedCount;
+        var nextIncludedState = includedCount <= excludedCount;
+
+        foreach (var row in m_rows)
+            row.IsIncluded = nextIncludedState;
+
+        UpdateBatchActionButtonStates();
+    }
+
+    private async void CommentSelectedButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (m_isBulkCommenting || m_commentFindingAction == null)
+            return;
+
+        var rowsToComment = m_rows
+            .Where(row => row.IsIncluded && row.CanCommentActive)
+            .ToArray();
+        if (rowsToComment.Length == 0)
+            return;
+
+        m_isBulkCommenting = true;
+        UpdateBatchActionButtonStates();
+
+        var successCount = 0;
+        var failureCount = 0;
+        foreach (var row in rowsToComment)
+        {
+            row.IsPostingComment = true;
+            try
+            {
+                var success = await m_commentFindingAction(row.Finding);
+                if (success)
+                {
+                    row.HasPostedComment = true;
+                    successCount++;
+                }
+                else
+                {
+                    failureCount++;
+                }
+            }
+            catch (Exception exception)
+            {
+                failureCount++;
+                SetPreviewText($"Failed to post comment: {exception.Message}", "Preview");
+            }
+            finally
+            {
+                row.IsPostingComment = false;
+            }
+        }
+
+        m_isBulkCommenting = false;
+        UpdateBatchActionButtonStates();
+
+        if (failureCount == 0)
+            SetPreviewText($"Posted {successCount} comment(s).", "Preview");
+        else
+            SetPreviewText($"Posted {successCount} comment(s). {failureCount} failed. See log for details.", "Preview");
+    }
+
     private void ResultsListBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (ResultsListBox.SelectedItem is not ReviewResultRow row)
@@ -117,7 +190,10 @@ public partial class ReviewResultsWindow : Window
         UpdatePreviewForFinding(row.Finding);
     }
 
-    private static ReviewResultRow MapToRow(CodeSmellFinding finding, bool canOpenInVsCode, bool canCommentInBitbucket)
+    private static ReviewResultRow MapToRow(
+        CodeSmellFinding finding,
+        bool canOpenInVsCode,
+        bool canCommentInBitbucket)
     {
         var issueLocation = finding.LineNumber > 0
             ? $"{finding.FilePath}:{finding.LineNumber}"
@@ -142,7 +218,14 @@ public partial class ReviewResultsWindow : Window
             canOpen,
             openToolTipBase,
             canComment,
-            commentToolTipBase);
+            commentToolTipBase,
+            false);
+    }
+
+    private void ReviewResultRow_OnPropertyChanged(object sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(ReviewResultRow.IsIncluded) or nameof(ReviewResultRow.IsPostingComment) or nameof(ReviewResultRow.HasPostedComment))
+            UpdateBatchActionButtonStates();
     }
 
     private void UpdatePreviewForFinding(CodeSmellFinding finding)
@@ -203,6 +286,14 @@ public partial class ReviewResultsWindow : Window
         PreviewTextBox.CaretIndex = 0;
     }
 
+    private void UpdateBatchActionButtonStates()
+    {
+        ToggleAllButton.IsEnabled = m_rows.Length > 0;
+        CommentSelectedButton.IsEnabled = !m_isBulkCommenting &&
+                                          m_commentFindingAction != null &&
+                                          m_rows.Any(row => row.IsIncluded && row.CanCommentActive);
+    }
+
     private static int GetSeveritySortOrder(CodeReviewFindingSeverity severity) =>
         severity switch
         {
@@ -235,7 +326,8 @@ public partial class ReviewResultsWindow : Window
             bool canOpen,
             string openToolTipBase,
             bool canComment,
-            string commentToolTipBase)
+            string commentToolTipBase,
+            bool hasExistingComment)
         {
             Finding = finding;
             SeverityText = severityText ?? string.Empty;
@@ -246,6 +338,7 @@ public partial class ReviewResultsWindow : Window
             CanComment = canComment;
             m_openToolTipBase = openToolTipBase ?? string.Empty;
             m_commentToolTipBase = commentToolTipBase ?? string.Empty;
+            m_hasPostedComment = hasExistingComment;
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
