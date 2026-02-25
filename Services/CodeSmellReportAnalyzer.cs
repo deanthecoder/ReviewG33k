@@ -235,6 +235,7 @@ public sealed class CodeSmellReportAnalyzer
         new IfElseBraceConsistencyCodeReviewCheck(),
         new ConstructorTooLongCodeReviewCheck(),
         new ThreadSleepCodeReviewCheck(),
+        new ThrowExCodeReviewCheck(),
         new MethodCanBeStaticCodeReviewCheck(),
         new UnobservedTaskResultCodeReviewCheck(),
         new DisposableNotDisposedCodeReviewCheck(),
@@ -244,6 +245,7 @@ public sealed class CodeSmellReportAnalyzer
         new MissingXmlDocsCodeReviewCheck(),
         new MissingUnitTestsCodeReviewCheck(),
         new MissingTestsForNewPublicMethodsCodeReviewCheck(),
+        new WarningSuppressionCodeReviewCheck(),
         new UnusedUsingRoslynCodeReviewCheck()
     ];
 }

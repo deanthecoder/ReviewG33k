@@ -284,6 +284,110 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void ThrowExCheckWhenThrowExUsedInCatchReportsImportant()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch (Exception ex)
+                    {
+                        throw ex;
+                    }
+                }
+
+                private static void ThrowSomething() => throw new Exception();
+            }
+            """;
+
+        var report = AnalyzeSource(new ThrowExCodeReviewCheck(), "A", source, Enumerable.Range(1, 19));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Important));
+        Assert.That(report.Findings[0].Message, Does.Contain("throw ex"));
+    }
+
+    [Test]
+    public void ThrowExCheckWhenBareThrowUsedDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch (Exception)
+                    {
+                        throw;
+                    }
+                }
+
+                private static void ThrowSomething() => throw new Exception();
+            }
+            """;
+
+        var report = AnalyzeSource(new ThrowExCodeReviewCheck(), "A", source, Enumerable.Range(1, 19));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void WarningSuppressionCheckWhenPragmaDisableAddedReportsImportant()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                #pragma warning disable CS0168
+                public void Run()
+                {
+                    int unused;
+                }
+                #pragma warning restore CS0168
+            }
+            """;
+
+        var report = AnalyzeSource(new WarningSuppressionCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Important));
+        Assert.That(report.Findings[0].Message, Does.Contain("#pragma warning disable"));
+    }
+
+    [Test]
+    public void WarningSuppressionCheckWhenSuppressMessageAttributeAddedReportsImportant()
+    {
+        const string source = """
+            using System.Diagnostics.CodeAnalysis;
+
+            [SuppressMessage("Style", "IDE0001")]
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new WarningSuppressionCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Important));
+        Assert.That(report.Findings[0].Message, Does.Contain("SuppressMessage"));
+    }
+
+    [Test]
     public void AsyncVoidCheckWhenAsyncVoidMethodIsAddedReportsImportant()
     {
         const string source = """

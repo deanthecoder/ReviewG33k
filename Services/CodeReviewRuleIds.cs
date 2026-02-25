@@ -29,6 +29,7 @@ public static class CodeReviewRuleIds
     public const string IfElseBraceConsistency = "if-else-brace-consistency";
     public const string ConstructorTooLong = "constructor-too-long";
     public const string ThreadSleep = "thread-sleep";
+    public const string ThrowExInCatch = "throw-ex-in-catch";
     public const string MethodCanBeStatic = "method-can-be-static";
     public const string UnobservedTaskResult = "unobserved-task-result";
     public const string DisposableNotDisposed = "disposable-not-disposed";
@@ -36,4 +37,5 @@ public static class CodeReviewRuleIds
     public const string PublicMutableStaticState = "public-mutable-static-state";
     public const string UnusedPrivateMember = "unused-private-member";
     public const string UnusedUsingsRoslyn = "unused-usings-roslyn";
+    public const string WarningSuppression = "warning-suppression";
 }
