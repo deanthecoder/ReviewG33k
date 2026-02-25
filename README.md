@@ -16,6 +16,7 @@ ReviewG33k is a lightweight Avalonia desktop app for fast, local code reviews. I
 - **Isolated PR worktrees**: Uses `git worktree` (`CodeReview/<repo>/PR-<id>`) so your main working tree stays untouched.
 - **Fast handoff to IDE**: Finds a `.sln` and opens it with your default solution app.
 - **Open findings in VS Code**: One click to jump to `file:line` (requires the `code` CLI).
+- **Local quick-fixes**: Some findings can be auto-fixed in-place when reviewing a local repo (for example, removing unused `using` directives).
 - **Export to clipboard**: Copy findings as text to paste into Codex (or similar) to help automate fixes.
 - **Opinionated automated checks**: Flags common pitfalls (async, exceptions, test hygiene, suppressions, and more) on the changed lines.
 

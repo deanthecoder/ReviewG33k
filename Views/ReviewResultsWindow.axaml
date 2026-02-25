@@ -83,6 +83,12 @@
                                             VerticalAlignment="Center"
                                             Spacing="6">
                                     <Button Width="78"
+                                            Click="FixFindingButton_OnClick"
+                                            IsVisible="{Binding ShowFixButton}"
+                                            IsEnabled="{Binding CanFixActive}"
+                                            ToolTip.Tip="{Binding FixToolTip}"
+                                            Content="Fix" />
+                                    <Button Width="78"
                                             Click="CommentFindingButton_OnClick"
                                             IsVisible="{Binding ShowCommentButton}"
                                             IsEnabled="{Binding CanCommentActive}"

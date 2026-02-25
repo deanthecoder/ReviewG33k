@@ -355,10 +355,12 @@ public partial class MainWindow : Window
     {
         var canOpenInVsCode = TryDetectVsCode(out _, out _);
         var canCommentInBitbucket = m_latestPullRequest != null;
+        var canFixLocally = m_settings.UseLocalCommittedReview;
         var resultsWindow = new ReviewResultsWindow(
             report?.Findings ?? [],
             canOpenInVsCode,
             canCommentInBitbucket,
+            canFixLocally,
             OpenReviewFindingInVsCode,
             CommentOnReviewFindingAsync,
             ResolveReviewFindingPath);

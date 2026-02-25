@@ -20,6 +20,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using ReviewG33k.Services;
+using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Views;
 
@@ -35,12 +36,12 @@ public partial class ReviewResultsWindow : Window
     private bool m_isBulkCommenting;
 
     public ReviewResultsWindow()
-        : this(Array.Empty<CodeSmellFinding>(), false, false, null, null, null)
+        : this(Array.Empty<CodeSmellFinding>(), false, false, false, null, null, null)
     {
     }
 
     public ReviewResultsWindow(IEnumerable<CodeSmellFinding> findings)
-        : this(findings, false, false, null, null, null)
+        : this(findings, false, false, false, null, null, null)
     {
     }
 
@@ -48,6 +49,7 @@ public partial class ReviewResultsWindow : Window
         IEnumerable<CodeSmellFinding> findings,
         bool canOpenInVsCode,
         bool canCommentInBitbucket,
+        bool canFixLocally,
         Action<CodeSmellFinding> openFindingAction,
         Func<CodeSmellFinding, Task<bool>> commentFindingAction,
         Func<CodeSmellFinding, string> resolveFindingPath)
@@ -65,7 +67,7 @@ public partial class ReviewResultsWindow : Window
             .OrderBy(finding => GetSeveritySortOrder(finding.Severity))
             .ThenBy(finding => finding.FilePath, StringComparer.OrdinalIgnoreCase)
             .ThenBy(finding => finding.LineNumber)
-            .Select(finding => MapToRow(finding, canOpenInVsCode, canCommentInBitbucket))
+            .Select(finding => MapToRow(finding, canOpenInVsCode, canCommentInBitbucket, canFixLocally, resolveFindingPath != null))
             .ToArray();
 
         foreach (var row in m_rows)
@@ -103,6 +105,51 @@ public partial class ReviewResultsWindow : Window
         finally
         {
             row.IsPostingComment = false;
+        }
+    }
+
+    private void FixFindingButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: ReviewResultRow row } || !row.CanFixActive)
+            return;
+
+        if (row.Finding == null)
+            return;
+
+        var resolvedPath = m_resolveFindingPath?.Invoke(row.Finding);
+        if (string.IsNullOrWhiteSpace(resolvedPath))
+        {
+            SetPreviewText("Could not resolve file path for fix.", "Preview");
+            return;
+        }
+
+        row.IsFixing = true;
+        try
+        {
+            if (!CodeReviewFindingFixer.TryFix(row.Finding, resolvedPath, out var fixMessage))
+            {
+                SetPreviewText(fixMessage ?? "Fix failed.", "Preview");
+                return;
+            }
+
+            row.HasBeenFixed = true;
+            row.IsIncluded = false;
+            SetPreviewText(fixMessage ?? "Fixed.", "Preview");
+
+            if (ResultsListBox.SelectedItem is ReviewResultRow selectedRow &&
+                ReferenceEquals(selectedRow, row) &&
+                row.Finding != null)
+            {
+                UpdatePreviewForFinding(row.Finding);
+            }
+        }
+        catch (Exception exception)
+        {
+            SetPreviewText($"Fix failed: {exception.Message}", "Preview");
+        }
+        finally
+        {
+            row.IsFixing = false;
         }
     }
 
@@ -236,7 +283,9 @@ public partial class ReviewResultsWindow : Window
     private static ReviewResultRow MapToRow(
         CodeSmellFinding finding,
         bool canOpenInVsCode,
-        bool canCommentInBitbucket)
+        bool canCommentInBitbucket,
+        bool canFixLocally,
+        bool hasPathResolver)
     {
         var issueLocation = finding.LineNumber > 0
             ? $"{finding.FilePath}:{finding.LineNumber}"
@@ -246,12 +295,16 @@ public partial class ReviewResultsWindow : Window
         var hasFileAndLine = !string.IsNullOrWhiteSpace(finding.FilePath) && finding.LineNumber > 0;
         var canOpen = canOpenInVsCode && hasFileAndLine;
         var canComment = canCommentInBitbucket && hasFileAndLine;
+        var canFix = canFixLocally && hasPathResolver && hasFileAndLine && CodeReviewFindingFixer.CanFix(finding);
         var openToolTipBase = canOpen
             ? "Open file and line in VS Code"
             : "VS Code not detected or no valid file/line for this issue";
         var commentToolTipBase = canComment
             ? "Post this issue as a Bitbucket PR inline comment"
             : "Bitbucket PR context is unavailable or no valid file/line for this issue";
+        var fixToolTipBase = canFix
+            ? "Apply a local quick-fix for this issue"
+            : "This issue cannot be auto-fixed";
         return new ReviewResultRow(
             finding,
             finding.RuleId,
@@ -264,12 +317,15 @@ public partial class ReviewResultsWindow : Window
             canComment,
             commentToolTipBase,
             canCommentInBitbucket,
+            canFix,
+            canFix,
+            fixToolTipBase,
             false);
     }
 
     private void ReviewResultRow_OnPropertyChanged(object sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(ReviewResultRow.IsIncluded) or nameof(ReviewResultRow.IsPostingComment) or nameof(ReviewResultRow.HasPostedComment))
+        if (e.PropertyName is nameof(ReviewResultRow.IsIncluded) or nameof(ReviewResultRow.IsPostingComment) or nameof(ReviewResultRow.HasPostedComment) or nameof(ReviewResultRow.IsFixing) or nameof(ReviewResultRow.HasBeenFixed))
         {
             UpdateOpenSelectedButtonState();
             UpdateBatchActionButtonStates();
@@ -423,9 +479,12 @@ public partial class ReviewResultsWindow : Window
 
         private readonly string m_openToolTipBase;
         private readonly string m_commentToolTipBase;
+        private readonly string m_fixToolTipBase;
         private bool m_isIncluded = true;
         private bool m_isPostingComment;
         private bool m_hasPostedComment;
+        private bool m_isFixing;
+        private bool m_hasBeenFixed;
 
         public ReviewResultRow(
             CodeSmellFinding finding,
@@ -439,6 +498,9 @@ public partial class ReviewResultsWindow : Window
             bool canComment,
             string commentToolTipBase,
             bool showCommentButton,
+            bool showFixButton,
+            bool canFix,
+            string fixToolTipBase,
             bool hasExistingComment)
         {
             Finding = finding;
@@ -450,8 +512,11 @@ public partial class ReviewResultsWindow : Window
             CanOpen = canOpen;
             CanComment = canComment;
             ShowCommentButton = showCommentButton;
+            ShowFixButton = showFixButton;
+            CanFix = canFix;
             m_openToolTipBase = openToolTipBase ?? string.Empty;
             m_commentToolTipBase = commentToolTipBase ?? string.Empty;
+            m_fixToolTipBase = fixToolTipBase ?? string.Empty;
             m_hasPostedComment = hasExistingComment;
         }
 
@@ -475,6 +540,10 @@ public partial class ReviewResultsWindow : Window
 
         public bool ShowCommentButton { get; }
 
+        public bool ShowFixButton { get; }
+
+        public bool CanFix { get; }
+
         public bool IsIncluded
         {
             get => m_isIncluded;
@@ -487,8 +556,10 @@ public partial class ReviewResultsWindow : Window
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(CanOpenActive));
                 RaisePropertyChanged(nameof(CanCommentActive));
+                RaisePropertyChanged(nameof(CanFixActive));
                 RaisePropertyChanged(nameof(OpenToolTip));
                 RaisePropertyChanged(nameof(CommentToolTip));
+                RaisePropertyChanged(nameof(FixToolTip));
                 RaisePropertyChanged(nameof(IssueForeground));
                 RaisePropertyChanged(nameof(IssueLocationForeground));
             }
@@ -506,6 +577,36 @@ public partial class ReviewResultsWindow : Window
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(CanCommentActive));
                 RaisePropertyChanged(nameof(CommentToolTip));
+            }
+        }
+
+        public bool IsFixing
+        {
+            get => m_isFixing;
+            set
+            {
+                if (m_isFixing == value)
+                    return;
+
+                m_isFixing = value;
+                RaisePropertyChanged();
+                RaisePropertyChanged(nameof(CanFixActive));
+                RaisePropertyChanged(nameof(FixToolTip));
+            }
+        }
+
+        public bool HasBeenFixed
+        {
+            get => m_hasBeenFixed;
+            set
+            {
+                if (m_hasBeenFixed == value)
+                    return;
+
+                m_hasBeenFixed = value;
+                RaisePropertyChanged();
+                RaisePropertyChanged(nameof(CanFixActive));
+                RaisePropertyChanged(nameof(FixToolTip));
             }
         }
 
@@ -528,6 +629,8 @@ public partial class ReviewResultsWindow : Window
 
         public bool CanCommentActive => CanComment && IsIncluded && !IsPostingComment && !HasPostedComment;
 
+        public bool CanFixActive => CanFix && IsIncluded && !IsFixing && !HasBeenFixed;
+
         public string OpenToolTip => !IsIncluded ? "Issue is ignored." : m_openToolTipBase;
 
         public string CommentToolTip
@@ -541,6 +644,20 @@ public partial class ReviewResultsWindow : Window
                 if (IsPostingComment)
                     return "Posting comment...";
                 return m_commentToolTipBase;
+            }
+        }
+
+        public string FixToolTip
+        {
+            get
+            {
+                if (!IsIncluded)
+                    return "Issue is ignored.";
+                if (HasBeenFixed)
+                    return "Issue has been fixed locally.";
+                if (IsFixing)
+                    return "Applying fix...";
+                return m_fixToolTipBase;
             }
         }
 
