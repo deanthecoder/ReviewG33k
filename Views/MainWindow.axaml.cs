@@ -28,6 +28,7 @@ using Avalonia.VisualTree;
 using DTC.Core.UI;
 using ReviewG33k.Models;
 using ReviewG33k.Services;
+using ReviewG33k.Services.Checks.Support;
 using ReviewG33k.ViewModels;
 
 namespace ReviewG33k.Views;
@@ -356,11 +357,13 @@ public partial class MainWindow : Window
         var canOpenInVsCode = TryDetectVsCode(out _, out _);
         var canCommentInBitbucket = m_latestPullRequest != null;
         var canFixLocally = m_settings.UseLocalCommittedReview;
+        var findingFixer = canFixLocally ? new CodeReviewFixDispatcher(m_codeSmellReportAnalyzer.Checks) : null;
         var resultsWindow = new ReviewResultsWindow(
             report?.Findings ?? [],
             canOpenInVsCode,
             canCommentInBitbucket,
             canFixLocally,
+            findingFixer,
             OpenReviewFindingInVsCode,
             CommentOnReviewFindingAsync,
             ResolveReviewFindingPath);

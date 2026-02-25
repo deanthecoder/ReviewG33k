@@ -32,16 +32,17 @@ public partial class ReviewResultsWindow : Window
     private readonly Action<CodeSmellFinding> m_openFindingAction;
     private readonly Func<CodeSmellFinding, Task<bool>> m_commentFindingAction;
     private readonly Func<CodeSmellFinding, string> m_resolveFindingPath;
+    private readonly ICodeReviewFindingFixer m_findingFixer;
     private readonly ReviewResultRow[] m_rows;
     private bool m_isBulkCommenting;
 
     public ReviewResultsWindow()
-        : this(Array.Empty<CodeSmellFinding>(), false, false, false, null, null, null)
+        : this(Array.Empty<CodeSmellFinding>(), false, false, false, null, null, null, null)
     {
     }
 
     public ReviewResultsWindow(IEnumerable<CodeSmellFinding> findings)
-        : this(findings, false, false, false, null, null, null)
+        : this(findings, false, false, false, null, null, null, null)
     {
     }
 
@@ -50,6 +51,7 @@ public partial class ReviewResultsWindow : Window
         bool canOpenInVsCode,
         bool canCommentInBitbucket,
         bool canFixLocally,
+        ICodeReviewFindingFixer findingFixer,
         Action<CodeSmellFinding> openFindingAction,
         Func<CodeSmellFinding, Task<bool>> commentFindingAction,
         Func<CodeSmellFinding, string> resolveFindingPath)
@@ -57,6 +59,7 @@ public partial class ReviewResultsWindow : Window
         m_openFindingAction = openFindingAction;
         m_commentFindingAction = commentFindingAction;
         m_resolveFindingPath = resolveFindingPath;
+        m_findingFixer = findingFixer;
         InitializeComponent();
         ResultsListBox.SelectionChanged += ResultsListBox_OnSelectionChanged;
         CommentSelectedButton.IsVisible = canCommentInBitbucket;
@@ -67,7 +70,7 @@ public partial class ReviewResultsWindow : Window
             .OrderBy(finding => GetSeveritySortOrder(finding.Severity))
             .ThenBy(finding => finding.FilePath, StringComparer.OrdinalIgnoreCase)
             .ThenBy(finding => finding.LineNumber)
-            .Select(finding => MapToRow(finding, canOpenInVsCode, canCommentInBitbucket, canFixLocally, resolveFindingPath != null))
+            .Select(finding => MapToRow(finding, canOpenInVsCode, canCommentInBitbucket, canFixLocally, resolveFindingPath != null, findingFixer))
             .ToArray();
 
         foreach (var row in m_rows)
@@ -126,7 +129,13 @@ public partial class ReviewResultsWindow : Window
         row.IsFixing = true;
         try
         {
-            if (!CodeReviewFindingFixer.TryFix(row.Finding, resolvedPath, out var fixMessage))
+            if (m_findingFixer == null)
+            {
+                SetPreviewText("No fixer is available in this mode.", "Preview");
+                return;
+            }
+
+            if (!m_findingFixer.TryFix(row.Finding, resolvedPath, out var fixMessage))
             {
                 SetPreviewText(fixMessage ?? "Fix failed.", "Preview");
                 return;
@@ -285,7 +294,8 @@ public partial class ReviewResultsWindow : Window
         bool canOpenInVsCode,
         bool canCommentInBitbucket,
         bool canFixLocally,
-        bool hasPathResolver)
+        bool hasPathResolver,
+        ICodeReviewFindingFixer findingFixer)
     {
         var issueLocation = finding.LineNumber > 0
             ? $"{finding.FilePath}:{finding.LineNumber}"
@@ -295,7 +305,7 @@ public partial class ReviewResultsWindow : Window
         var hasFileAndLine = !string.IsNullOrWhiteSpace(finding.FilePath) && finding.LineNumber > 0;
         var canOpen = canOpenInVsCode && hasFileAndLine;
         var canComment = canCommentInBitbucket && hasFileAndLine;
-        var canFix = canFixLocally && hasPathResolver && hasFileAndLine && CodeReviewFindingFixer.CanFix(finding);
+        var canFix = canFixLocally && hasPathResolver && hasFileAndLine && findingFixer != null && findingFixer.CanFix(finding);
         var openToolTipBase = canOpen
             ? "Open file and line in VS Code"
             : "VS Code not detected or no valid file/line for this issue";
@@ -317,7 +327,7 @@ public partial class ReviewResultsWindow : Window
             canComment,
             commentToolTipBase,
             canCommentInBitbucket,
-            canFix,
+            canFixLocally,
             canFix,
             fixToolTipBase,
             false);

@@ -15,12 +15,14 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 
 using ReviewG33k.Services;
+using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
 
-public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase
+public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase, IFixableCodeReviewCheck
 {
     private const string UnusedUsingDiagnosticId = "CS8019";
     private static readonly CSharpParseOptions ParseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
@@ -31,6 +33,76 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase
     public override string RuleId => CodeReviewRuleIds.UnusedUsingsRoslyn;
 
     public override string DisplayName => "Unused using directives (Roslyn)";
+
+    public bool CanFix(CodeSmellFinding finding) =>
+        finding != null &&
+        string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase) &&
+        finding.LineNumber > 0;
+
+    public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
+    {
+        resultMessage = null;
+
+        if (!CanFix(finding))
+        {
+            resultMessage = "Finding is not fixable.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(resolvedFilePath) || !File.Exists(resolvedFilePath))
+        {
+            resultMessage = "File path could not be resolved.";
+            return false;
+        }
+
+        string text;
+        try
+        {
+            text = File.ReadAllText(resolvedFilePath);
+        }
+        catch (Exception exception)
+        {
+            resultMessage = $"Could not read file: {exception.Message}";
+            return false;
+        }
+
+        var sourceText = SourceText.From(text);
+        var lineIndex = finding.LineNumber - 1;
+        if (lineIndex < 0 || lineIndex >= sourceText.Lines.Count)
+        {
+            resultMessage = "Finding line number is out of range for this file.";
+            return false;
+        }
+
+        var line = sourceText.Lines[lineIndex];
+        var lineText = line.ToString();
+        var trimmed = lineText.TrimStart();
+        if (!trimmed.StartsWith("using ", StringComparison.Ordinal) &&
+            !trimmed.StartsWith("using\t", StringComparison.Ordinal) &&
+            !trimmed.StartsWith("global using ", StringComparison.Ordinal) &&
+            !trimmed.StartsWith("global using\t", StringComparison.Ordinal))
+        {
+            resultMessage = "Target line is not a using directive.";
+            return false;
+        }
+
+        var spanToRemove = TextSpan.FromBounds(line.Start, line.EndIncludingLineBreak);
+        var updatedText = sourceText.WithChanges(new TextChange(spanToRemove, string.Empty)).ToString();
+        updatedText = CodeReviewFixTextUtilities.CollapseConsecutiveBlankLinesNearLine(updatedText, lineIndex);
+
+        try
+        {
+            File.WriteAllText(resolvedFilePath, updatedText);
+        }
+        catch (Exception exception)
+        {
+            resultMessage = $"Could not write file: {exception.Message}";
+            return false;
+        }
+
+        resultMessage = "Removed unused using directive.";
+        return true;
+    }
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
