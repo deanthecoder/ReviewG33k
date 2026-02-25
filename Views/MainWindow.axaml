@@ -95,19 +95,21 @@
                                 Classes="accent"
                                 Padding="14,8"
                                 Click="PrepareReviewButton_OnClick"
-                                Content="Prepare Review Checkout" />
+                                Content="Review PR" />
                         <ProgressBar Grid.Column="1" x:Name="BusyIndicatorSpinner"
                                      Width="120"
                                      Margin="8,0"
                                      VerticalAlignment="Center"
                                      IsVisible="False"
                                      IsIndeterminate="True" />
-                        <CheckBox x:Name="AutoOpenSolutionCheckBox"
-                                  Grid.Column="3"
-                                  VerticalAlignment="Center"
-                                  HorizontalAlignment="Right"
-                                  IsChecked="True"
-                                  Content="Open highest-level .sln automatically" />
+                        <Button x:Name="OpenSolutionButton"
+                                Grid.Column="3"
+                                Padding="12,8"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Right"
+                                Click="OpenSolutionButton_OnClick"
+                                IsEnabled="False"
+                                Content="Open Solution" />
                     </Grid>
                 </Grid>
             </Border>

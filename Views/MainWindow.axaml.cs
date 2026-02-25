@@ -39,6 +39,7 @@ public partial class MainWindow : Window
     private static readonly IBrush DetailLogBrush = Brushes.Gray;
     private static readonly IBrush ErrorLogBrush = Brushes.IndianRed;
     private static readonly IBrush WarningLogBrush = Brushes.Orange;
+    private static readonly IBrush HintLogBrush = Brushes.LightSteelBlue;
     private static readonly IBrush PassLogBrush = Brushes.LimeGreen;
 
     private readonly GitCommandRunner m_gitCommandRunner = new();
@@ -49,6 +50,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<LogLineEntry> m_logLines = [];
     private CancellationTokenSource m_previewUpdateCancellation;
     private string m_latestReviewWorktreePath;
+    private string m_latestSolutionPath;
     private string m_vsCodeExecutablePath;
     private bool m_busy;
     private bool m_isGitAvailable = true;
@@ -66,7 +68,6 @@ public partial class MainWindow : Window
         PullRequestUrlTextBox.AddHandler(DragDrop.DropEvent, PullRequestUrlTextBox_OnDrop);
         PullRequestUrlTextBox.TextChanged += PullRequestUrlTextBox_OnTextChanged;
         RepositoryRootTextBox.TextChanged += RepositoryRootTextBox_OnTextChanged;
-        AutoOpenSolutionCheckBox.IsCheckedChanged += AutoOpenSolutionCheckBox_OnIsCheckedChanged;
         RepositoryRootTextBox.LostFocus += RepositoryRootTextBox_OnLostFocus;
         LogListBox.AddHandler(InputElement.PointerPressedEvent, LogListBox_OnPointerPressed, RoutingStrategies.Bubble);
         Opened += MainWindow_OnOpened;
@@ -75,7 +76,6 @@ public partial class MainWindow : Window
 
         if (!string.IsNullOrWhiteSpace(m_settings.RepositoryRootPath))
             RepositoryRootTextBox.Text = m_settings.RepositoryRootPath;
-        AutoOpenSolutionCheckBox.IsChecked = m_settings.AutoOpenSolutionFile;
         LogListBox.ItemsSource = m_logLines;
 
         _ = UpdatePullRequestPreviewAsync();
@@ -145,10 +145,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        CodeSmellReport report = null;
         await ExecuteBusyActionAsync(
-            "Preparing review checkout...",
+            "Reviewing pull request...",
             async () =>
             {
+                m_latestSolutionPath = null;
+                UpdateActionButtonStates();
+
                 var metadata = await m_pullRequestMetadataClient.TryGetMetadataAsync(pullRequest);
                 var changedPaths = await m_pullRequestMetadataClient.TryGetChangedPathsAsync(pullRequest);
 
@@ -165,26 +169,25 @@ public partial class MainWindow : Window
 
                 if (!string.IsNullOrWhiteSpace(result.SolutionPath))
                 {
+                    m_latestSolutionPath = result.SolutionPath;
                     AppendLog($"Solution selected: {result.SolutionPath}");
-
-                    if (AutoOpenSolutionCheckBox.IsChecked == true)
-                    {
-                        OpenFileWithShell(result.SolutionPath);
-                        AppendLog("Opened solution in default application.");
-                    }
                 }
                 else
                 {
                     AppendLog("No .sln file found in review checkout.");
                 }
 
-                await RunCodeSmellScanAsync(result.ReviewWorktreePath, metadata?.TargetBranch);
+                UpdateActionButtonStates();
+                report = await RunCodeSmellScanAsync(result.ReviewWorktreePath, metadata?.TargetBranch);
 
-                SetStatus("Review checkout is ready.");
+                SetStatus("Review complete.");
             });
+
+        if (report != null)
+            await ShowReviewResultsWindowAsync(report);
     }
 
-    private async Task RunCodeSmellScanAsync(string reviewWorktreePath, string targetBranch)
+    private async Task<CodeSmellReport> RunCodeSmellScanAsync(string reviewWorktreePath, string targetBranch)
     {
         AppendLog("Code review scan starting...");
         var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(reviewWorktreePath, targetBranch);
@@ -197,7 +200,7 @@ public partial class MainWindow : Window
         if (report.Findings.Count == 0)
         {
             AppendLog("Code review scan: no findings.");
-            return;
+            return report;
         }
 
         AppendLog($"Code review scan: {report.Findings.Count} finding(s).");
@@ -207,6 +210,8 @@ public partial class MainWindow : Window
             var location = finding.LineNumber > 0 ? $"{finding.FilePath}:{finding.LineNumber}" : finding.FilePath;
             AppendLog($"{severity}: [{location}] {finding.Message}");
         }
+
+        return report;
     }
 
     private void LogCodeSmellCheckStatuses(CodeSmellReport report)
@@ -217,6 +222,49 @@ public partial class MainWindow : Window
             if (count == 0)
                 AppendLog($"CHECK PASS: {check.DisplayName}");
         }
+    }
+
+    private async Task ShowReviewResultsWindowAsync(CodeSmellReport report)
+    {
+        var canOpenInVsCode = TryDetectVsCode(out _, out _);
+        var resultsWindow = new ReviewResultsWindow(
+            report?.Findings ?? [],
+            canOpenInVsCode,
+            OpenReviewFindingInVsCode,
+            ResolveReviewFindingPath);
+        await resultsWindow.ShowDialog(this);
+    }
+
+    private void OpenReviewFindingInVsCode(CodeSmellFinding finding)
+    {
+        if (finding == null)
+            return;
+
+        var lineNumber = finding.LineNumber > 0 ? finding.LineNumber : 1;
+        if (!TryResolveLogPath(finding.FilePath, out var resolvedPath))
+        {
+            var error = $"Could not resolve file path: {finding.FilePath}";
+            AppendLog($"WARNING: {error}");
+            SetStatus(error);
+            return;
+        }
+
+        if (!TryLaunchVsCodeAtLine(resolvedPath, lineNumber, out var launchError))
+        {
+            AppendLog($"WARNING: {launchError}");
+            SetStatus(launchError);
+            return;
+        }
+
+        SetStatus($"Opened in VS Code: {Path.GetFileName(resolvedPath)}:{lineNumber}");
+    }
+
+    private string ResolveReviewFindingPath(CodeSmellFinding finding)
+    {
+        if (finding == null)
+            return null;
+
+        return TryResolveLogPath(finding.FilePath, out var resolvedPath) ? resolvedPath : null;
     }
 
     private async Task ExecuteBusyActionAsync(string statusText, Func<Task> action)
@@ -404,6 +452,9 @@ public partial class MainWindow : Window
     {
         PrepareReviewButton.IsEnabled = !m_busy && m_isGitAvailable && HasValidPrepareInputs();
         OpenPullRequestButton.IsEnabled = !m_busy && HasValidPullRequestInput();
+        OpenSolutionButton.IsEnabled = !m_busy &&
+                                      !string.IsNullOrWhiteSpace(m_latestSolutionPath) &&
+                                      File.Exists(m_latestSolutionPath);
     }
 
     private bool HasValidPullRequestInput()
@@ -467,17 +518,24 @@ public partial class MainWindow : Window
             return PassLogBrush;
         if (ContainsWarningMarker(line))
             return WarningLogBrush;
+        if (ContainsHintMarker(line))
+            return HintLogBrush;
 
         return HasTimestampPrefix(line) ? TimestampedLogBrush : DetailLogBrush;
     }
 
     private static bool ContainsErrorMarker(string line) =>
         line?.Contains("ERROR", StringComparison.OrdinalIgnoreCase) == true ||
-        line?.Contains("fatal", StringComparison.OrdinalIgnoreCase) == true;
+        line?.Contains("fatal", StringComparison.OrdinalIgnoreCase) == true ||
+        line?.Contains("IMPORTANT:", StringComparison.OrdinalIgnoreCase) == true;
 
     private static bool ContainsWarningMarker(string line) =>
         line?.Contains("CHECK WARNING:", StringComparison.OrdinalIgnoreCase) == true ||
+        line?.Contains("SUGGESTION:", StringComparison.OrdinalIgnoreCase) == true ||
         line?.Contains("WARNING:", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool ContainsHintMarker(string line) =>
+        line?.Contains("HINT:", StringComparison.OrdinalIgnoreCase) == true;
 
     private static bool ContainsPassMarker(string line) =>
         line?.Contains("CHECK PASS:", StringComparison.OrdinalIgnoreCase) == true;
@@ -735,9 +793,6 @@ public partial class MainWindow : Window
     private void RepositoryRootTextBox_OnLostFocus(object sender, RoutedEventArgs e) =>
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
 
-    private void AutoOpenSolutionCheckBox_OnIsCheckedChanged(object sender, RoutedEventArgs e) =>
-        PersistAutoOpenSolutionPreference(AutoOpenSolutionCheckBox.IsChecked);
-
     private async void MainWindow_OnOpened(object sender, EventArgs e)
     {
         await EnsureGitIsAvailableOnStartupAsync();
@@ -759,7 +814,6 @@ public partial class MainWindow : Window
         m_pullRequestMetadataClient.Dispose();
 
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
-        PersistAutoOpenSolutionPreference(AutoOpenSolutionCheckBox.IsChecked);
         m_settings.Dispose();
     }
 
@@ -861,24 +915,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private void PersistAutoOpenSolutionPreference(bool? autoOpenSolution)
-    {
-        var normalizedValue = autoOpenSolution != false;
-        if (m_settings.AutoOpenSolutionFile == normalizedValue)
-            return;
-
-        m_settings.AutoOpenSolutionFile = normalizedValue;
-
-        try
-        {
-            m_settings.Save();
-        }
-        catch (Exception exception)
-        {
-            AppendLog($"Warning: could not save app settings. {exception.Message}");
-        }
-    }
-
     private void OpenPullRequestButton_OnClick(object sender, RoutedEventArgs e)
     {
         var prUrlText = PullRequestUrlTextBox.Text?.Trim();
@@ -892,6 +928,20 @@ public partial class MainWindow : Window
 
         OpenFileWithShell(pullRequest.SourceUrl);
         SetStatus("Pull request opened in browser.");
+    }
+
+    private void OpenSolutionButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(m_latestSolutionPath) || !File.Exists(m_latestSolutionPath))
+        {
+            UpdateActionButtonStates();
+            SetStatus("No solution is available from the latest review.");
+            return;
+        }
+
+        OpenFileWithShell(m_latestSolutionPath);
+        SetStatus("Opened solution in default application.");
+        AppendLog($"Opened solution: {m_latestSolutionPath}");
     }
 
     private static void OpenFileWithShell(string filePath)

@@ -1,0 +1,111 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="ReviewG33k.Views.ReviewResultsWindow"
+        Width="980"
+        Height="620"
+        MinWidth="700"
+        MinHeight="420"
+        Title="Review Results">
+    <Grid Margin="16"
+          RowDefinitions="Auto,Auto,*">
+        <TextBlock x:Name="SummaryTextBlock"
+                   Grid.Row="0"
+                   FontSize="16"
+                   FontWeight="SemiBold"
+                   Text="Review issues" />
+
+        <Grid Grid.Row="1"
+              Margin="0,12,0,6"
+              ColumnDefinitions="90,*,84">
+            <TextBlock Grid.Column="0"
+                       FontWeight="SemiBold"
+                       Text="Severity" />
+            <TextBlock Grid.Column="1"
+                       Margin="8,0,0,0"
+                       FontWeight="SemiBold"
+                       Text="Issue" />
+            <TextBlock Grid.Column="2"
+                       HorizontalAlignment="Right"
+                       FontWeight="SemiBold"
+                       Text="Action" />
+        </Grid>
+
+        <Grid Grid.Row="2"
+              RowDefinitions="*,Auto"
+              MinHeight="220">
+            <Border Grid.Row="0"
+                    MinHeight="140"
+                    BorderBrush="{DynamicResource ZoneBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                <ListBox x:Name="ResultsListBox"
+                         BorderThickness="0"
+                         Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,1"
+                                  ColumnDefinitions="90,*,84">
+                                <TextBlock Grid.Column="0"
+                                           VerticalAlignment="Center"
+                                           Text="{Binding SeverityText}" />
+                                <StackPanel Grid.Column="1"
+                                            Margin="8,2,8,2"
+                                            Spacing="1">
+                                    <TextBlock Text="{Binding IssueSummary}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextWrapping="NoWrap"
+                                               ToolTip.Tip="{Binding IssueFull}" />
+                                    <TextBlock Width="520"
+                                               Text="{Binding IssueLocation}"
+                                               FontSize="11"
+                                               Opacity="0.72"
+                                               Foreground="Gray"
+                                               HorizontalAlignment="Left"
+                                               TextAlignment="Left"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextWrapping="NoWrap"
+                                               ToolTip.Tip="{Binding IssueLocation}" />
+                                </StackPanel>
+                                <Button Grid.Column="2"
+                                        Width="72"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center"
+                                        Click="OpenFindingButton_OnClick"
+                                        IsEnabled="{Binding CanOpen}"
+                                        ToolTip.Tip="{Binding OpenToolTip}"
+                                        Content="Open" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <Border Grid.Row="1"
+                    Margin="0,8,0,0"
+                    BorderBrush="{DynamicResource ZoneBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="8">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock x:Name="PreviewHeaderTextBlock"
+                               Margin="0,0,0,6"
+                               FontWeight="SemiBold"
+                               Text="Preview" />
+                    <TextBox x:Name="PreviewTextBox"
+                             Grid.Row="1"
+                             Height="230"
+                             IsReadOnly="True"
+                             AcceptsReturn="True"
+                             TextWrapping="NoWrap"
+                             FontFamily="Consolas, Courier New, monospace"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

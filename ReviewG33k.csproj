@@ -6,7 +6,7 @@
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <AssemblyName>ReviewG33k</AssemblyName>
     <RootNamespace>ReviewG33k</RootNamespace>
-    <DefaultItemExcludes>$(DefaultItemExcludes);DTC.Core\**;Installer\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);DTC.Core\**;Installer\**;ReviewG33k.Tests\**</DefaultItemExcludes>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <Version>1.0.0.0</Version>
@@ -47,6 +47,9 @@
       <DependentUpon>%(Filename)</DependentUpon>
     </Compile>
     <Compile Update="Views\MainWindow.axaml.cs">
+      <DependentUpon>%(Filename)</DependentUpon>
+    </Compile>
+    <Compile Update="Views\ReviewResultsWindow.axaml.cs">
       <DependentUpon>%(Filename)</DependentUpon>
     </Compile>
   </ItemGroup>

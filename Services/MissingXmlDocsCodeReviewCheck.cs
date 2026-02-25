@@ -30,7 +30,7 @@ public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
                 continue;
 
             if (!CodeReviewCheckUtilities.HasXmlDocumentationAbove(file.Lines, declarationLineNumber))
-                AddFinding(report, CodeReviewFindingSeverity.Warning, file.Path, declarationLineNumber, "Missing XML docs on new public type.");
+                AddFinding(report, CodeReviewFindingSeverity.Hint, file.Path, declarationLineNumber, "Missing XML docs on new public type.");
         }
     }
 

@@ -47,7 +47,7 @@ public sealed class AsyncMethodNameSuffixCodeReviewCheck : CodeReviewCheckBase
 
                 AddFinding(
                     report,
-                    CodeReviewFindingSeverity.Warning,
+                    CodeReviewFindingSeverity.Hint,
                     file.Path,
                     lineNumber,
                     $"Async method '{methodName}' should end with 'Async'.");

@@ -39,6 +39,8 @@
       <Setter Property="Background" Value="#FF2A3A4F" />
       <Setter Property="BorderBrush" Value="#FF4B627E" />
       <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
 
     <Style Selector="Button:pointerover">

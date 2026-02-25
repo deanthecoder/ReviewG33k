@@ -69,7 +69,9 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
                     continue;
 
                 var guardWindowLines = GetGuardWindow(file.Lines, bodyOpenLine, bodyCloseLine, maxLines: 10);
+                var methodBodyLines = GetMethodBodyLines(file.Lines, bodyOpenLine, bodyCloseLine);
                 var unguardedParameters = parametersToGuard
+                    .Where(parameter => ParameterIsUsed(methodBodyLines, parameter))
                     .Where(parameter => !HasArgumentGuard(guardWindowLines, parameter))
                     .ToArray();
 
@@ -78,7 +80,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
 
                 AddFinding(
                     report,
-                    CodeReviewFindingSeverity.Warning,
+                    CodeReviewFindingSeverity.Hint,
                     file.Path,
                     lineNumber,
                     $"Public method '{signature.MethodName}' may be missing argument guard(s): {string.Join(", ", unguardedParameters)}.");
@@ -226,6 +228,18 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         return window;
     }
 
+    private static IReadOnlyList<string> GetMethodBodyLines(IReadOnlyList<string> lines, int bodyOpenLine, int bodyCloseLine)
+    {
+        var bodyLines = new List<string>();
+        var startLineIndex = Math.Min(lines.Count - 1, bodyOpenLine);
+        var endLineIndex = Math.Min(lines.Count - 1, bodyCloseLine - 2);
+
+        for (var lineIndex = startLineIndex; lineIndex <= endLineIndex; lineIndex++)
+            bodyLines.Add(lines[lineIndex]);
+
+        return bodyLines;
+    }
+
     private static IReadOnlyList<string> GetParametersRequiringGuard(string parameterListText)
     {
         var parameterNames = new List<string>();
@@ -361,7 +375,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
 
         var escapedParameterName = Regex.Escape(parameterName);
         var throwIfNullPattern = $@"\bArgumentNullException\.ThrowIfNull\s*\(\s*{escapedParameterName}\s*\)";
-        var nullCheckPattern = $@"\bif\s*\(\s*{escapedParameterName}\s*(?:==\s*null|is\s+null)\s*\)";
+        var nullCheckPattern = $@"\bif\s*\([^)]*\b{escapedParameterName}\s*(?:==\s*null|is\s+null)\b[^)]*\)";
         var nullCoalesceThrowPattern = $@"\b{escapedParameterName}\s*\?\?\s*throw\s+new\s+ArgumentNullException\b";
         var stringGuardPattern = $@"\bstring\.(?:IsNullOrEmpty|IsNullOrWhiteSpace)\s*\(\s*{escapedParameterName}\s*\)";
         var guardAgainstPattern = $@"\bGuard\.Against\.Null\s*\(\s*{escapedParameterName}\s*[,\)]";
@@ -379,5 +393,18 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         }
 
         return false;
+    }
+
+    private static bool ParameterIsUsed(IReadOnlyList<string> methodBodyLines, string parameterName)
+    {
+        if (methodBodyLines == null || methodBodyLines.Count == 0 || string.IsNullOrWhiteSpace(parameterName))
+            return false;
+
+        var bodyText = string.Join('\n', methodBodyLines);
+        var withoutBlockComments = Regex.Replace(bodyText, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
+        var withoutLineComments = Regex.Replace(withoutBlockComments, @"//.*?$", string.Empty, RegexOptions.Multiline);
+
+        var usagePattern = $@"\b{Regex.Escape(parameterName)}\b";
+        return Regex.IsMatch(withoutLineComments, usagePattern, RegexOptions.Compiled);
     }
 }

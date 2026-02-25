@@ -12,7 +12,8 @@ namespace ReviewG33k.Services;
 
 public enum CodeReviewFindingSeverity
 {
-    Info,
-    Warning,
-    Error
+    Ok,
+    Hint,
+    Suggestion,
+    Important
 }

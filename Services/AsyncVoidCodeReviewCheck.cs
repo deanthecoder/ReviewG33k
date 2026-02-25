@@ -35,7 +35,7 @@ public sealed class AsyncVoidCodeReviewCheck : CodeReviewCheckBase
                     continue;
 
                 if (AsyncVoidRegex.IsMatch(line) && !CodeReviewCheckUtilities.LooksLikeEventHandlerSignature(line))
-                    AddFinding(report, CodeReviewFindingSeverity.Warning, file.Path, lineNumber, "Suspicious 'async void' usage (non-event handler).");
+                    AddFinding(report, CodeReviewFindingSeverity.Important, file.Path, lineNumber, "Suspicious 'async void' usage (non-event handler).");
             }
         }
     }

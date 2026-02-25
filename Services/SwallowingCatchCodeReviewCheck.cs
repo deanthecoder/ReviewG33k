@@ -28,7 +28,7 @@ public sealed class SwallowingCatchCodeReviewCheck : CodeReviewCheckBase
                 if (!CodeReviewCheckUtilities.ContainsRethrow(catchBlock.BodyWithoutComments) &&
                     !CodeReviewCheckUtilities.ContainsLoggingCall(catchBlock.BodyWithoutComments))
                 {
-                    AddFinding(report, CodeReviewFindingSeverity.Warning, file.Path, catchBlock.StartLine, "Catch block appears to swallow exceptions.");
+                    AddFinding(report, CodeReviewFindingSeverity.Important, file.Path, catchBlock.StartLine, "Catch block appears to swallow exceptions.");
                 }
             }
         }

@@ -11,11 +11,16 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace ReviewG33k.Services;
 
 public sealed class MissingUnitTestsCodeReviewCheck : CodeReviewCheckBase
 {
+    private static readonly Regex UiUsingRegex = new(
+        @"^\s*using\s+(?<ns>(Avalonia\.(Controls|VisualTree)|System\.Windows(?:\.(Controls|Data|Documents|Forms|Input|Interop|Markup|Media|Navigation|Shapes|Threading))?|Windows\.UI\.Xaml(?:\.(Controls|Data|Documents|Input|Interop|Markup|Media|Navigation|Shapes))?))\s*;",
+        RegexOptions.Multiline | RegexOptions.Compiled);
+
     public override string RuleId => CodeReviewRuleIds.MissingTests;
 
     public override string DisplayName => "new non-UI type has new test file";
@@ -28,6 +33,8 @@ public sealed class MissingUnitTestsCodeReviewCheck : CodeReviewCheckBase
                 continue;
             if (IsLikelyInterfaceFilePath(file.Path))
                 continue;
+            if (IsLikelyUiCodeFile(file))
+                continue;
 
             if (!CodeReviewCheckUtilities.TryGetPublicTypeDeclaration(file.Text, out var typeName, out var declarationLineNumber))
                 continue;
@@ -38,11 +45,11 @@ public sealed class MissingUnitTestsCodeReviewCheck : CodeReviewCheckBase
 
             if (!context.HasAnyAddedTestFiles)
             {
-                AddFinding(report, CodeReviewFindingSeverity.Warning, file.Path, declarationLineNumber, $"No new unit test added for new type '{typeName}'. Expected '{expectedTestFileName}'.");
+                AddFinding(report, CodeReviewFindingSeverity.Suggestion, file.Path, declarationLineNumber, $"No new unit test added for new type '{typeName}'. Expected '{expectedTestFileName}'.");
                 continue;
             }
 
-            AddFinding(report, CodeReviewFindingSeverity.Warning, file.Path, declarationLineNumber, $"No matching test file '{expectedTestFileName}' found for new type '{typeName}'.");
+            AddFinding(report, CodeReviewFindingSeverity.Hint, file.Path, declarationLineNumber, $"No matching test file '{expectedTestFileName}' found for new type '{typeName}'.");
         }
     }
 
@@ -59,4 +66,9 @@ public sealed class MissingUnitTestsCodeReviewCheck : CodeReviewCheckBase
 
         return char.IsUpper(fileName[1]);
     }
+
+    private static bool IsLikelyUiCodeFile(CodeReviewChangedFile file) =>
+        file != null &&
+        !string.IsNullOrWhiteSpace(file.Text) &&
+        UiUsingRegex.IsMatch(file.Text);
 }

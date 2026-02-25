@@ -46,7 +46,7 @@ public sealed class TaskRunAsyncCodeReviewCheck : CodeReviewCheckBase
                 if (!ContainsTaskRunAsyncPattern(line))
                     continue;
 
-                AddFinding(report, CodeReviewFindingSeverity.Warning, file.Path, lineNumber, "Task.Run wrapping async code detected (possible fake async).");
+                AddFinding(report, CodeReviewFindingSeverity.Suggestion, file.Path, lineNumber, "Task.Run wrapping async code detected (possible fake async).");
             }
         }
     }
