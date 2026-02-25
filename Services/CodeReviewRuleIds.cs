@@ -21,5 +21,12 @@ public static class CodeReviewRuleIds
     public const string TaskRunAsync = "task-run-async";
     public const string MissingXmlDocs = "missing-xml-docs";
     public const string MissingTests = "missing-tests";
+    public const string PropertyCanBeAutoProperty = "property-can-be-auto-property";
+    public const string PrivatePropertyShouldBeField = "private-property-should-be-field";
+    public const string MethodParameterCount = "method-parameter-count";
+    public const string GenericTypeNameSuffix = "generic-type-name-suffix";
+    public const string IfElseBraceConsistency = "if-else-brace-consistency";
+    public const string ConstructorTooLong = "constructor-too-long";
+    public const string ThreadSleep = "thread-sleep";
     public const string UnusedUsingsRoslyn = "unused-usings-roslyn";
 }

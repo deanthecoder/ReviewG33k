@@ -30,8 +30,8 @@ public sealed class LockTargetCodeReviewCheck : CodeReviewCheckBase
             {
                 if (lineNumber < 1 || lineNumber > file.Lines.Count)
                     continue;
-
                 var line = file.Lines[lineNumber - 1];
+
                 if (string.IsNullOrWhiteSpace(line))
                     continue;
 

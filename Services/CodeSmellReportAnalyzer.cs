@@ -227,6 +227,13 @@ public sealed class CodeSmellReportAnalyzer
         new SwallowingCatchCodeReviewCheck(),
         new LockTargetCodeReviewCheck(),
         new TaskRunAsyncCodeReviewCheck(),
+        new PropertyCanBeAutoPropertyCodeReviewCheck(),
+        new PrivatePropertyShouldBeFieldCodeReviewCheck(),
+        new MethodParameterCountCodeReviewCheck(),
+        new GenericTypeNameSuffixCodeReviewCheck(),
+        new IfElseBraceConsistencyCodeReviewCheck(),
+        new ConstructorTooLongCodeReviewCheck(),
+        new ThreadSleepCodeReviewCheck(),
         new MissingXmlDocsCodeReviewCheck(),
         new MissingUnitTestsCodeReviewCheck(),
         new UnusedUsingRoslynCodeReviewCheck()
