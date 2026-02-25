@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using ReviewG33k.Services;
+using ReviewG33k.Services.Checks;
 
 namespace ReviewG33k.Tests;
 

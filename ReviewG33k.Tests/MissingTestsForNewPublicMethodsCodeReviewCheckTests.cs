@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using ReviewG33k.Services;
+using ReviewG33k.Services.Checks;
 
 namespace ReviewG33k.Tests;
 
