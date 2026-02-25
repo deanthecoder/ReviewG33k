@@ -8,10 +8,6 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
 

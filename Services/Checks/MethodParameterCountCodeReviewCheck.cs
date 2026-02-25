@@ -12,8 +12,6 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using ReviewG33k.Services;
-
 namespace ReviewG33k.Services.Checks;
 
 public sealed class MethodParameterCountCodeReviewCheck : CodeReviewCheckBase
@@ -23,6 +21,8 @@ public sealed class MethodParameterCountCodeReviewCheck : CodeReviewCheckBase
     public override string RuleId => CodeReviewRuleIds.MethodParameterCount;
 
     public override string DisplayName => "Methods/constructors with high parameter count";
+
+    private readonly record struct CallableInfo(string Kind, string Name, ParameterListSyntax Parameters);
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
@@ -36,9 +36,7 @@ public sealed class MethodParameterCountCodeReviewCheck : CodeReviewCheckBase
                     file,
                     report,
                     method,
-                    method.ParameterList,
-                    "Method",
-                    method.Identifier.ValueText);
+                    new CallableInfo("Method", method.Identifier.ValueText, method.ParameterList));
             }
 
             var constructors = root.DescendantNodes().OfType<ConstructorDeclarationSyntax>();
@@ -48,9 +46,7 @@ public sealed class MethodParameterCountCodeReviewCheck : CodeReviewCheckBase
                     file,
                     report,
                     constructor,
-                    constructor.ParameterList,
-                    "Constructor",
-                    constructor.Identifier.ValueText);
+                    new CallableInfo("Constructor", constructor.Identifier.ValueText, constructor.ParameterList));
             }
         }
     }
@@ -59,14 +55,12 @@ public sealed class MethodParameterCountCodeReviewCheck : CodeReviewCheckBase
         CodeReviewChangedFile file,
         CodeSmellReport report,
         SyntaxNode node,
-        ParameterListSyntax parameterList,
-        string callableKind,
-        string callableName)
+        CallableInfo callable)
     {
         if (!RoslynCodeReviewCheckUtilities.IsNodeNew(file, node))
             return;
 
-        var parameterCount = parameterList?.Parameters.Count ?? 0;
+        var parameterCount = callable.Parameters?.Parameters.Count ?? 0;
         if (parameterCount < ParameterThreshold)
             return;
 
@@ -76,6 +70,6 @@ public sealed class MethodParameterCountCodeReviewCheck : CodeReviewCheckBase
             CodeReviewFindingSeverity.Hint,
             file.Path,
             lineNumber,
-            $"{callableKind} '{callableName}' has {parameterCount} parameters. Consider reducing parameter count.");
+            $"{callable.Kind} '{callable.Name}' has {parameterCount} parameters. Consider reducing parameter count.");
     }
 }

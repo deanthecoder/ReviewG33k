@@ -11,8 +11,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using ReviewG33k.Services;
-
 namespace ReviewG33k.Services.Checks;
 
 public abstract class RoslynSemanticCodeReviewCheckBase : CodeReviewCheckBase

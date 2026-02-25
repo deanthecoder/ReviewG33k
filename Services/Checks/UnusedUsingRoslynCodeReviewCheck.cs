@@ -16,8 +16,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
-
-using ReviewG33k.Services;
 using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
@@ -25,7 +23,6 @@ namespace ReviewG33k.Services.Checks;
 public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase, IFixableCodeReviewCheck
 {
     private const string UnusedUsingDiagnosticId = "CS8019";
-    private static readonly CSharpParseOptions ParseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
     private static readonly CSharpCompilationOptions CompilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
         .WithSpecificDiagnosticOptions(new Dictionary<string, ReportDiagnostic> { { UnusedUsingDiagnosticId, ReportDiagnostic.Warn } });
     private static readonly Lazy<IReadOnlyList<MetadataReference>> MetadataReferences = new(CreateMetadataReferences);

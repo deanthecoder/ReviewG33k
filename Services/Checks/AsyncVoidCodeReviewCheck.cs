@@ -13,8 +13,6 @@ using System.Linq;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using ReviewG33k.Services;
-
 namespace ReviewG33k.Services.Checks;
 
 public sealed class AsyncVoidCodeReviewCheck : CodeReviewCheckBase

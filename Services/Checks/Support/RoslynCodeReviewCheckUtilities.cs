@@ -18,8 +18,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
-using ReviewG33k.Services;
-
 namespace ReviewG33k.Services.Checks;
 
 internal static class RoslynCodeReviewCheckUtilities

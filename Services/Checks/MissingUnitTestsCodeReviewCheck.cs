@@ -8,10 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-using System;
 using System.Linq;
-
-using ReviewG33k.Services;
 
 namespace ReviewG33k.Services.Checks;
 
@@ -45,7 +42,7 @@ public sealed class MissingUnitTestsCodeReviewCheck : CodeReviewCheckBase
                 continue;
             }
 
-            AddFinding(report, CodeReviewFindingSeverity.Hint, file.Path, declarationLineNumber, $"No matching test file '{expectedTestFileName}' found for new type '{typeName}'.");
+            AddFinding(report, CodeReviewFindingSeverity.Hint, file.Path, declarationLineNumber, $"No matching test file found for new type '{typeName}'.");
         }
     }
 }

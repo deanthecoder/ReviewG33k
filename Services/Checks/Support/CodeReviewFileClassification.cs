@@ -12,8 +12,6 @@ using System;
 using System.IO;
 using System.Text.RegularExpressions;
 
-using ReviewG33k.Services;
-
 namespace ReviewG33k.Services.Checks;
 
 internal static class CodeReviewFileClassification

@@ -15,8 +15,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
-
-using ReviewG33k.Services;
 using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;

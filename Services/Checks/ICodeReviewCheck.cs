@@ -8,8 +8,6 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-using ReviewG33k.Services;
-
 namespace ReviewG33k.Services.Checks;
 
 public interface ICodeReviewCheck
