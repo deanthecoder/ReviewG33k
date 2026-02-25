@@ -343,6 +343,310 @@ public sealed class RoslynStyleCodeReviewChecksTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void UnobservedTaskResultCheckWhenTaskCallIsIgnoredReportsSuggestion()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public async Task RunAsync()
+                {
+                    FireAndForgetAsync();
+                    await Task.Delay(1);
+                }
+
+                private static Task FireAndForgetAsync() => Task.CompletedTask;
+            }
+            """;
+
+        var report = AnalyzeSource(new UnobservedTaskResultCodeReviewCheck(), "A", source, Enumerable.Range(1, 15));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("`FireAndForgetAsync`"));
+    }
+
+    [Test]
+    public void UnobservedTaskResultCheckWhenTaskIsAwaitedDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public async Task RunAsync()
+                {
+                    await FireAndForgetAsync();
+                }
+
+                private static Task FireAndForgetAsync() => Task.CompletedTask;
+            }
+            """;
+
+        var report = AnalyzeSource(new UnobservedTaskResultCodeReviewCheck(), "A", source, Enumerable.Range(1, 13));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnobservedTaskResultCheckWhenValueTaskCallIsIgnoredReportsSuggestion()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    DoAsync();
+                }
+
+                private static ValueTask DoAsync() => ValueTask.CompletedTask;
+            }
+            """;
+
+        var report = AnalyzeSource(new UnobservedTaskResultCodeReviewCheck(), "A", source, Enumerable.Range(1, 13));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("`DoAsync`"));
+    }
+
+    [Test]
+    public void DisposableNotDisposedCheckWhenDisposableCreatedWithoutUsingReportsSuggestion()
+    {
+        const string source = """
+            using System.IO;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    var stream = new MemoryStream();
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new DisposableNotDisposedCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("`MemoryStream`"));
+    }
+
+    [Test]
+    public void DisposableNotDisposedCheckWhenUsingDeclarationIsUsedDoesNotReport()
+    {
+        const string source = """
+            using System.IO;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    using var stream = new MemoryStream();
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new DisposableNotDisposedCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void DisposableNotDisposedCheckWhenDisposeCalledLaterDoesNotReport()
+    {
+        const string source = """
+            using System.IO;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    var stream = new MemoryStream();
+                    stream.Dispose();
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new DisposableNotDisposedCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void MultipleEnumerationCheckWhenIEnumerableIsEnumeratedTwiceReportsSuggestion()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public sealed class Sample
+            {
+                public int Run(IEnumerable<int> values)
+                {
+                    var first = values.First();
+                    var count = values.Count();
+                    return first + count;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MultipleEnumerationCodeReviewCheck(), "A", source, Enumerable.Range(1, 14));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("`values`"));
+    }
+
+    [Test]
+    public void MultipleEnumerationCheckWhenCollectionTypeIsCheapDoesNotReport()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public sealed class Sample
+            {
+                public int Run(List<int> values)
+                {
+                    var first = values.First();
+                    var count = values.Count();
+                    return first + count;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MultipleEnumerationCodeReviewCheck(), "A", source, Enumerable.Range(1, 14));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void PublicMutableStaticStateCheckWhenPublicStaticFieldIsMutableReportsImportant()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public static int Counter = 0;
+            }
+            """;
+
+        var report = AnalyzeSource(new PublicMutableStaticStateCodeReviewCheck(), "A", source, Enumerable.Range(1, 5));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Important));
+        Assert.That(report.Findings[0].Message, Does.Contain("`Counter`"));
+    }
+
+    [Test]
+    public void PublicMutableStaticStateCheckWhenPublicStaticPropertyHasSetterReportsImportant()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public static string Name { get; set; }
+            }
+            """;
+
+        var report = AnalyzeSource(new PublicMutableStaticStateCodeReviewCheck(), "A", source, Enumerable.Range(1, 5));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Important));
+        Assert.That(report.Findings[0].Message, Does.Contain("`Name`"));
+    }
+
+    [Test]
+    public void PublicMutableStaticStateCheckWhenFieldReadonlyAndPropertyPrivateSetDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public static readonly int Counter = 0;
+                public static string Name { get; private set; }
+            }
+            """;
+
+        var report = AnalyzeSource(new PublicMutableStaticStateCodeReviewCheck(), "A", source, Enumerable.Range(1, 6));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnusedPrivateMemberCheckWhenPrivateFieldMethodAndPropertyAreUnusedReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private readonly int count = 1;
+
+                private int Value { get; set; }
+
+                private void DoWork()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedPrivateMemberCodeReviewCheck(), "A", source, Enumerable.Range(1, 12));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(3));
+        Assert.That(report.Findings.All(finding => finding.Severity == CodeReviewFindingSeverity.Hint), Is.True);
+        Assert.That(report.Findings.Any(finding => finding.Message.Contains("field `count`", StringComparison.Ordinal)), Is.True);
+        Assert.That(report.Findings.Any(finding => finding.Message.Contains("property `Value`", StringComparison.Ordinal)), Is.True);
+        Assert.That(report.Findings.Any(finding => finding.Message.Contains("method `DoWork`", StringComparison.Ordinal)), Is.True);
+    }
+
+    [Test]
+    public void UnusedPrivateMemberCheckWhenPrivateMembersAreUsedDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private int count;
+
+                private int Value { get; set; }
+
+                public int Run()
+                {
+                    this.count++;
+                    this.Value = this.count;
+                    this.DoWork();
+                    return this.Value;
+                }
+
+                private void DoWork()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedPrivateMemberCodeReviewCheck(), "A", source, Enumerable.Range(1, 20));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnusedPrivateMemberCheckWhenContainingTypeIsPartialDoesNotReport()
+    {
+        const string source = """
+            public partial class Sample
+            {
+                private int count;
+                private int Value { get; set; }
+                private void DoWork()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedPrivateMemberCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport AnalyzeSource(ICodeReviewCheck check, string status, string source, IEnumerable<int> addedLines)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');

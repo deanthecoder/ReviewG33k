@@ -236,6 +236,11 @@ public sealed class CodeSmellReportAnalyzer
         new ConstructorTooLongCodeReviewCheck(),
         new ThreadSleepCodeReviewCheck(),
         new MethodCanBeStaticCodeReviewCheck(),
+        new UnobservedTaskResultCodeReviewCheck(),
+        new DisposableNotDisposedCodeReviewCheck(),
+        new MultipleEnumerationCodeReviewCheck(),
+        new PublicMutableStaticStateCodeReviewCheck(),
+        new UnusedPrivateMemberCodeReviewCheck(),
         new MissingXmlDocsCodeReviewCheck(),
         new MissingUnitTestsCodeReviewCheck(),
         new UnusedUsingRoslynCodeReviewCheck()
