@@ -10,19 +10,14 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace ReviewG33k.Services;
 
 public sealed class MultipleEnumerationCodeReviewCheck : CodeReviewCheckBase
 {
-    private static readonly CSharpParseOptions ParseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
-    private static readonly CSharpCompilationOptions CompilationOptions = new(OutputKind.DynamicallyLinkedLibrary);
-    private static readonly Lazy<IReadOnlyList<MetadataReference>> MetadataReferences = new(CreateMetadataReferences);
     private static readonly HashSet<string> LinqTerminalMethodNames =
     [
         "Any",
@@ -55,21 +50,16 @@ public sealed class MultipleEnumerationCodeReviewCheck : CodeReviewCheckBase
     {
         foreach (var file in context.Files)
         {
-            if (string.IsNullOrWhiteSpace(file.Text))
+            if (!RoslynCodeReviewCheckUtilities.TryGetSemanticAnalysis(
+                    file,
+                    out var root,
+                    out var semanticModel,
+                    out var syntaxTree,
+                    out var diagnostics))
+                continue;
+            if (RoslynCodeReviewCheckUtilities.HasSourceErrorsForTree(diagnostics, syntaxTree))
                 continue;
 
-            var syntaxTree = CSharpSyntaxTree.ParseText(file.Text, ParseOptions, file.Path);
-            var compilation = CSharpCompilation.Create(
-                assemblyName: "ReviewG33k.MultipleEnumeration",
-                syntaxTrees: [syntaxTree],
-                references: MetadataReferences.Value,
-                options: CompilationOptions);
-            var diagnostics = compilation.GetDiagnostics();
-            if (HasSourceErrorsForTree(diagnostics, syntaxTree))
-                continue;
-
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
-            var root = syntaxTree.GetCompilationUnitRoot();
             var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
             foreach (var method in methods)
             {
@@ -242,26 +232,4 @@ public sealed class MultipleEnumerationCodeReviewCheck : CodeReviewCheckBase
             @interface.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IReadOnlyList_T);
     }
 
-    private static bool HasSourceErrorsForTree(IEnumerable<Diagnostic> diagnostics, SyntaxTree syntaxTree) =>
-        diagnostics.Any(diagnostic =>
-            diagnostic.Severity == DiagnosticSeverity.Error &&
-            diagnostic.Location != Location.None &&
-            diagnostic.Location.IsInSource &&
-            diagnostic.Location.SourceTree == syntaxTree);
-
-    private static IReadOnlyList<MetadataReference> CreateMetadataReferences()
-    {
-        var trustedAssemblies = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
-        if (string.IsNullOrWhiteSpace(trustedAssemblies))
-            return [MetadataReference.CreateFromFile(typeof(object).Assembly.Location)];
-
-        return trustedAssemblies
-            .Split(Path.PathSeparator)
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Where(File.Exists)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(path => MetadataReference.CreateFromFile(path))
-            .Cast<MetadataReference>()
-            .ToArray();
-    }
 }

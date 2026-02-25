@@ -37,7 +37,7 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase
             if (string.IsNullOrWhiteSpace(file.Text))
                 continue;
 
-            var syntaxTree = CSharpSyntaxTree.ParseText(file.Text, ParseOptions, file.Path);
+            var syntaxTree = RoslynCodeReviewCheckUtilities.ParseTree(file);
             var compilation = CSharpCompilation.Create(
                 assemblyName: "ReviewG33k.UnusedUsings",
                 syntaxTrees: [syntaxTree],
@@ -47,10 +47,10 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase
             if (diagnostics.Length == 0)
                 continue;
 
-            if (HasSourceErrorsForTree(diagnostics, syntaxTree))
+            if (RoslynCodeReviewCheckUtilities.HasSourceErrorsForTree(diagnostics, syntaxTree))
                 continue;
 
-            var root = syntaxTree.GetRoot();
+            var root = RoslynCodeReviewCheckUtilities.ParseRoot(file);
             foreach (var diagnostic in diagnostics.Where(IsUnusedUsingDiagnostic))
             {
                 var lineNumber = diagnostic.Location.GetLineSpan().StartLinePosition.Line + 1;
@@ -71,13 +71,6 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase
         diagnostic is { Id: UnusedUsingDiagnosticId } &&
         diagnostic.Location != Location.None &&
         diagnostic.Location.IsInSource;
-
-    private static bool HasSourceErrorsForTree(IEnumerable<Diagnostic> diagnostics, SyntaxTree syntaxTree) =>
-        diagnostics.Any(diagnostic =>
-            diagnostic.Severity == DiagnosticSeverity.Error &&
-            diagnostic.Location != Location.None &&
-            diagnostic.Location.IsInSource &&
-            diagnostic.Location.SourceTree == syntaxTree);
 
     private static string BuildUsingText(UsingDirectiveSyntax usingDirective)
     {

@@ -9,7 +9,10 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -20,11 +23,24 @@ namespace ReviewG33k.Services;
 internal static class RoslynCodeReviewCheckUtilities
 {
     private static readonly CSharpParseOptions ParseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
+    private static readonly CSharpCompilationOptions SemanticCompilationOptions = new(OutputKind.DynamicallyLinkedLibrary);
+    private static readonly Lazy<IReadOnlyList<MetadataReference>> MetadataReferences = new(CreateMetadataReferences);
+    private static readonly ConditionalWeakTable<CodeReviewChangedFile, RoslynFileCache> FileCaches = new();
 
     public static CompilationUnitSyntax ParseRoot(CodeReviewChangedFile file)
     {
-        var syntaxTree = CSharpSyntaxTree.ParseText(file?.Text ?? string.Empty, ParseOptions, file?.Path);
-        return syntaxTree.GetCompilationUnitRoot();
+        if (file == null)
+            return CSharpSyntaxTree.ParseText(string.Empty, ParseOptions).GetCompilationUnitRoot();
+
+        return GetOrCreateFileCache(file).Root.Value;
+    }
+
+    public static SyntaxTree ParseTree(CodeReviewChangedFile file)
+    {
+        if (file == null)
+            return CSharpSyntaxTree.ParseText(string.Empty, ParseOptions);
+
+        return GetOrCreateFileCache(file).SyntaxTree.Value;
     }
 
     public static int GetStartLine(SyntaxNode node) =>
@@ -43,11 +59,45 @@ internal static class RoslynCodeReviewCheckUtilities
         if (file.IsAdded)
             return true;
 
-        var lineSpan = CSharpSyntaxTree.ParseText(file.Text ?? string.Empty, ParseOptions).GetLineSpan(span);
+        var lineSpan = ParseTree(file).GetLineSpan(span);
         var startLine = lineSpan.StartLinePosition.Line + 1;
         var endLine = lineSpan.EndLinePosition.Line + 1;
         return file.AddedLineNumbers.Any(lineNumber => lineNumber >= startLine && lineNumber <= endLine);
     }
+
+    public static bool TryGetSemanticAnalysis(
+        CodeReviewChangedFile file,
+        out CompilationUnitSyntax root,
+        out SemanticModel semanticModel,
+        out SyntaxTree syntaxTree,
+        out IReadOnlyList<Diagnostic> diagnostics)
+    {
+        root = null;
+        semanticModel = null;
+        syntaxTree = null;
+        diagnostics = null;
+
+        if (file == null || string.IsNullOrWhiteSpace(file.Text))
+            return false;
+
+        var fileCache = GetOrCreateFileCache(file);
+        var semanticCache = fileCache.SemanticAnalysis.Value;
+
+        root = fileCache.Root.Value;
+        semanticModel = semanticCache.SemanticModel;
+        syntaxTree = semanticCache.SyntaxTree;
+        diagnostics = semanticCache.Diagnostics;
+        return semanticModel != null && syntaxTree != null;
+    }
+
+    public static bool HasSourceErrorsForTree(IEnumerable<Diagnostic> diagnostics, SyntaxTree syntaxTree) =>
+        diagnostics != null &&
+        syntaxTree != null &&
+        diagnostics.Any(diagnostic =>
+            diagnostic.Severity == DiagnosticSeverity.Error &&
+            diagnostic.Location != Location.None &&
+            diagnostic.Location.IsInSource &&
+            diagnostic.Location.SourceTree == syntaxTree);
 
     public static bool IsPrivateProperty(PropertyDeclarationSyntax property) =>
         property.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PrivateKeyword));
@@ -188,5 +238,75 @@ internal static class RoslynCodeReviewCheckUtilities
         }
 
         return false;
+    }
+
+    private static RoslynFileCache GetOrCreateFileCache(CodeReviewChangedFile file) =>
+        FileCaches.GetValue(file, static changedFile => new RoslynFileCache(changedFile));
+
+    private static SemanticAnalysisCache CreateSemanticAnalysis(SyntaxTree syntaxTree)
+    {
+        var compilation = CSharpCompilation.Create(
+            assemblyName: "ReviewG33k.SharedSemanticAnalysis",
+            syntaxTrees: [syntaxTree],
+            references: MetadataReferences.Value,
+            options: SemanticCompilationOptions);
+
+        var diagnostics = compilation.GetDiagnostics();
+        var semanticModel = compilation.GetSemanticModel(syntaxTree);
+        return new SemanticAnalysisCache(syntaxTree, semanticModel, diagnostics);
+    }
+
+    private static IReadOnlyList<MetadataReference> CreateMetadataReferences()
+    {
+        var trustedAssemblies = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
+        if (string.IsNullOrWhiteSpace(trustedAssemblies))
+            return [MetadataReference.CreateFromFile(typeof(object).Assembly.Location)];
+
+        return trustedAssemblies
+            .Split(Path.PathSeparator)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(path => MetadataReference.CreateFromFile(path))
+            .Cast<MetadataReference>()
+            .ToArray();
+    }
+
+    private sealed class RoslynFileCache
+    {
+        public RoslynFileCache(CodeReviewChangedFile file)
+        {
+            SyntaxTree = new Lazy<SyntaxTree>(
+                () => CSharpSyntaxTree.ParseText(file?.Text ?? string.Empty, ParseOptions, file?.Path),
+                isThreadSafe: true);
+            Root = new Lazy<CompilationUnitSyntax>(
+                () => ((CSharpSyntaxTree)SyntaxTree.Value).GetCompilationUnitRoot(),
+                isThreadSafe: true);
+            SemanticAnalysis = new Lazy<SemanticAnalysisCache>(
+                () => CreateSemanticAnalysis(SyntaxTree.Value),
+                isThreadSafe: true);
+        }
+
+        public Lazy<SyntaxTree> SyntaxTree { get; }
+
+        public Lazy<CompilationUnitSyntax> Root { get; }
+
+        public Lazy<SemanticAnalysisCache> SemanticAnalysis { get; }
+    }
+
+    private sealed class SemanticAnalysisCache
+    {
+        public SemanticAnalysisCache(SyntaxTree syntaxTree, SemanticModel semanticModel, IReadOnlyList<Diagnostic> diagnostics)
+        {
+            SyntaxTree = syntaxTree;
+            SemanticModel = semanticModel;
+            Diagnostics = diagnostics ?? [];
+        }
+
+        public SyntaxTree SyntaxTree { get; }
+
+        public SemanticModel SemanticModel { get; }
+
+        public IReadOnlyList<Diagnostic> Diagnostics { get; }
     }
 }

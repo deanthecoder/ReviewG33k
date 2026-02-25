@@ -9,8 +9,6 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -20,10 +18,6 @@ namespace ReviewG33k.Services;
 
 public sealed class DisposableNotDisposedCodeReviewCheck : CodeReviewCheckBase
 {
-    private static readonly CSharpParseOptions ParseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
-    private static readonly CSharpCompilationOptions CompilationOptions = new(OutputKind.DynamicallyLinkedLibrary);
-    private static readonly Lazy<IReadOnlyList<MetadataReference>> MetadataReferences = new(CreateMetadataReferences);
-
     public override string RuleId => CodeReviewRuleIds.DisposableNotDisposed;
 
     public override string DisplayName => "Disposable created without disposal";
@@ -32,21 +26,16 @@ public sealed class DisposableNotDisposedCodeReviewCheck : CodeReviewCheckBase
     {
         foreach (var file in context.Files)
         {
-            if (string.IsNullOrWhiteSpace(file.Text))
+            if (!RoslynCodeReviewCheckUtilities.TryGetSemanticAnalysis(
+                    file,
+                    out var root,
+                    out var semanticModel,
+                    out var syntaxTree,
+                    out var diagnostics))
+                continue;
+            if (RoslynCodeReviewCheckUtilities.HasSourceErrorsForTree(diagnostics, syntaxTree))
                 continue;
 
-            var syntaxTree = CSharpSyntaxTree.ParseText(file.Text, ParseOptions, file.Path);
-            var compilation = CSharpCompilation.Create(
-                assemblyName: "ReviewG33k.DisposableNotDisposed",
-                syntaxTrees: [syntaxTree],
-                references: MetadataReferences.Value,
-                options: CompilationOptions);
-            var diagnostics = compilation.GetDiagnostics();
-            if (HasSourceErrorsForTree(diagnostics, syntaxTree))
-                continue;
-
-            var semanticModel = compilation.GetSemanticModel(syntaxTree);
-            var root = syntaxTree.GetCompilationUnitRoot();
             var localDeclarations = root.DescendantNodes().OfType<LocalDeclarationStatementSyntax>();
             foreach (var localDeclaration in localDeclarations)
             {
@@ -129,26 +118,4 @@ public sealed class DisposableNotDisposedCodeReviewCheck : CodeReviewCheckBase
             string.Equals(@interface.ToDisplayString(), "System.IAsyncDisposable", StringComparison.Ordinal));
     }
 
-    private static bool HasSourceErrorsForTree(IEnumerable<Diagnostic> diagnostics, SyntaxTree syntaxTree) =>
-        diagnostics.Any(diagnostic =>
-            diagnostic.Severity == DiagnosticSeverity.Error &&
-            diagnostic.Location != Location.None &&
-            diagnostic.Location.IsInSource &&
-            diagnostic.Location.SourceTree == syntaxTree);
-
-    private static IReadOnlyList<MetadataReference> CreateMetadataReferences()
-    {
-        var trustedAssemblies = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
-        if (string.IsNullOrWhiteSpace(trustedAssemblies))
-            return [MetadataReference.CreateFromFile(typeof(object).Assembly.Location)];
-
-        return trustedAssemblies
-            .Split(Path.PathSeparator)
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Where(File.Exists)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(path => MetadataReference.CreateFromFile(path))
-            .Cast<MetadataReference>()
-            .ToArray();
-    }
 }
