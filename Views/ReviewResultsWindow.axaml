@@ -19,7 +19,7 @@
 
         <Grid Grid.Row="1"
               Margin="0,12,0,6"
-              ColumnDefinitions="34,90,*,170">
+              ColumnDefinitions="34,90,*,90">
             <TextBlock Grid.Column="1"
                        FontWeight="SemiBold"
                        Text="Severity" />
@@ -44,7 +44,7 @@
                         <DataTemplate>
                         <Grid Margin="0,1"
                               Background="Transparent"
-                              ColumnDefinitions="34,90,*,170">
+                              ColumnDefinitions="34,90,*,90">
                                 <Grid.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="{Binding UntickSameTypeMenuHeader}"
@@ -83,11 +83,6 @@
                                             VerticalAlignment="Center"
                                             Spacing="6">
                                     <Button Width="78"
-                                            Click="OpenFindingButton_OnClick"
-                                            IsEnabled="{Binding CanOpenActive}"
-                                            ToolTip.Tip="{Binding OpenToolTip}"
-                                            Content="Open" />
-                                    <Button Width="78"
                                             Click="CommentFindingButton_OnClick"
                                             IsVisible="{Binding ShowCommentButton}"
                                             IsEnabled="{Binding CanCommentActive}"
@@ -107,10 +102,19 @@
                     CornerRadius="8"
                     Padding="8">
                 <Grid RowDefinitions="Auto,*">
-                    <TextBlock x:Name="PreviewHeaderTextBlock"
-                               Margin="0,0,0,6"
-                               FontWeight="SemiBold"
-                               Text="Preview" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock x:Name="PreviewHeaderTextBlock"
+                                   Margin="0,0,0,6"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Text="Preview" />
+                        <Button x:Name="OpenSelectedButton"
+                                Grid.Column="1"
+                                Margin="8,0,0,6"
+                                Width="110"
+                                Click="OpenSelectedButton_OnClick"
+                                Content="Open Selected" />
+                    </Grid>
                     <TextBox x:Name="PreviewTextBox"
                              Grid.Row="1"
                              Height="230"

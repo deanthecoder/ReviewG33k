@@ -81,14 +81,7 @@ public partial class ReviewResultsWindow : Window
             ? "No review findings"
             : $"{m_rows.Length} finding(s)";
         UpdateBatchActionButtonStates();
-    }
-
-    private void OpenFindingButton_OnClick(object sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        if (sender is not Button { DataContext: ReviewResultRow row } || !row.CanOpenActive)
-            return;
-
-        m_openFindingAction?.Invoke(row.Finding);
+        UpdateOpenSelectedButtonState();
     }
 
     private async void CommentFindingButton_OnClick(object sender, RoutedEventArgs e)
@@ -223,11 +216,21 @@ public partial class ReviewResultsWindow : Window
     {
         if (ResultsListBox.SelectedItem is not ReviewResultRow row)
         {
+            UpdateOpenSelectedButtonState();
             SetPreviewText("Select an issue to preview surrounding file content.", "Preview");
             return;
         }
 
+        UpdateOpenSelectedButtonState();
         UpdatePreviewForFinding(row.Finding);
+    }
+
+    private void OpenSelectedButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (ResultsListBox.SelectedItem is not ReviewResultRow row || !row.CanOpenActive)
+            return;
+
+        m_openFindingAction?.Invoke(row.Finding);
     }
 
     private static ReviewResultRow MapToRow(
@@ -267,7 +270,10 @@ public partial class ReviewResultsWindow : Window
     private void ReviewResultRow_OnPropertyChanged(object sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(ReviewResultRow.IsIncluded) or nameof(ReviewResultRow.IsPostingComment) or nameof(ReviewResultRow.HasPostedComment))
+        {
+            UpdateOpenSelectedButtonState();
             UpdateBatchActionButtonStates();
+        }
     }
 
     private void UpdatePreviewForFinding(CodeSmellFinding finding)
@@ -335,6 +341,14 @@ public partial class ReviewResultsWindow : Window
         CommentSelectedButton.IsEnabled = !m_isBulkCommenting &&
                                           m_commentFindingAction != null &&
                                           m_rows.Any(row => row.IsIncluded && row.CanCommentActive);
+    }
+
+    private void UpdateOpenSelectedButtonState()
+    {
+        if (OpenSelectedButton == null)
+            return;
+
+        OpenSelectedButton.IsEnabled = ResultsListBox.SelectedItem is ReviewResultRow row && row.CanOpenActive;
     }
 
     private string BuildExportText(out int exportedCount, out bool exportedIncludedOnly)
