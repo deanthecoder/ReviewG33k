@@ -283,6 +283,66 @@ public sealed class RoslynStyleCodeReviewChecksTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void MethodCanBeStaticCheckWhenMethodDoesNotUseInstanceStateReportsHint()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public int SumAbs(int left, int right)
+                {
+                    return Math.Abs(left) + Math.Abs(right);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MethodCanBeStaticCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings[0].Message, Does.Contain("`SumAbs`"));
+    }
+
+    [Test]
+    public void MethodCanBeStaticCheckWhenMethodUsesInstanceFieldDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private readonly int value = 3;
+
+                public int Calculate(int input)
+                {
+                    return input + this.value;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MethodCanBeStaticCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void MethodCanBeStaticCheckWhenMethodIsAlreadyStaticDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public static int Sum(int left, int right)
+                {
+                    return left + right;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MethodCanBeStaticCodeReviewCheck(), "A", source, Enumerable.Range(1, 8));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport AnalyzeSource(ICodeReviewCheck check, string status, string source, IEnumerable<int> addedLines)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');

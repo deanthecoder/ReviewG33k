@@ -235,6 +235,7 @@ public sealed class CodeSmellReportAnalyzer
         new IfElseBraceConsistencyCodeReviewCheck(),
         new ConstructorTooLongCodeReviewCheck(),
         new ThreadSleepCodeReviewCheck(),
+        new MethodCanBeStaticCodeReviewCheck(),
         new MissingXmlDocsCodeReviewCheck(),
         new MissingUnitTestsCodeReviewCheck(),
         new UnusedUsingRoslynCodeReviewCheck()

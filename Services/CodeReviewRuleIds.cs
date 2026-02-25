@@ -28,5 +28,6 @@ public static class CodeReviewRuleIds
     public const string IfElseBraceConsistency = "if-else-brace-consistency";
     public const string ConstructorTooLong = "constructor-too-long";
     public const string ThreadSleep = "thread-sleep";
+    public const string MethodCanBeStatic = "method-can-be-static";
     public const string UnusedUsingsRoslyn = "unused-usings-roslyn";
 }
