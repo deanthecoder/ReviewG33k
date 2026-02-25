@@ -1,5 +1,9 @@
 [![Twitter URL](https://img.shields.io/twitter/url/https/twitter.com/deanthecoder.svg?style=social&label=Follow%20%40deanthecoder)](https://twitter.com/deanthecoder)
 
+<p align="center">
+  <img src="img/logo.png" alt="ReviewG33k Logo">
+</p>
+
 # ReviewG33k
 ReviewG33k is a lightweight Avalonia desktop app for fast, local code reviews. It can prepare isolated Bitbucket pull-request checkouts, run automated checks against the changed code, and jump straight to findings in VS Code.
 
