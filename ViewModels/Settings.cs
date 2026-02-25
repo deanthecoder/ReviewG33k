@@ -20,6 +20,9 @@ public sealed class Settings : UserSettingsBase
     {
         AutoOpenSolutionFile = true;
         RepositoryRootPath = string.Empty;
+        LocalReviewRepositoryPath = string.Empty;
+        LocalReviewBaseBranch = "main";
+        UseLocalCommittedReview = false;
     }
 
     public string RepositoryRootPath
@@ -29,6 +32,24 @@ public sealed class Settings : UserSettingsBase
     }
 
     public bool AutoOpenSolutionFile
+    {
+        get => Get<bool>();
+        set => Set(value);
+    }
+
+    public string LocalReviewRepositoryPath
+    {
+        get => Get<string>();
+        set => Set(value);
+    }
+
+    public string LocalReviewBaseBranch
+    {
+        get => Get<string>();
+        set => Set(value);
+    }
+
+    public bool UseLocalCommittedReview
     {
         get => Get<bool>();
         set => Set(value);

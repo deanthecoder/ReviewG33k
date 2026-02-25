@@ -73,6 +73,10 @@ public partial class MainWindow : Window
         PullRequestUrlTextBox.TextChanged += PullRequestUrlTextBox_OnTextChanged;
         RepositoryRootTextBox.TextChanged += RepositoryRootTextBox_OnTextChanged;
         RepositoryRootTextBox.LostFocus += RepositoryRootTextBox_OnLostFocus;
+        LocalRepositoryFolderTextBox.TextChanged += LocalRepositoryFolderTextBox_OnTextChanged;
+        LocalRepositoryFolderTextBox.LostFocus += LocalRepositoryFolderTextBox_OnLostFocus;
+        LocalBaseBranchTextBox.TextChanged += LocalBaseBranchTextBox_OnTextChanged;
+        LocalBaseBranchTextBox.LostFocus += LocalBaseBranchTextBox_OnLostFocus;
         LogListBox.AddHandler(InputElement.PointerPressedEvent, LogListBox_OnPointerPressed, RoutingStrategies.Bubble);
         Opened += MainWindow_OnOpened;
         Activated += MainWindow_OnActivated;
@@ -80,8 +84,15 @@ public partial class MainWindow : Window
 
         if (!string.IsNullOrWhiteSpace(m_settings.RepositoryRootPath))
             RepositoryRootTextBox.Text = m_settings.RepositoryRootPath;
+        if (!string.IsNullOrWhiteSpace(m_settings.LocalReviewRepositoryPath))
+            LocalRepositoryFolderTextBox.Text = m_settings.LocalReviewRepositoryPath;
+        LocalBaseBranchTextBox.Text = string.IsNullOrWhiteSpace(m_settings.LocalReviewBaseBranch)
+            ? "main"
+            : m_settings.LocalReviewBaseBranch;
+        LocalCommittedReviewCheckBox.IsChecked = m_settings.UseLocalCommittedReview;
         LogListBox.ItemsSource = m_logLines;
 
+        ApplyReviewModeUi();
         _ = UpdatePullRequestPreviewAsync();
         UpdateActionButtonStates();
     }
@@ -111,6 +122,44 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void BrowseLocalRepositoryButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var topLevel = GetTopLevel(this);
+        if (topLevel == null)
+            return;
+
+        var startLocation = await GetStartFolderAsync(topLevel, LocalRepositoryFolderTextBox.Text);
+        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(
+            new FolderPickerOpenOptions
+            {
+                Title = "Choose local repository folder",
+                AllowMultiple = false,
+                SuggestedStartLocation = startLocation
+            });
+
+        var selectedFolder = folders.FirstOrDefault();
+        var path = selectedFolder?.TryGetLocalPath();
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        LocalRepositoryFolderTextBox.Text = path;
+        PersistLocalReviewRepositoryPath(path);
+    }
+
+    private void LocalCommittedReviewCheckBox_OnChanged(object sender, RoutedEventArgs e)
+    {
+        if (IsLocalCommittedReviewMode())
+        {
+            m_latestPullRequest = null;
+            UpdatePullRequestReviewState(null);
+        }
+
+        ApplyReviewModeUi();
+        PersistUseLocalCommittedReview(LocalCommittedReviewCheckBox.IsChecked == true);
+        _ = UpdatePullRequestPreviewAsync();
+        UpdateActionButtonStates();
+    }
+
     private void PullRequestUrlTextBox_OnDragOver(object sender, DragEventArgs e)
     {
         e.DragEffects = TryExtractPullRequestUrl(e.Data, out _) ? DragDropEffects.Copy : DragDropEffects.None;
@@ -134,9 +183,21 @@ public partial class MainWindow : Window
     private void RepositoryRootTextBox_OnTextChanged(object sender, TextChangedEventArgs e) =>
         UpdateActionButtonStates();
 
+    private void LocalRepositoryFolderTextBox_OnTextChanged(object sender, TextChangedEventArgs e) =>
+        UpdateActionButtonStates();
+
+    private void LocalBaseBranchTextBox_OnTextChanged(object sender, TextChangedEventArgs e) =>
+        UpdateActionButtonStates();
+
     private async void PrepareReviewButton_OnClick(object sender, RoutedEventArgs e)
     {
-        if (!TryGetInputs(out var repositoryRoot, out var prUrlText))
+        if (IsLocalCommittedReviewMode())
+        {
+            await PrepareLocalCommittedReviewAsync();
+            return;
+        }
+
+        if (!TryGetPullRequestInputs(out var repositoryRoot, out var prUrlText))
             return;
 
         PersistRepositoryRootPath(repositoryRoot);
@@ -200,11 +261,64 @@ public partial class MainWindow : Window
             await ShowReviewResultsWindowAsync(report);
     }
 
+    private async Task PrepareLocalCommittedReviewAsync()
+    {
+        if (!TryGetLocalCommittedReviewInputs(out var localRepositoryPath, out var baseBranch))
+            return;
+
+        PersistLocalReviewRepositoryPath(localRepositoryPath);
+        PersistLocalReviewBaseBranch(baseBranch);
+
+        m_latestPullRequest = null;
+        UpdatePullRequestReviewState(null);
+
+        CodeSmellReport report = null;
+        await ExecuteBusyActionAsync(
+            "Reviewing local committed changes...",
+            async () =>
+            {
+                m_latestReviewWorktreePath = localRepositoryPath;
+                m_latestSolutionPath = FindTopLevelSolutionFile(localRepositoryPath);
+                UpdateActionButtonStates();
+
+                AppendLog($"Local review repository: {localRepositoryPath}");
+                AppendLog($"Comparing current branch changes against: origin/{baseBranch}");
+
+                if (!string.IsNullOrWhiteSpace(m_latestSolutionPath))
+                    AppendLog($"Solution selected: {m_latestSolutionPath}");
+                else
+                    AppendLog("No .sln file found in local repository.");
+
+                var changedFileSource = new GitBranchComparisonChangedFileSource(
+                    m_gitCommandRunner,
+                    localRepositoryPath,
+                    baseBranch,
+                    fetchTargetBranch: true);
+
+                report = await RunCodeSmellScanAsync(changedFileSource);
+                SetStatus("Local review complete.");
+            });
+
+        if (report != null)
+            await ShowReviewResultsWindowAsync(report);
+    }
+
     private async Task<CodeSmellReport> RunCodeSmellScanAsync(string reviewWorktreePath, string targetBranch)
     {
         AppendLog("Code review scan starting...");
         var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(reviewWorktreePath, targetBranch);
+        return ProcessCodeSmellReport(report);
+    }
 
+    private async Task<CodeSmellReport> RunCodeSmellScanAsync(ICodeReviewChangedFileSource changedFileSource)
+    {
+        AppendLog("Code review scan starting...");
+        var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(changedFileSource);
+        return ProcessCodeSmellReport(report);
+    }
+
+    private CodeSmellReport ProcessCodeSmellReport(CodeSmellReport report)
+    {
         foreach (var info in report.Info)
             AppendLog(info);
 
@@ -350,7 +464,7 @@ public partial class MainWindow : Window
         return await topLevel.StorageProvider.TryGetFolderFromPathAsync(existingPath);
     }
 
-    private bool TryGetInputs(out string repositoryRoot, out string prUrlText)
+    private bool TryGetPullRequestInputs(out string repositoryRoot, out string prUrlText)
     {
         repositoryRoot = RepositoryRootTextBox.Text?.Trim();
         prUrlText = PullRequestUrlTextBox.Text?.Trim();
@@ -379,9 +493,46 @@ public partial class MainWindow : Window
         return true;
     }
 
+    private bool TryGetLocalCommittedReviewInputs(out string localRepositoryPath, out string baseBranch)
+    {
+        localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
+        baseBranch = LocalBaseBranchTextBox.Text?.Trim();
+
+        if (string.IsNullOrWhiteSpace(localRepositoryPath))
+        {
+            SetStatus("Set local repository folder first.");
+            DialogService.Instance.ShowMessage("Local repository required", "Choose the local repository folder to review.", null);
+            return false;
+        }
+
+        if (!Directory.Exists(localRepositoryPath))
+        {
+            SetStatus($"Local repository folder does not exist: {localRepositoryPath}");
+            DialogService.Instance.ShowMessage("Local repository not found", localRepositoryPath, null);
+            return false;
+        }
+
+        if (!LooksLikeGitRepository(localRepositoryPath))
+        {
+            SetStatus("Selected folder is not a Git repository.");
+            DialogService.Instance.ShowMessage("Invalid repository folder", "The selected folder does not appear to contain a Git repository.", null);
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(baseBranch))
+        {
+            SetStatus("Enter a base branch (for example: main).");
+            DialogService.Instance.ShowMessage("Base branch required", "Enter the branch to compare against (for example: main or develop).", null);
+            return false;
+        }
+
+        return true;
+    }
+
     private void OnInputTextChanged()
     {
-        NormalizePullRequestUrlInTextBoxIfNeeded();
+        if (!IsLocalCommittedReviewMode())
+            NormalizePullRequestUrlInTextBoxIfNeeded();
         _ = UpdatePullRequestPreviewAsync();
         UpdateActionButtonStates();
     }
@@ -419,6 +570,17 @@ public partial class MainWindow : Window
         m_previewUpdateCancellation?.Dispose();
         m_previewUpdateCancellation = new CancellationTokenSource();
         var cancellationToken = m_previewUpdateCancellation.Token;
+
+        if (IsLocalCommittedReviewMode())
+        {
+            UpdatePullRequestReviewState(null);
+            PullRequestPreviewTextBlock.IsVisible = false;
+            PullRequestPreviewTextBlock.Text = string.Empty;
+            PullRequestMetadataTextBlock.IsVisible = false;
+            PullRequestMetadataTextBlock.Text = string.Empty;
+            UpdateActionButtonStates();
+            return;
+        }
 
         var urlText = PullRequestUrlTextBox.Text?.Trim();
         if (string.IsNullOrWhiteSpace(urlText))
@@ -505,13 +667,38 @@ public partial class MainWindow : Window
         UpdateActionButtonStates();
     }
 
+    private bool IsLocalCommittedReviewMode() => LocalCommittedReviewCheckBox.IsChecked == true;
+
+    private void ApplyReviewModeUi()
+    {
+        var isLocalMode = IsLocalCommittedReviewMode();
+
+        PullRequestUrlLabelTextBlock.IsVisible = !isLocalMode;
+        PullRequestUrlTextBox.IsVisible = !isLocalMode;
+        OpenPullRequestButton.IsVisible = !isLocalMode;
+        LocalReviewOptionsGrid.IsVisible = isLocalMode;
+
+        if (isLocalMode)
+        {
+            PullRequestPreviewTextBlock.IsVisible = false;
+            PullRequestMetadataTextBlock.IsVisible = false;
+        }
+
+        PrepareReviewButton.Content = isLocalMode ? "Review Local" : "Review PR";
+    }
+
     private void UpdateActionButtonStates()
     {
         var canReviewCurrentPullRequest = m_previewPullRequestIsOpen != false;
-        PrepareReviewButton.IsEnabled = !m_busy && m_isGitAvailable && canReviewCurrentPullRequest && HasValidPrepareInputs();
-        OpenPullRequestButton.IsEnabled = !m_busy && HasValidPullRequestInput();
+        var isLocalMode = IsLocalCommittedReviewMode();
+        PrepareReviewButton.IsEnabled = !m_busy &&
+                                        m_isGitAvailable &&
+                                        (isLocalMode
+                                            ? HasValidLocalPrepareInputs()
+                                            : canReviewCurrentPullRequest && HasValidPullRequestPrepareInputs());
+        OpenPullRequestButton.IsEnabled = !m_busy && !isLocalMode && HasValidPullRequestInput();
         OpenSolutionButton.IsEnabled = !m_busy &&
-                                      canReviewCurrentPullRequest &&
+                                      (isLocalMode || canReviewCurrentPullRequest) &&
                                       !string.IsNullOrWhiteSpace(m_latestSolutionPath) &&
                                       File.Exists(m_latestSolutionPath);
     }
@@ -523,7 +710,7 @@ public partial class MainWindow : Window
                BitbucketPrUrlParser.TryParse(prUrlText, out _, out _);
     }
 
-    private bool HasValidPrepareInputs()
+    private bool HasValidPullRequestPrepareInputs()
     {
         var repositoryRoot = RepositoryRootTextBox.Text?.Trim();
         if (string.IsNullOrWhiteSpace(repositoryRoot) || !Directory.Exists(repositoryRoot))
@@ -534,6 +721,19 @@ public partial class MainWindow : Window
             return false;
 
         return BitbucketPrUrlParser.TryParse(prUrlText, out _, out _);
+    }
+
+    private bool HasValidLocalPrepareInputs()
+    {
+        var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(localRepositoryPath) || !Directory.Exists(localRepositoryPath))
+            return false;
+
+        if (!LooksLikeGitRepository(localRepositoryPath))
+            return false;
+
+        var baseBranch = LocalBaseBranchTextBox.Text?.Trim();
+        return !string.IsNullOrWhiteSpace(baseBranch);
     }
 
     private void SetStatus(string status)
@@ -852,6 +1052,12 @@ public partial class MainWindow : Window
     private void RepositoryRootTextBox_OnLostFocus(object sender, RoutedEventArgs e) =>
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
 
+    private void LocalRepositoryFolderTextBox_OnLostFocus(object sender, RoutedEventArgs e) =>
+        PersistLocalReviewRepositoryPath(LocalRepositoryFolderTextBox.Text);
+
+    private void LocalBaseBranchTextBox_OnLostFocus(object sender, RoutedEventArgs e) =>
+        PersistLocalReviewBaseBranch(LocalBaseBranchTextBox.Text);
+
     private async void MainWindow_OnOpened(object sender, EventArgs e)
     {
         await EnsureGitIsAvailableOnStartupAsync();
@@ -873,6 +1079,9 @@ public partial class MainWindow : Window
         m_pullRequestMetadataClient.Dispose();
 
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
+        PersistLocalReviewRepositoryPath(LocalRepositoryFolderTextBox.Text);
+        PersistLocalReviewBaseBranch(LocalBaseBranchTextBox.Text);
+        PersistUseLocalCommittedReview(IsLocalCommittedReviewMode());
         m_settings.Dispose();
     }
 
@@ -932,6 +1141,9 @@ public partial class MainWindow : Window
 
     private async Task TryPrefillPullRequestUrlFromClipboardAsync()
     {
+        if (IsLocalCommittedReviewMode())
+            return;
+
         if (!string.IsNullOrWhiteSpace(PullRequestUrlTextBox.Text))
             return;
 
@@ -972,6 +1184,70 @@ public partial class MainWindow : Window
         {
             AppendLog($"Warning: could not save app settings. {exception.Message}");
         }
+    }
+
+    private void PersistLocalReviewRepositoryPath(string localRepositoryPath)
+    {
+        var normalizedPath = localRepositoryPath?.Trim();
+        if (string.Equals(m_settings.LocalReviewRepositoryPath, normalizedPath, StringComparison.Ordinal))
+            return;
+
+        m_settings.LocalReviewRepositoryPath = normalizedPath;
+        SaveSettingsSafely();
+    }
+
+    private void PersistLocalReviewBaseBranch(string baseBranch)
+    {
+        var normalizedBranch = string.IsNullOrWhiteSpace(baseBranch) ? "main" : baseBranch.Trim();
+        if (string.Equals(m_settings.LocalReviewBaseBranch, normalizedBranch, StringComparison.Ordinal))
+            return;
+
+        m_settings.LocalReviewBaseBranch = normalizedBranch;
+        SaveSettingsSafely();
+    }
+
+    private void PersistUseLocalCommittedReview(bool useLocalCommittedReview)
+    {
+        if (m_settings.UseLocalCommittedReview == useLocalCommittedReview)
+            return;
+
+        m_settings.UseLocalCommittedReview = useLocalCommittedReview;
+        SaveSettingsSafely();
+    }
+
+    private void SaveSettingsSafely()
+    {
+        try
+        {
+            m_settings.Save();
+        }
+        catch (Exception exception)
+        {
+            AppendLog($"Warning: could not save app settings. {exception.Message}");
+        }
+    }
+
+    private static bool LooksLikeGitRepository(string folderPath) =>
+        !string.IsNullOrWhiteSpace(folderPath) &&
+        (Directory.Exists(Path.Combine(folderPath, ".git")) || File.Exists(Path.Combine(folderPath, ".git")));
+
+    private static string FindTopLevelSolutionFile(string rootFolder)
+    {
+        if (string.IsNullOrWhiteSpace(rootFolder) || !Directory.Exists(rootFolder))
+            return null;
+
+        var rootDepth = rootFolder.Count(ch => ch == Path.DirectorySeparatorChar || ch == Path.AltDirectorySeparatorChar);
+        return Directory
+            .EnumerateFiles(rootFolder, "*.sln", SearchOption.AllDirectories)
+            .Select(path => new
+            {
+                Path = path,
+                Depth = path.Count(ch => ch == Path.DirectorySeparatorChar || ch == Path.AltDirectorySeparatorChar) - rootDepth
+            })
+            .OrderBy(candidate => candidate.Depth)
+            .ThenBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
+            .Select(candidate => candidate.Path)
+            .FirstOrDefault();
     }
 
     private void OpenPullRequestButton_OnClick(object sender, RoutedEventArgs e)
