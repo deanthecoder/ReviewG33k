@@ -21,6 +21,7 @@ public static class CodeReviewRuleIds
     public const string TaskRunAsync = "task-run-async";
     public const string MissingXmlDocs = "missing-xml-docs";
     public const string MissingTests = "missing-tests";
+    public const string MissingTestsForPublicMethods = "missing-tests-public-methods";
     public const string PropertyCanBeAutoProperty = "property-can-be-auto-property";
     public const string PrivatePropertyShouldBeField = "private-property-should-be-field";
     public const string MethodParameterCount = "method-parameter-count";

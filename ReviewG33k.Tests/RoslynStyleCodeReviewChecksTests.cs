@@ -86,7 +86,7 @@ public sealed class RoslynStyleCodeReviewChecksTests
         var report = AnalyzeSource(new MethodParameterCountCodeReviewCheck(), "A", source, Enumerable.Range(1, 7));
 
         Assert.That(report.Findings, Has.Count.EqualTo(1));
-        Assert.That(report.Findings[0].Message, Does.Contain("Constructor 'Sample'"));
+        Assert.That(report.Findings[0].Message, Does.Contain("Constructor `Sample`"));
         Assert.That(report.Findings[0].Message, Does.Contain("6 parameters"));
     }
 
@@ -279,6 +279,90 @@ public sealed class RoslynStyleCodeReviewChecksTests
             """;
 
         var report = AnalyzeSource(new ThreadSleepCodeReviewCheck(), "A", source, Enumerable.Range(1, 13));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AsyncVoidCheckWhenAsyncVoidMethodIsAddedReportsImportant()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public async void RunAsyncThing()
+                {
+                    await Task.Delay(1);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new AsyncVoidCodeReviewCheck(), "A", source, Enumerable.Range(1, 8));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Important));
+    }
+
+    [Test]
+    public void AsyncVoidCheckWhenMethodLooksLikeEventHandlerDoesNotReport()
+    {
+        const string source = """
+            using System;
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public async void OnClick(object? sender, EventArgs e)
+                {
+                    await Task.Delay(1);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new AsyncVoidCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void TaskRunAsyncCheckWhenTaskRunUsesAsyncLambdaReportsSuggestion()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public Task RunAsync()
+                {
+                    return Task.Run(async () =>
+                    {
+                        await Task.Delay(1);
+                    });
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new TaskRunAsyncCodeReviewCheck(), "A", source, Enumerable.Range(1, 13));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+    }
+
+    [Test]
+    public void TaskRunAsyncCheckWhenTaskRunUsesCpuBoundLambdaDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public Task<int> RunAsync()
+                {
+                    return Task.Run(() => 42);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new TaskRunAsyncCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
 
         Assert.That(report.Findings, Is.Empty);
     }

@@ -8,15 +8,15 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System;
 using System.Linq;
-using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace ReviewG33k.Services;
 
 public sealed class AsyncVoidCodeReviewCheck : CodeReviewCheckBase
 {
-    private static readonly Regex AsyncVoidRegex = new(@"\basync\s+void\s+[A-Za-z_][A-Za-z0-9_]*\s*\(", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
     public override string RuleId => CodeReviewRuleIds.AsyncVoid;
 
     public override string DisplayName => "async void (non-event handlers)";
@@ -25,18 +25,66 @@ public sealed class AsyncVoidCodeReviewCheck : CodeReviewCheckBase
     {
         foreach (var file in context.Files)
         {
-            foreach (var lineNumber in file.AddedLineNumbers.OrderBy(n => n))
+            var root = RoslynCodeReviewCheckUtilities.ParseRoot(file);
+            var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
+            foreach (var method in methods)
             {
-                if (lineNumber < 1 || lineNumber > file.Lines.Count)
+                if (!RoslynCodeReviewCheckUtilities.IsNodeNew(file, method))
+                    continue;
+                if (!method.Modifiers.Any(modifier => modifier.RawKind == (int)SyntaxKind.AsyncKeyword))
+                    continue;
+                if (!IsVoidReturnType(method.ReturnType))
+                    continue;
+                if (IsLikelyEventHandler(method))
                     continue;
 
-                var line = file.Lines[lineNumber - 1];
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
-
-                if (AsyncVoidRegex.IsMatch(line) && !CodeReviewCheckUtilities.LooksLikeEventHandlerSignature(line))
-                    AddFinding(report, CodeReviewFindingSeverity.Important, file.Path, lineNumber, "Suspicious 'async void' usage (non-event handler).");
+                var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(method);
+                AddFinding(report, CodeReviewFindingSeverity.Important, file.Path, lineNumber, "Suspicious 'async void' usage (non-event handler).");
             }
         }
+    }
+
+    private static bool IsVoidReturnType(TypeSyntax returnType) =>
+        string.Equals(returnType?.ToString(), "void", StringComparison.Ordinal);
+
+    private static bool IsLikelyEventHandler(MethodDeclarationSyntax method)
+    {
+        var parameters = method?.ParameterList?.Parameters;
+        if (parameters == null || parameters.Value.Count != 2)
+            return false;
+
+        return IsObjectLike(parameters.Value[0].Type) && IsEventArgsLike(parameters.Value[1].Type);
+    }
+
+    private static bool IsObjectLike(TypeSyntax type)
+    {
+        if (type == null)
+            return false;
+
+        var normalized = NormalizeTypeName(type.ToString());
+        return string.Equals(normalized, "object", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(normalized, "System.Object", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsEventArgsLike(TypeSyntax type)
+    {
+        if (type == null)
+            return false;
+
+        var normalized = NormalizeTypeName(type.ToString());
+        return normalized.EndsWith("EventArgs", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeTypeName(string typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+            return string.Empty;
+
+        var normalized = typeName.Trim();
+        normalized = normalized.Replace("global::", string.Empty, StringComparison.Ordinal);
+        if (normalized.EndsWith("?", StringComparison.Ordinal))
+            normalized = normalized[..^1];
+
+        return normalized.Trim();
     }
 }

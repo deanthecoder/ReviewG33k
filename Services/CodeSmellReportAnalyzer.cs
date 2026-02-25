@@ -243,6 +243,7 @@ public sealed class CodeSmellReportAnalyzer
         new UnusedPrivateMemberCodeReviewCheck(),
         new MissingXmlDocsCodeReviewCheck(),
         new MissingUnitTestsCodeReviewCheck(),
+        new MissingTestsForNewPublicMethodsCodeReviewCheck(),
         new UnusedUsingRoslynCodeReviewCheck()
     ];
 }

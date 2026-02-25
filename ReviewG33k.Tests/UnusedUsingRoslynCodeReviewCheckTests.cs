@@ -23,7 +23,7 @@ public sealed class UnusedUsingRoslynCodeReviewCheckTests
 
             public sealed class Sample
             {
-                public string GetValue() => string.Empty;
+                public int Compare(string left, string right) => string.Compare(left, right, StringComparison.Ordinal);
             }
             """;
 
