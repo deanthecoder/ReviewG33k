@@ -17,6 +17,7 @@ public sealed class CodeSmellReport
 {
     private static readonly Regex SingleQuotedCodeRegex = new("'([^'\\r\\n]+)'", RegexOptions.Compiled);
 
+    private readonly object m_syncRoot = new();
     private readonly List<string> m_info = [];
     private readonly List<CodeSmellFinding> m_findings = [];
 
@@ -26,13 +27,17 @@ public sealed class CodeSmellReport
 
     public void AddInfo(string message)
     {
-        if (!string.IsNullOrWhiteSpace(message))
+        if (string.IsNullOrWhiteSpace(message))
+            return;
+
+        lock (m_syncRoot)
             m_info.Add(message.Trim());
     }
 
     public void AddFinding(CodeReviewFindingSeverity severity, string ruleId, string filePath, int lineNumber, string message)
     {
-        m_findings.Add(new CodeSmellFinding(severity, ruleId, filePath, lineNumber, FormatMessage(message)));
+        lock (m_syncRoot)
+            m_findings.Add(new CodeSmellFinding(severity, ruleId, filePath, lineNumber, FormatMessage(message)));
     }
 
     private static string FormatMessage(string message)

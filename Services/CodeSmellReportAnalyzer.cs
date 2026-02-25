@@ -104,8 +104,9 @@ public sealed class CodeSmellReportAnalyzer
 
         report.AddInfo($"Code review scan: analyzing {changedFiles.Count} changed C# file(s).");
         var context = BuildContext(changedFiles);
-        foreach (var check in m_checks)
-            check.Analyze(context, report);
+        m_checks
+            .AsParallel()
+            .ForAll(check => check.Analyze(context, report));
 
         return report;
     }
