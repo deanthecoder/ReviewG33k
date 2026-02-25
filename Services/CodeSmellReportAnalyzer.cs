@@ -228,6 +228,7 @@ public sealed class CodeSmellReportAnalyzer
         new LockTargetCodeReviewCheck(),
         new TaskRunAsyncCodeReviewCheck(),
         new MissingXmlDocsCodeReviewCheck(),
-        new MissingUnitTestsCodeReviewCheck()
+        new MissingUnitTestsCodeReviewCheck(),
+        new UnusedUsingRoslynCodeReviewCheck()
     ];
 }

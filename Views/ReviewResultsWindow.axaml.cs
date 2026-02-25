@@ -179,6 +179,17 @@ public partial class ReviewResultsWindow : Window
             SetPreviewText($"Posted {successCount} comment(s). {failureCount} failed. See log for details.", "Preview");
     }
 
+    private void UntickSameTypeMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { DataContext: ReviewResultRow sourceRow } || string.IsNullOrWhiteSpace(sourceRow.RuleId))
+            return;
+
+        foreach (var row in m_rows.Where(row => string.Equals(row.RuleId, sourceRow.RuleId, StringComparison.OrdinalIgnoreCase)))
+            row.IsIncluded = false;
+
+        UpdateBatchActionButtonStates();
+    }
+
     private void ResultsListBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (ResultsListBox.SelectedItem is not ReviewResultRow row)
@@ -211,6 +222,7 @@ public partial class ReviewResultsWindow : Window
             : "Bitbucket PR context is unavailable or no valid file/line for this issue";
         return new ReviewResultRow(
             finding,
+            finding.RuleId,
             finding.Severity.ToString().ToUpperInvariant(),
             issueSummary,
             issueFull,
@@ -319,6 +331,7 @@ public partial class ReviewResultsWindow : Window
 
         public ReviewResultRow(
             CodeSmellFinding finding,
+            string ruleId,
             string severityText,
             string issueSummary,
             string issueFull,
@@ -330,6 +343,7 @@ public partial class ReviewResultsWindow : Window
             bool hasExistingComment)
         {
             Finding = finding;
+            RuleId = ruleId ?? string.Empty;
             SeverityText = severityText ?? string.Empty;
             IssueSummary = issueSummary ?? string.Empty;
             IssueFull = issueFull ?? string.Empty;
@@ -344,6 +358,8 @@ public partial class ReviewResultsWindow : Window
         public event PropertyChangedEventHandler PropertyChanged;
 
         public CodeSmellFinding Finding { get; }
+
+        public string RuleId { get; }
 
         public string SeverityText { get; }
 
@@ -425,6 +441,11 @@ public partial class ReviewResultsWindow : Window
                 return m_commentToolTipBase;
             }
         }
+
+        public string UntickSameTypeMenuHeader =>
+            string.IsNullOrWhiteSpace(RuleId)
+                ? "Untick issues of this type"
+                : $"Untick all `{RuleId}` issues";
 
         public IBrush IssueForeground => IsIncluded ? IncludedIssueBrush : ExcludedIssueBrush;
 

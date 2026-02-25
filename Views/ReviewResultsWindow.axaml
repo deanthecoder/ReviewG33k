@@ -43,7 +43,14 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                         <Grid Margin="0,1"
+                              Background="Transparent"
                               ColumnDefinitions="34,90,*,170">
+                                <Grid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="{Binding UntickSameTypeMenuHeader}"
+                                                  Click="UntickSameTypeMenuItem_OnClick" />
+                                    </ContextMenu>
+                                </Grid.ContextMenu>
                                 <CheckBox Grid.Column="0"
                                           HorizontalAlignment="Center"
                                           VerticalAlignment="Center"

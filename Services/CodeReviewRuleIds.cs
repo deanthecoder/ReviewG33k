@@ -21,4 +21,5 @@ public static class CodeReviewRuleIds
     public const string TaskRunAsync = "task-run-async";
     public const string MissingXmlDocs = "missing-xml-docs";
     public const string MissingTests = "missing-tests";
+    public const string UnusedUsingsRoslyn = "unused-usings-roslyn";
 }
