@@ -10,11 +10,15 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using ReviewG33k.Services;
 
 namespace ReviewG33k.Views;
@@ -25,25 +29,29 @@ public partial class ReviewResultsWindow : Window
     private const int PreviewLinesAfter = 8;
 
     private readonly Action<CodeSmellFinding> m_openFindingAction;
+    private readonly Func<CodeSmellFinding, Task<bool>> m_commentFindingAction;
     private readonly Func<CodeSmellFinding, string> m_resolveFindingPath;
 
     public ReviewResultsWindow()
-        : this(Array.Empty<CodeSmellFinding>(), false, null, null)
+        : this(Array.Empty<CodeSmellFinding>(), false, false, null, null, null)
     {
     }
 
     public ReviewResultsWindow(IEnumerable<CodeSmellFinding> findings)
-        : this(findings, false, null, null)
+        : this(findings, false, false, null, null, null)
     {
     }
 
     public ReviewResultsWindow(
         IEnumerable<CodeSmellFinding> findings,
         bool canOpenInVsCode,
+        bool canCommentInBitbucket,
         Action<CodeSmellFinding> openFindingAction,
+        Func<CodeSmellFinding, Task<bool>> commentFindingAction,
         Func<CodeSmellFinding, string> resolveFindingPath)
     {
         m_openFindingAction = openFindingAction;
+        m_commentFindingAction = commentFindingAction;
         m_resolveFindingPath = resolveFindingPath;
         InitializeComponent();
         ResultsListBox.SelectionChanged += ResultsListBox_OnSelectionChanged;
@@ -54,7 +62,7 @@ public partial class ReviewResultsWindow : Window
             .OrderBy(finding => GetSeveritySortOrder(finding.Severity))
             .ThenBy(finding => finding.FilePath, StringComparer.OrdinalIgnoreCase)
             .ThenBy(finding => finding.LineNumber)
-            .Select(finding => MapToRow(finding, canOpenInVsCode))
+            .Select(finding => MapToRow(finding, canOpenInVsCode, canCommentInBitbucket))
             .ToArray();
 
         ResultsListBox.ItemsSource = rows;
@@ -70,10 +78,32 @@ public partial class ReviewResultsWindow : Window
 
     private void OpenFindingButton_OnClick(object sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if (sender is not Button { DataContext: ReviewResultRow row } || !row.CanOpen)
+        if (sender is not Button { DataContext: ReviewResultRow row } || !row.CanOpenActive)
             return;
 
         m_openFindingAction?.Invoke(row.Finding);
+    }
+
+    private async void CommentFindingButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: ReviewResultRow row } || !row.CanCommentActive || m_commentFindingAction == null)
+            return;
+
+        row.IsPostingComment = true;
+        try
+        {
+            var success = await m_commentFindingAction(row.Finding);
+            if (success)
+                row.HasPostedComment = true;
+        }
+        catch (Exception exception)
+        {
+            SetPreviewText($"Failed to post comment: {exception.Message}", "Preview");
+        }
+        finally
+        {
+            row.IsPostingComment = false;
+        }
     }
 
     private void ResultsListBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -87,20 +117,32 @@ public partial class ReviewResultsWindow : Window
         UpdatePreviewForFinding(row.Finding);
     }
 
-    private static ReviewResultRow MapToRow(CodeSmellFinding finding, bool canOpenInVsCode)
+    private static ReviewResultRow MapToRow(CodeSmellFinding finding, bool canOpenInVsCode, bool canCommentInBitbucket)
     {
         var issueLocation = finding.LineNumber > 0
             ? $"{finding.FilePath}:{finding.LineNumber}"
             : finding.FilePath;
         var issueSummary = finding.Message ?? string.Empty;
         var issueFull = issueSummary;
-        var canOpen = canOpenInVsCode &&
-                      !string.IsNullOrWhiteSpace(finding.FilePath) &&
-                      finding.LineNumber > 0;
-        var openToolTip = canOpen
+        var hasFileAndLine = !string.IsNullOrWhiteSpace(finding.FilePath) && finding.LineNumber > 0;
+        var canOpen = canOpenInVsCode && hasFileAndLine;
+        var canComment = canCommentInBitbucket && hasFileAndLine;
+        var openToolTipBase = canOpen
             ? "Open file and line in VS Code"
             : "VS Code not detected or no valid file/line for this issue";
-        return new ReviewResultRow(finding, finding.Severity.ToString().ToUpperInvariant(), issueSummary, issueFull, issueLocation, canOpen, openToolTip);
+        var commentToolTipBase = canComment
+            ? "Post this issue as a Bitbucket PR inline comment"
+            : "Bitbucket PR context is unavailable or no valid file/line for this issue";
+        return new ReviewResultRow(
+            finding,
+            finding.Severity.ToString().ToUpperInvariant(),
+            issueSummary,
+            issueFull,
+            issueLocation,
+            canOpen,
+            openToolTipBase,
+            canComment,
+            commentToolTipBase);
     }
 
     private void UpdatePreviewForFinding(CodeSmellFinding finding)
@@ -171,9 +213,29 @@ public partial class ReviewResultsWindow : Window
             _ => 4
         };
 
-    private sealed class ReviewResultRow
+    private sealed class ReviewResultRow : INotifyPropertyChanged
     {
-        public ReviewResultRow(CodeSmellFinding finding, string severityText, string issueSummary, string issueFull, string issueLocation, bool canOpen, string openToolTip)
+        private static readonly IBrush IncludedIssueBrush = Brushes.Gainsboro;
+        private static readonly IBrush ExcludedIssueBrush = Brushes.Gray;
+        private static readonly IBrush IncludedLocationBrush = Brushes.Gray;
+        private static readonly IBrush ExcludedLocationBrush = new SolidColorBrush(Color.Parse("#6B6B6B"));
+
+        private readonly string m_openToolTipBase;
+        private readonly string m_commentToolTipBase;
+        private bool m_isIncluded = true;
+        private bool m_isPostingComment;
+        private bool m_hasPostedComment;
+
+        public ReviewResultRow(
+            CodeSmellFinding finding,
+            string severityText,
+            string issueSummary,
+            string issueFull,
+            string issueLocation,
+            bool canOpen,
+            string openToolTipBase,
+            bool canComment,
+            string commentToolTipBase)
         {
             Finding = finding;
             SeverityText = severityText ?? string.Empty;
@@ -181,8 +243,12 @@ public partial class ReviewResultsWindow : Window
             IssueFull = issueFull ?? string.Empty;
             IssueLocation = issueLocation ?? string.Empty;
             CanOpen = canOpen;
-            OpenToolTip = openToolTip ?? string.Empty;
+            CanComment = canComment;
+            m_openToolTipBase = openToolTipBase ?? string.Empty;
+            m_commentToolTipBase = commentToolTipBase ?? string.Empty;
         }
+
+        public event PropertyChangedEventHandler PropertyChanged;
 
         public CodeSmellFinding Finding { get; }
 
@@ -196,6 +262,82 @@ public partial class ReviewResultsWindow : Window
 
         public bool CanOpen { get; }
 
-        public string OpenToolTip { get; }
+        public bool CanComment { get; }
+
+        public bool IsIncluded
+        {
+            get => m_isIncluded;
+            set
+            {
+                if (m_isIncluded == value)
+                    return;
+
+                m_isIncluded = value;
+                RaisePropertyChanged();
+                RaisePropertyChanged(nameof(CanOpenActive));
+                RaisePropertyChanged(nameof(CanCommentActive));
+                RaisePropertyChanged(nameof(OpenToolTip));
+                RaisePropertyChanged(nameof(CommentToolTip));
+                RaisePropertyChanged(nameof(IssueForeground));
+                RaisePropertyChanged(nameof(IssueLocationForeground));
+            }
+        }
+
+        public bool IsPostingComment
+        {
+            get => m_isPostingComment;
+            set
+            {
+                if (m_isPostingComment == value)
+                    return;
+
+                m_isPostingComment = value;
+                RaisePropertyChanged();
+                RaisePropertyChanged(nameof(CanCommentActive));
+                RaisePropertyChanged(nameof(CommentToolTip));
+            }
+        }
+
+        public bool HasPostedComment
+        {
+            get => m_hasPostedComment;
+            set
+            {
+                if (m_hasPostedComment == value)
+                    return;
+
+                m_hasPostedComment = value;
+                RaisePropertyChanged();
+                RaisePropertyChanged(nameof(CanCommentActive));
+                RaisePropertyChanged(nameof(CommentToolTip));
+            }
+        }
+
+        public bool CanOpenActive => CanOpen && IsIncluded;
+
+        public bool CanCommentActive => CanComment && IsIncluded && !IsPostingComment && !HasPostedComment;
+
+        public string OpenToolTip => !IsIncluded ? "Issue is ignored." : m_openToolTipBase;
+
+        public string CommentToolTip
+        {
+            get
+            {
+                if (!IsIncluded)
+                    return "Issue is ignored.";
+                if (HasPostedComment)
+                    return "Comment already posted for this issue.";
+                if (IsPostingComment)
+                    return "Posting comment...";
+                return m_commentToolTipBase;
+            }
+        }
+
+        public IBrush IssueForeground => IsIncluded ? IncludedIssueBrush : ExcludedIssueBrush;
+
+        public IBrush IssueLocationForeground => IsIncluded ? IncludedLocationBrush : ExcludedLocationBrush;
+
+        private void RaisePropertyChanged([CallerMemberName] string propertyName = null) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

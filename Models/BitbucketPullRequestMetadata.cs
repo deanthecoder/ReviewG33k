@@ -14,13 +14,14 @@ namespace ReviewG33k.Models;
 
 public sealed class BitbucketPullRequestMetadata
 {
-    public BitbucketPullRequestMetadata(string sourceBranch, string targetBranch, string title, string author, DateTimeOffset? updatedAt)
+    public BitbucketPullRequestMetadata(string sourceBranch, string targetBranch, string title, string author, DateTimeOffset? updatedAt, string state)
     {
         SourceBranch = sourceBranch;
         TargetBranch = targetBranch;
         Title = title;
         Author = author;
         UpdatedAt = updatedAt;
+        State = state;
     }
 
     public string SourceBranch { get; }
@@ -32,4 +33,6 @@ public sealed class BitbucketPullRequestMetadata
     public string Author { get; }
 
     public DateTimeOffset? UpdatedAt { get; }
+
+    public string State { get; }
 }

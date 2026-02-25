@@ -49,9 +49,13 @@ public partial class MainWindow : Window
     private readonly Settings m_settings = Settings.Instance;
     private readonly ObservableCollection<LogLineEntry> m_logLines = [];
     private CancellationTokenSource m_previewUpdateCancellation;
+    private BitbucketPullRequestReference m_latestPullRequest;
     private string m_latestReviewWorktreePath;
     private string m_latestSolutionPath;
+    private string m_previewPullRequestState;
+    private string m_lastNonOpenPullRequestNoticeKey;
     private string m_vsCodeExecutablePath;
+    private bool? m_previewPullRequestIsOpen;
     private bool m_busy;
     private bool m_isGitAvailable = true;
     private bool m_gitAvailabilityChecked;
@@ -145,6 +149,8 @@ public partial class MainWindow : Window
             return;
         }
 
+        m_latestPullRequest = pullRequest;
+
         CodeSmellReport report = null;
         await ExecuteBusyActionAsync(
             "Reviewing pull request...",
@@ -154,12 +160,19 @@ public partial class MainWindow : Window
                 UpdateActionButtonStates();
 
                 var metadata = await m_pullRequestMetadataClient.TryGetMetadataAsync(pullRequest);
+                UpdatePullRequestReviewState(metadata);
+                UpdateActionButtonStates();
+                if (m_previewPullRequestIsOpen == false)
+                {
+                    NotifyNonOpenPullRequestIfNeeded(pullRequest);
+                    return;
+                }
+
                 var changedPaths = await m_pullRequestMetadataClient.TryGetChangedPathsAsync(pullRequest);
 
                 AppendLog($"PR detected: {pullRequest.SourceUrl}");
                 AppendLog($"PR title: {FormatMetadataText(metadata?.Title)}");
                 AppendLog($"PR author: {FormatMetadataText(metadata?.Author)}");
-                AppendLog($"PR updated: {FormatMetadataUpdated(metadata?.UpdatedAt)}");
                 AppendLog($"PR modified files: {(changedPaths.Count > 0 ? changedPaths.Count.ToString() : "N/A")}");
 
                 var result = await m_orchestrator.PrepareReviewAsync(repositoryRoot, pullRequest, changedPaths, AppendLog);
@@ -227,10 +240,13 @@ public partial class MainWindow : Window
     private async Task ShowReviewResultsWindowAsync(CodeSmellReport report)
     {
         var canOpenInVsCode = TryDetectVsCode(out _, out _);
+        var canCommentInBitbucket = m_latestPullRequest != null;
         var resultsWindow = new ReviewResultsWindow(
             report?.Findings ?? [],
             canOpenInVsCode,
+            canCommentInBitbucket,
             OpenReviewFindingInVsCode,
+            CommentOnReviewFindingAsync,
             ResolveReviewFindingPath);
         await resultsWindow.ShowDialog(this);
     }
@@ -265,6 +281,42 @@ public partial class MainWindow : Window
             return null;
 
         return TryResolveLogPath(finding.FilePath, out var resolvedPath) ? resolvedPath : null;
+    }
+
+    private async Task<bool> CommentOnReviewFindingAsync(CodeSmellFinding finding)
+    {
+        if (finding == null || string.IsNullOrWhiteSpace(finding.FilePath) || finding.LineNumber < 1)
+        {
+            SetStatus("Selected finding has no valid file/line for commenting.");
+            return false;
+        }
+
+        if (m_latestPullRequest == null)
+        {
+            SetStatus("Pull request context is unavailable for posting comments.");
+            return false;
+        }
+
+        var commentText = finding.Message ?? string.Empty;
+        var result = await m_pullRequestMetadataClient.TryAddInlineCommentAsync(
+            m_latestPullRequest,
+            finding.FilePath,
+            finding.LineNumber,
+            commentText);
+
+        if (result.Success)
+        {
+            AppendLog($"HINT: Posted Bitbucket comment at [{finding.FilePath}:{finding.LineNumber}].");
+            SetStatus("Comment posted to Bitbucket.");
+            return true;
+        }
+
+        var errorMessage = string.IsNullOrWhiteSpace(result.ErrorMessage)
+            ? "Failed to post Bitbucket comment."
+            : result.ErrorMessage;
+        AppendLog($"WARNING: Could not post Bitbucket comment at [{finding.FilePath}:{finding.LineNumber}]. {errorMessage}");
+        SetStatus("Failed to post comment. See log for details.");
+        return false;
     }
 
     private async Task ExecuteBusyActionAsync(string statusText, Func<Task> action)
@@ -371,6 +423,8 @@ public partial class MainWindow : Window
         var urlText = PullRequestUrlTextBox.Text?.Trim();
         if (string.IsNullOrWhiteSpace(urlText))
         {
+            UpdatePullRequestReviewState(null);
+            UpdateActionButtonStates();
             PullRequestPreviewTextBlock.IsVisible = false;
             PullRequestPreviewTextBlock.Text = string.Empty;
             PullRequestMetadataTextBlock.IsVisible = false;
@@ -380,6 +434,8 @@ public partial class MainWindow : Window
 
         if (!BitbucketPrUrlParser.TryParse(urlText, out var pullRequest, out _))
         {
+            UpdatePullRequestReviewState(null);
+            UpdateActionButtonStates();
             PullRequestPreviewTextBlock.Text = "Preview: Invalid Bitbucket PR URL";
             PullRequestPreviewTextBlock.IsVisible = true;
             PullRequestMetadataTextBlock.IsVisible = false;
@@ -395,6 +451,9 @@ public partial class MainWindow : Window
         var metadata = await m_pullRequestMetadataClient.TryGetMetadataAsync(pullRequest, cancellationToken);
         if (cancellationToken.IsCancellationRequested)
             return;
+
+        UpdatePullRequestReviewState(metadata);
+        UpdateActionButtonStates();
 
         var previewPrefix = $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId}";
 
@@ -414,6 +473,9 @@ public partial class MainWindow : Window
 
         PullRequestMetadataTextBlock.Text = BuildPullRequestMetadataText(metadata);
         PullRequestMetadataTextBlock.IsVisible = true;
+
+        if (m_previewPullRequestIsOpen == false)
+            NotifyNonOpenPullRequestIfNeeded(pullRequest);
     }
 
     private static bool HasBranchInfo(BitbucketPullRequestMetadata metadata) =>
@@ -428,18 +490,13 @@ public partial class MainWindow : Window
 
         var title = string.IsNullOrWhiteSpace(metadata.Title) ? "(no title)" : metadata.Title.Trim();
         var author = string.IsNullOrWhiteSpace(metadata.Author) ? "Unknown author" : metadata.Author.Trim();
-        var updated = metadata.UpdatedAt.HasValue
-            ? metadata.UpdatedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-            : "Unknown";
+        var state = FormatPullRequestState(metadata.State);
 
-        return $"Title: {title} | Author: {author} | Updated: {updated}";
+        return $"Title: {title} | Author: {author} | State: {state}";
     }
 
     private static string FormatMetadataText(string value) =>
         string.IsNullOrWhiteSpace(value) ? "N/A" : value.Trim();
-
-    private static string FormatMetadataUpdated(DateTimeOffset? updatedAt) =>
-        updatedAt.HasValue ? updatedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "N/A";
 
     private void SetBusyState(bool isBusy)
     {
@@ -450,9 +507,11 @@ public partial class MainWindow : Window
 
     private void UpdateActionButtonStates()
     {
-        PrepareReviewButton.IsEnabled = !m_busy && m_isGitAvailable && HasValidPrepareInputs();
+        var canReviewCurrentPullRequest = m_previewPullRequestIsOpen != false;
+        PrepareReviewButton.IsEnabled = !m_busy && m_isGitAvailable && canReviewCurrentPullRequest && HasValidPrepareInputs();
         OpenPullRequestButton.IsEnabled = !m_busy && HasValidPullRequestInput();
         OpenSolutionButton.IsEnabled = !m_busy &&
+                                      canReviewCurrentPullRequest &&
                                       !string.IsNullOrWhiteSpace(m_latestSolutionPath) &&
                                       File.Exists(m_latestSolutionPath);
     }
@@ -928,6 +987,49 @@ public partial class MainWindow : Window
 
         OpenFileWithShell(pullRequest.SourceUrl);
         SetStatus("Pull request opened in browser.");
+    }
+
+    private void UpdatePullRequestReviewState(BitbucketPullRequestMetadata metadata)
+    {
+        if (metadata == null)
+        {
+            m_previewPullRequestState = null;
+            m_previewPullRequestIsOpen = null;
+            return;
+        }
+
+        m_previewPullRequestState = metadata.State?.Trim();
+        m_previewPullRequestIsOpen = string.IsNullOrWhiteSpace(m_previewPullRequestState)
+            ? null
+            : string.Equals(m_previewPullRequestState, "OPEN", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void NotifyNonOpenPullRequestIfNeeded(BitbucketPullRequestReference pullRequest)
+    {
+        if (pullRequest == null || m_previewPullRequestIsOpen != false)
+            return;
+
+        var state = FormatPullRequestState(m_previewPullRequestState);
+        var noticeKey = $"{pullRequest.SourceUrl}|{state}";
+        if (string.Equals(noticeKey, m_lastNonOpenPullRequestNoticeKey, StringComparison.Ordinal))
+            return;
+
+        m_lastNonOpenPullRequestNoticeKey = noticeKey;
+        var message = $"PR #{pullRequest.PullRequestId} is {state}. Review checkout requires an OPEN pull request.";
+        AppendLog($"WARNING: {message}");
+        SetStatus(message);
+        DialogService.Instance.ShowMessage(
+            "Pull request is not open",
+            $"{message}{Environment.NewLine}{Environment.NewLine}You can still click 'Open PR' to inspect it in Bitbucket.",
+            null);
+    }
+
+    private static string FormatPullRequestState(string state)
+    {
+        if (string.IsNullOrWhiteSpace(state))
+            return "N/A";
+
+        return state.Trim().ToUpperInvariant();
     }
 
     private void OpenSolutionButton_OnClick(object sender, RoutedEventArgs e)

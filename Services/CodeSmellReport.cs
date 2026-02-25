@@ -9,11 +9,14 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace ReviewG33k.Services;
 
 public sealed class CodeSmellReport
 {
+    private static readonly Regex SingleQuotedCodeRegex = new("'([^'\\r\\n]+)'", RegexOptions.Compiled);
+
     private readonly List<string> m_info = [];
     private readonly List<CodeSmellFinding> m_findings = [];
 
@@ -29,6 +32,14 @@ public sealed class CodeSmellReport
 
     public void AddFinding(CodeReviewFindingSeverity severity, string ruleId, string filePath, int lineNumber, string message)
     {
-        m_findings.Add(new CodeSmellFinding(severity, ruleId, filePath, lineNumber, message));
+        m_findings.Add(new CodeSmellFinding(severity, ruleId, filePath, lineNumber, FormatMessage(message)));
+    }
+
+    private static string FormatMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return string.Empty;
+
+        return SingleQuotedCodeRegex.Replace(message, static match => $"`{match.Groups[1].Value}`");
     }
 }

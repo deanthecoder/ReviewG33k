@@ -99,7 +99,126 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
         return uniquePaths;
     }
 
+    public async Task<(bool Success, string ErrorMessage)> TryAddInlineCommentAsync(
+        BitbucketPullRequestReference pullRequest,
+        string path,
+        int line,
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        if (pullRequest == null)
+            return (false, "Pull request reference is not available.");
+        if (line < 1)
+            return (false, "Line number must be greater than zero.");
+        if (string.IsNullOrWhiteSpace(path))
+            return (false, "File path is required.");
+        if (string.IsNullOrWhiteSpace(text))
+            return (false, "Comment text is required.");
+
+        var apiUrl = BuildCommentsApiUrl(pullRequest);
+        var payloadJson = JsonSerializer.Serialize(
+            new
+            {
+                text = text.Trim(),
+                anchor = new
+                {
+                    line,
+                    lineType = "ADDED",
+                    fileType = "TO",
+                    path = NormalizePath(path)
+                }
+            });
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await SendCommentRequestAsync(apiUrl, payloadJson, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            return (false, exception.Message);
+        }
+
+        if ((response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden) &&
+            await TryGetGitCredentialsAsync(pullRequest, cancellationToken) is { } gitCredentials)
+        {
+            response.Dispose();
+
+            try
+            {
+                response = await SendCommentRequestAsync(
+                    apiUrl,
+                    payloadJson,
+                    cancellationToken,
+                    BuildBasicAuthHeader(gitCredentials.Username, gitCredentials.Password));
+            }
+            catch (Exception exception)
+            {
+                return (false, exception.Message);
+            }
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            response.Dispose();
+            return (true, null);
+        }
+
+        var error = await TryReadErrorAsync(response, cancellationToken);
+        response.Dispose();
+        return (false, string.IsNullOrWhiteSpace(error) ? $"Bitbucket returned {(int)response.StatusCode}." : error);
+    }
+
     public void Dispose() => m_httpClient.Dispose();
+
+    private async Task<HttpResponseMessage> SendCommentRequestAsync(
+        string apiUrl,
+        string payloadJson,
+        CancellationToken cancellationToken,
+        AuthenticationHeaderValue authHeader = null)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, apiUrl)
+        {
+            Content = new StringContent(payloadJson, Encoding.UTF8, "application/json")
+        };
+
+        if (authHeader != null)
+            request.Headers.Authorization = authHeader;
+
+        return await m_httpClient.SendAsync(request, cancellationToken);
+    }
+
+    private static async Task<string> TryReadErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(raw))
+                return null;
+
+            using var doc = JsonDocument.Parse(raw);
+            if (doc.RootElement.TryGetProperty("errors", out var errorsElement) &&
+                errorsElement.ValueKind == JsonValueKind.Array)
+            {
+                var messages = errorsElement
+                    .EnumerateArray()
+                    .Select(error => error.TryGetProperty("message", out var messageElement) && messageElement.ValueKind == JsonValueKind.String
+                        ? messageElement.GetString()
+                        : null)
+                    .Where(message => !string.IsNullOrWhiteSpace(message))
+                    .ToArray();
+
+                if (messages.Length > 0)
+                    return string.Join(" ", messages);
+            }
+
+            return raw.Trim();
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private async Task<string> TryGetResponseTextAsync(BitbucketPullRequestReference pullRequest, string apiUrl, CancellationToken cancellationToken)
     {
@@ -159,6 +278,11 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
     private static string BuildChangesApiUrl(BitbucketPullRequestReference pullRequest, int start, int limit) =>
         $"https://{pullRequest.Host}/rest/api/1.0/projects/{Uri.EscapeDataString(pullRequest.ProjectKey)}/repos/{Uri.EscapeDataString(pullRequest.RepoSlug)}/pull-requests/{pullRequest.PullRequestId}/changes?start={start}&limit={limit}";
 
+    private static string BuildCommentsApiUrl(BitbucketPullRequestReference pullRequest) =>
+        $"https://{pullRequest.Host}/rest/api/1.0/projects/{Uri.EscapeDataString(pullRequest.ProjectKey)}/repos/{Uri.EscapeDataString(pullRequest.RepoSlug)}/pull-requests/{pullRequest.PullRequestId}/comments";
+
+    private static string NormalizePath(string path) => (path ?? string.Empty).Replace('\\', '/');
+
     private static bool TryParseMetadata(string json, out BitbucketPullRequestMetadata metadata)
     {
         metadata = null;
@@ -175,8 +299,9 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
             var title = GetTitle(root);
             var author = GetAuthor(root);
             var updatedAt = GetUpdatedAt(root);
+            var state = GetState(root);
 
-            metadata = new BitbucketPullRequestMetadata(sourceBranch, targetBranch, title, author, updatedAt);
+            metadata = new BitbucketPullRequestMetadata(sourceBranch, targetBranch, title, author, updatedAt, state);
             return true;
         }
         catch
@@ -239,6 +364,14 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
         }
 
         return null;
+    }
+
+    private static string GetState(JsonElement root)
+    {
+        if (root.TryGetProperty("state", out var stateElement) && stateElement.ValueKind == JsonValueKind.String)
+            return stateElement.GetString();
+
+        return string.Empty;
     }
 
     private static string TrimGitRefPrefix(string refName)

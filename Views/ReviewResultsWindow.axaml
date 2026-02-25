@@ -19,18 +19,14 @@
 
         <Grid Grid.Row="1"
               Margin="0,12,0,6"
-              ColumnDefinitions="90,*,84">
-            <TextBlock Grid.Column="0"
+              ColumnDefinitions="34,90,*,170">
+            <TextBlock Grid.Column="1"
                        FontWeight="SemiBold"
                        Text="Severity" />
-            <TextBlock Grid.Column="1"
+            <TextBlock Grid.Column="2"
                        Margin="8,0,0,0"
                        FontWeight="SemiBold"
                        Text="Issue" />
-            <TextBlock Grid.Column="2"
-                       HorizontalAlignment="Right"
-                       FontWeight="SemiBold"
-                       Text="Action" />
         </Grid>
 
         <Grid Grid.Row="2"
@@ -46,38 +42,50 @@
                          Background="Transparent">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Grid Margin="0,1"
-                                  ColumnDefinitions="90,*,84">
-                                <TextBlock Grid.Column="0"
+                        <Grid Margin="0,1"
+                              ColumnDefinitions="34,90,*,170">
+                                <CheckBox Grid.Column="0"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          IsChecked="{Binding IsIncluded}" />
+                                <TextBlock Grid.Column="1"
                                            VerticalAlignment="Center"
                                            Text="{Binding SeverityText}" />
-                                <StackPanel Grid.Column="1"
+                                <StackPanel Grid.Column="2"
                                             Margin="8,2,8,2"
                                             Spacing="1">
                                     <TextBlock Text="{Binding IssueSummary}"
+                                               Foreground="{Binding IssueForeground}"
                                                VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis"
                                                TextWrapping="NoWrap"
                                                ToolTip.Tip="{Binding IssueFull}" />
                                     <TextBlock Width="520"
                                                Text="{Binding IssueLocation}"
+                                               Foreground="{Binding IssueLocationForeground}"
                                                FontSize="11"
-                                               Opacity="0.72"
-                                               Foreground="Gray"
                                                HorizontalAlignment="Left"
                                                TextAlignment="Left"
                                                TextTrimming="CharacterEllipsis"
                                                TextWrapping="NoWrap"
                                                ToolTip.Tip="{Binding IssueLocation}" />
                                 </StackPanel>
-                                <Button Grid.Column="2"
-                                        Width="72"
-                                        HorizontalAlignment="Right"
-                                        VerticalAlignment="Center"
-                                        Click="OpenFindingButton_OnClick"
-                                        IsEnabled="{Binding CanOpen}"
-                                        ToolTip.Tip="{Binding OpenToolTip}"
-                                        Content="Open" />
+                                <StackPanel Grid.Column="3"
+                                            Orientation="Horizontal"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center"
+                                            Spacing="6">
+                                    <Button Width="78"
+                                            Click="OpenFindingButton_OnClick"
+                                            IsEnabled="{Binding CanOpenActive}"
+                                            ToolTip.Tip="{Binding OpenToolTip}"
+                                            Content="Open" />
+                                    <Button Width="78"
+                                            Click="CommentFindingButton_OnClick"
+                                            IsEnabled="{Binding CanCommentActive}"
+                                            ToolTip.Tip="{Binding CommentToolTip}"
+                                            Content="Comment" />
+                                </StackPanel>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
