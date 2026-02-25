@@ -15,50 +15,42 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace ReviewG33k.Services;
 
-public sealed class UnobservedTaskResultCodeReviewCheck : CodeReviewCheckBase
+public sealed class UnobservedTaskResultCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
 {
     public override string RuleId => CodeReviewRuleIds.UnobservedTaskResult;
 
     public override string DisplayName => "Unobserved Task/ValueTask results";
 
-    public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
+    protected override void AnalyzeFile(
+        CodeReviewAnalysisContext context,
+        CodeReviewChangedFile file,
+        CompilationUnitSyntax root,
+        SemanticModel semanticModel,
+        CodeSmellReport report)
     {
-        foreach (var file in context.Files)
+        var statements = root.DescendantNodes().OfType<ExpressionStatementSyntax>();
+        foreach (var statement in statements)
         {
-            if (!RoslynCodeReviewCheckUtilities.TryGetSemanticAnalysis(
-                    file,
-                    out var root,
-                    out var semanticModel,
-                    out var syntaxTree,
-                    out var diagnostics))
+            if (!RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, statement.Span))
                 continue;
-            if (RoslynCodeReviewCheckUtilities.HasSourceErrorsForTree(diagnostics, syntaxTree))
+            if (statement.Expression is AwaitExpressionSyntax)
+                continue;
+            if (statement.Expression is not InvocationExpressionSyntax invocation)
+                continue;
+            if (!ReturnsTaskLike(semanticModel, invocation))
                 continue;
 
-            var statements = root.DescendantNodes().OfType<ExpressionStatementSyntax>();
-            foreach (var statement in statements)
-            {
-                if (!RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, statement.Span))
-                    continue;
-                if (statement.Expression is AwaitExpressionSyntax)
-                    continue;
-                if (statement.Expression is not InvocationExpressionSyntax invocation)
-                    continue;
-                if (!ReturnsTaskLike(semanticModel, invocation))
-                    continue;
-
-                var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(statement);
-                var invokedMethodName = (semanticModel.GetSymbolInfo(invocation).Symbol as IMethodSymbol)?.Name;
-                var methodHint = string.IsNullOrWhiteSpace(invokedMethodName)
-                    ? "Result of async call is ignored."
-                    : $"Result of async call `{invokedMethodName}` is ignored.";
-                AddFinding(
-                    report,
-                    CodeReviewFindingSeverity.Suggestion,
-                    file.Path,
-                    lineNumber,
-                    $"{methodHint} Consider awaiting or explicitly handling the returned `Task`/`ValueTask`.");
-            }
+            var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(statement);
+            var invokedMethodName = (semanticModel.GetSymbolInfo(invocation).Symbol as IMethodSymbol)?.Name;
+            var methodHint = string.IsNullOrWhiteSpace(invokedMethodName)
+                ? "Result of async call is ignored."
+                : $"Result of async call `{invokedMethodName}` is ignored.";
+            AddFinding(
+                report,
+                CodeReviewFindingSeverity.Suggestion,
+                file.Path,
+                lineNumber,
+                $"{methodHint} Consider awaiting or explicitly handling the returned `Task`/`ValueTask`.");
         }
     }
 

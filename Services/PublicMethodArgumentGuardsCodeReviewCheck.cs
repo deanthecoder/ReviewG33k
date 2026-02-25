@@ -56,7 +56,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
     {
         foreach (var file in context.Files)
         {
-            if (IsTestFilePath(file.Path))
+            if (CodeReviewFileClassification.IsTestFilePath(file.Path))
                 continue;
 
             foreach (var lineNumber in file.AddedLineNumbers.OrderBy(number => number))
@@ -87,14 +87,6 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
             }
         }
     }
-
-    private static bool IsTestFilePath(string path) =>
-        !string.IsNullOrWhiteSpace(path) &&
-        (path.EndsWith("Tests.cs", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("/Tests/", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("\\Tests\\", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("/UnitTests/", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("\\UnitTests\\", StringComparison.OrdinalIgnoreCase));
 
     private static bool TryGetPublicMethodSignature(
         IReadOnlyList<string> lines,

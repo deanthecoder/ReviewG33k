@@ -16,44 +16,36 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace ReviewG33k.Services;
 
-public sealed class MethodCanBeStaticCodeReviewCheck : CodeReviewCheckBase
+public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
 {
     public override string RuleId => CodeReviewRuleIds.MethodCanBeStatic;
 
     public override string DisplayName => "Methods that can be static";
 
-    public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
+    protected override void AnalyzeFile(
+        CodeReviewAnalysisContext context,
+        CodeReviewChangedFile file,
+        CompilationUnitSyntax root,
+        SemanticModel semanticModel,
+        CodeSmellReport report)
     {
-        foreach (var file in context.Files)
+        var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
+        foreach (var method in methods)
         {
-            if (!RoslynCodeReviewCheckUtilities.TryGetSemanticAnalysis(
-                    file,
-                    out var root,
-                    out var semanticModel,
-                    out var syntaxTree,
-                    out var diagnostics))
+            if (!RoslynCodeReviewCheckUtilities.IsNodeNew(file, method))
                 continue;
-            if (RoslynCodeReviewCheckUtilities.HasSourceErrorsForTree(diagnostics, syntaxTree))
+            if (!CanMethodBeStatic(semanticModel, method, out var methodSymbol))
+                continue;
+            if (UsesInstanceState(semanticModel, method, methodSymbol.ContainingType))
                 continue;
 
-            var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
-            foreach (var method in methods)
-            {
-                if (!RoslynCodeReviewCheckUtilities.IsNodeNew(file, method))
-                    continue;
-                if (!CanMethodBeStatic(semanticModel, method, out var methodSymbol))
-                    continue;
-                if (UsesInstanceState(semanticModel, method, methodSymbol.ContainingType))
-                    continue;
-
-                var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(method);
-                AddFinding(
-                    report,
-                    CodeReviewFindingSeverity.Hint,
-                    file.Path,
-                    lineNumber,
-                    $"Method `{method.Identifier.ValueText}` can likely be made static.");
-            }
+            var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(method);
+            AddFinding(
+                report,
+                CodeReviewFindingSeverity.Hint,
+                file.Path,
+                lineNumber,
+                $"Method `{method.Identifier.ValueText}` can likely be made static.");
         }
     }
 

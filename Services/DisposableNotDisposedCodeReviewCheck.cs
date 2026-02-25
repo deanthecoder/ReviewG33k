@@ -16,64 +16,56 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace ReviewG33k.Services;
 
-public sealed class DisposableNotDisposedCodeReviewCheck : CodeReviewCheckBase
+public sealed class DisposableNotDisposedCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
 {
     public override string RuleId => CodeReviewRuleIds.DisposableNotDisposed;
 
     public override string DisplayName => "Disposable created without disposal";
 
-    public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
+    protected override void AnalyzeFile(
+        CodeReviewAnalysisContext context,
+        CodeReviewChangedFile file,
+        CompilationUnitSyntax root,
+        SemanticModel semanticModel,
+        CodeSmellReport report)
     {
-        foreach (var file in context.Files)
+        var localDeclarations = root.DescendantNodes().OfType<LocalDeclarationStatementSyntax>();
+        foreach (var localDeclaration in localDeclarations)
         {
-            if (!RoslynCodeReviewCheckUtilities.TryGetSemanticAnalysis(
-                    file,
-                    out var root,
-                    out var semanticModel,
-                    out var syntaxTree,
-                    out var diagnostics))
+            if (!RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, localDeclaration.Span))
                 continue;
-            if (RoslynCodeReviewCheckUtilities.HasSourceErrorsForTree(diagnostics, syntaxTree))
+            if (localDeclaration.UsingKeyword.IsKind(SyntaxKind.UsingKeyword))
                 continue;
 
-            var localDeclarations = root.DescendantNodes().OfType<LocalDeclarationStatementSyntax>();
-            foreach (var localDeclaration in localDeclarations)
+            var declarationBlock = localDeclaration.Parent as BlockSyntax;
+            foreach (var variable in localDeclaration.Declaration?.Variables ?? [])
             {
-                if (!RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, localDeclaration.Span))
-                    continue;
-                if (localDeclaration.UsingKeyword.IsKind(SyntaxKind.UsingKeyword))
-                    continue;
-
-                var declarationBlock = localDeclaration.Parent as BlockSyntax;
-                foreach (var variable in localDeclaration.Declaration?.Variables ?? [])
+                if (variable.Initializer?.Value is not ObjectCreationExpressionSyntax &&
+                    variable.Initializer?.Value is not ImplicitObjectCreationExpressionSyntax)
                 {
-                    if (variable.Initializer?.Value is not ObjectCreationExpressionSyntax &&
-                        variable.Initializer?.Value is not ImplicitObjectCreationExpressionSyntax)
-                    {
-                        continue;
-                    }
-
-                    var localSymbol = semanticModel.GetDeclaredSymbol(variable) as ILocalSymbol;
-                    var typeSymbol = localSymbol?.Type ?? semanticModel.GetTypeInfo(variable.Initializer.Value).Type;
-                    if (!ImplementsDisposable(typeSymbol))
-                        continue;
-
-                    if (localSymbol != null &&
-                        declarationBlock != null &&
-                        IsDisposedLater(semanticModel, declarationBlock, localDeclaration.SpanStart, localSymbol))
-                    {
-                        continue;
-                    }
-
-                    var lineNumber = variable.Identifier.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                    var typeName = typeSymbol?.Name ?? "disposable";
-                    AddFinding(
-                        report,
-                        CodeReviewFindingSeverity.Suggestion,
-                        file.Path,
-                        lineNumber,
-                        $"Disposable `{typeName}` is created without `using`/`await using` or explicit dispose call.");
+                    continue;
                 }
+
+                var localSymbol = semanticModel.GetDeclaredSymbol(variable) as ILocalSymbol;
+                var typeSymbol = localSymbol?.Type ?? semanticModel.GetTypeInfo(variable.Initializer.Value).Type;
+                if (!ImplementsDisposable(typeSymbol))
+                    continue;
+
+                if (localSymbol != null &&
+                    declarationBlock != null &&
+                    IsDisposedLater(semanticModel, declarationBlock, localDeclaration.SpanStart, localSymbol))
+                {
+                    continue;
+                }
+
+                var lineNumber = variable.Identifier.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                var typeName = typeSymbol?.Name ?? "disposable";
+                AddFinding(
+                    report,
+                    CodeReviewFindingSeverity.Suggestion,
+                    file.Path,
+                    lineNumber,
+                    $"Disposable `{typeName}` is created without `using`/`await using` or explicit dispose call.");
             }
         }
     }

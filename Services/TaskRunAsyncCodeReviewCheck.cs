@@ -15,40 +15,32 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace ReviewG33k.Services;
 
-public sealed class TaskRunAsyncCodeReviewCheck : CodeReviewCheckBase
+public sealed class TaskRunAsyncCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
 {
     public override string RuleId => CodeReviewRuleIds.TaskRunAsync;
 
     public override string DisplayName => "Task.Run(async ...)";
 
-    public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
+    protected override void AnalyzeFile(
+        CodeReviewAnalysisContext context,
+        CodeReviewChangedFile file,
+        CompilationUnitSyntax root,
+        SemanticModel semanticModel,
+        CodeSmellReport report)
     {
-        foreach (var file in context.Files)
+        var invocations = root.DescendantNodes().OfType<InvocationExpressionSyntax>();
+        foreach (var invocation in invocations)
         {
-            if (!RoslynCodeReviewCheckUtilities.TryGetSemanticAnalysis(
-                    file,
-                    out var root,
-                    out var semanticModel,
-                    out var syntaxTree,
-                    out var diagnostics))
+            if (!RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, invocation.Span))
                 continue;
-            if (RoslynCodeReviewCheckUtilities.HasSourceErrorsForTree(diagnostics, syntaxTree))
+            var invokedMethod = GetInvokedMethodSymbol(semanticModel, invocation);
+            if (!IsTaskRunMethod(invokedMethod))
+                continue;
+            if (!FirstDelegateParameterReturnsTaskLike(invokedMethod))
                 continue;
 
-            var invocations = root.DescendantNodes().OfType<InvocationExpressionSyntax>();
-            foreach (var invocation in invocations)
-            {
-                if (!RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, invocation.Span))
-                    continue;
-                var invokedMethod = GetInvokedMethodSymbol(semanticModel, invocation);
-                if (!IsTaskRunMethod(invokedMethod))
-                    continue;
-                if (!FirstDelegateParameterReturnsTaskLike(invokedMethod))
-                    continue;
-
-                var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(invocation);
-                AddFinding(report, CodeReviewFindingSeverity.Suggestion, file.Path, lineNumber, "Task.Run wrapping async code detected (possible fake async).");
-            }
+            var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(invocation);
+            AddFinding(report, CodeReviewFindingSeverity.Suggestion, file.Path, lineNumber, "Task.Run wrapping async code detected (possible fake async).");
         }
     }
 

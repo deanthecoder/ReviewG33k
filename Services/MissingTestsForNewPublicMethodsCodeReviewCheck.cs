@@ -12,7 +12,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -20,10 +19,6 @@ namespace ReviewG33k.Services;
 
 public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewCheckBase
 {
-    private static readonly Regex UiUsingRegex = new(
-        @"^\s*using\s+(?<ns>(Avalonia\.(Controls|VisualTree)|System\.Windows(?:\.(Controls|Data|Documents|Forms|Input|Interop|Markup|Media|Navigation|Shapes|Threading))?|Windows\.UI\.Xaml(?:\.(Controls|Data|Documents|Input|Interop|Markup|Media|Navigation|Shapes))?))\s*;",
-        RegexOptions.Multiline | RegexOptions.Compiled);
-
     public override string RuleId => CodeReviewRuleIds.MissingTestsForPublicMethods;
 
     public override string DisplayName => "new public methods have test changes";
@@ -31,7 +26,7 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
         var changedTestFiles = context.Files
-            .Where(file => IsTestFilePath(file.Path))
+            .Where(file => CodeReviewFileClassification.IsTestFilePath(file.Path))
             .ToArray();
         var changedTestFileNames = new HashSet<string>(
             changedTestFiles.Select(file => Path.GetFileName(file.Path)),
@@ -40,7 +35,9 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
 
         foreach (var file in context.Files)
         {
-            if (IsTestFilePath(file.Path) || IsGeneratedFilePath(file.Path) || IsLikelyUiCodeFile(file))
+            if (CodeReviewFileClassification.IsTestFilePath(file.Path) ||
+                CodeReviewFileClassification.IsGeneratedFilePath(file.Path) ||
+                CodeReviewFileClassification.IsLikelyUiCodeFile(file))
                 continue;
 
             var root = RoslynCodeReviewCheckUtilities.ParseRoot(file);
@@ -123,23 +120,4 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
             fileName.Contains("Test", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool IsGeneratedFilePath(string path) =>
-        !string.IsNullOrWhiteSpace(path) &&
-        (path.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase) ||
-         path.EndsWith(".g.i.cs", StringComparison.OrdinalIgnoreCase) ||
-         path.EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase) ||
-         path.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase));
-
-    private static bool IsTestFilePath(string path) =>
-        !string.IsNullOrWhiteSpace(path) &&
-        (path.EndsWith("Tests.cs", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("/Tests/", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("\\Tests\\", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("/UnitTests/", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("\\UnitTests\\", StringComparison.OrdinalIgnoreCase));
-
-    private static bool IsLikelyUiCodeFile(CodeReviewChangedFile file) =>
-        file != null &&
-        !string.IsNullOrWhiteSpace(file.Text) &&
-        UiUsingRegex.IsMatch(file.Text);
 }

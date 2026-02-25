@@ -23,7 +23,7 @@ public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
     {
         foreach (var file in context.Files.Where(file => file.IsAdded))
         {
-            if (IsTestFilePath(file.Path))
+            if (CodeReviewFileClassification.IsTestFilePath(file.Path))
                 continue;
 
             if (!CodeReviewCheckUtilities.TryGetPublicTypeDeclaration(file.Text, out _, out var declarationLineNumber))
@@ -33,12 +33,4 @@ public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
                 AddFinding(report, CodeReviewFindingSeverity.Hint, file.Path, declarationLineNumber, "Missing XML docs on new public type.");
         }
     }
-
-    private static bool IsTestFilePath(string path) =>
-        !string.IsNullOrWhiteSpace(path) &&
-        (path.EndsWith("Tests.cs", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("/Tests/", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("\\Tests\\", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("/UnitTests/", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("\\UnitTests\\", StringComparison.OrdinalIgnoreCase));
 }
