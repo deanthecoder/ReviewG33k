@@ -368,6 +368,31 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void TaskRunAsyncCheckWhenFileHasUnrelatedMissingTypeStillReports()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public Task RunAsync()
+                {
+                    MissingType value = null;
+                    return Task.Run(async () =>
+                    {
+                        await Task.Delay(1);
+                    });
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new TaskRunAsyncCodeReviewCheck(), "A", source, Enumerable.Range(1, 14));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("Task.Run"));
+    }
+
+    [Test]
     public void MethodCanBeStaticCheckWhenMethodDoesNotUseInstanceStateReportsHint()
     {
         const string source = """

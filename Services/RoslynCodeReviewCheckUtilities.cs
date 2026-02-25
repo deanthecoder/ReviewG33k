@@ -90,14 +90,18 @@ internal static class RoslynCodeReviewCheckUtilities
         return semanticModel != null && syntaxTree != null;
     }
 
-    public static bool HasSourceErrorsForTree(IEnumerable<Diagnostic> diagnostics, SyntaxTree syntaxTree) =>
-        diagnostics != null &&
-        syntaxTree != null &&
-        diagnostics.Any(diagnostic =>
-            diagnostic.Severity == DiagnosticSeverity.Error &&
-            diagnostic.Location != Location.None &&
-            diagnostic.Location.IsInSource &&
-            diagnostic.Location.SourceTree == syntaxTree);
+    public static bool HasSourceErrorsForTree(IEnumerable<Diagnostic> diagnostics, SyntaxTree syntaxTree)
+    {
+        // These checks often run against a single changed file rather than the full project compilation.
+        // A green CI build can still produce local Roslyn errors here (missing project-local symbols/types).
+        // Treat only parse/syntax errors as blocking so we don't skip useful checks on otherwise-valid PRs.
+        _ = diagnostics; // kept for call-site compatibility and future diagnostics-based filtering.
+
+        if (syntaxTree == null)
+            return true;
+
+        return syntaxTree.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+    }
 
     public static bool IsPrivateProperty(PropertyDeclarationSyntax property) =>
         property.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PrivateKeyword));

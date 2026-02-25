@@ -69,18 +69,16 @@ public sealed class UnusedUsingRoslynCodeReviewCheckTests
     }
 
     [Test]
-    public void AnalyzeWhenFileHasSourceErrorsDoesNotReportUnusedUsings()
+    public void AnalyzeWhenFileHasSyntaxErrorsDoesNotReportUnusedUsings()
     {
         const string source = """
-            using ReviewG33k.Services;
-
             public sealed class Sample
             {
-                public string GetRule() => CodeReviewRuleIds.EmptyCatch;
+                public int Add(int a, int b) => a + ;
             }
             """;
 
-        var report = AnalyzeSource("A", source, [1, 2, 3, 4, 5, 6]);
+        var report = AnalyzeSource("A", source, [1, 2, 3, 4, 5]);
 
         Assert.That(report.Findings, Is.Empty);
     }
