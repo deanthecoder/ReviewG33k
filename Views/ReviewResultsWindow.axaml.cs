@@ -68,6 +68,7 @@ public partial class ReviewResultsWindow : Window
             .Where(finding => finding != null)
             .Where(finding => finding.Severity != CodeReviewFindingSeverity.Ok)
             .OrderBy(finding => GetSeveritySortOrder(finding.Severity))
+            .ThenBy(finding => finding.RuleId, StringComparer.OrdinalIgnoreCase)
             .ThenBy(finding => finding.FilePath, StringComparer.OrdinalIgnoreCase)
             .ThenBy(finding => finding.LineNumber)
             .Select(finding => MapToRow(finding, canOpenInVsCode, canCommentInBitbucket, canFixLocally, resolveFindingPath != null, findingFixer))
