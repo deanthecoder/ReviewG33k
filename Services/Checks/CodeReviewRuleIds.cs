@@ -33,6 +33,7 @@ public static class CodeReviewRuleIds
     public const string ThrowExInCatch = "throw-ex-in-catch";
     public const string MethodCanBeStatic = "method-can-be-static";
     public const string UnnecessaryCast = "unnecessary-cast";
+    public const string UnnecessaryVerbatimStringPrefix = "unnecessary-verbatim-string-prefix";
     public const string UnobservedTaskResult = "unobserved-task-result";
     public const string DisposableNotDisposed = "disposable-not-disposed";
     public const string MultipleEnumeration = "multiple-enumeration";

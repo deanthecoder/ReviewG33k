@@ -740,6 +740,102 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void UnnecessaryVerbatimStringPrefixCheckWhenSimpleVerbatimLiteralReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public string Run()
+                {
+                    var foo = @"hello";
+                    return foo;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryVerbatimStringPrefixCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings[0].Message, Does.Contain("verbatim string prefix `@`"));
+    }
+
+    [Test]
+    public void UnnecessaryVerbatimStringPrefixCheckWhenVerbatimContainsBackslashesDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public string Run()
+                {
+                    var foo = @"c:\temp\hello.txt";
+                    return foo;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryVerbatimStringPrefixCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnnecessaryVerbatimStringPrefixCheckWhenVerbatimContainsQuoteEscapesDoesNotReport()
+    {
+        const string source = """"
+            public sealed class Sample
+            {
+                public string Run()
+                {
+                    var foo = @"say ""hello""";
+                    return foo;
+                }
+            }
+            """";
+
+        var report = AnalyzeSource(new UnnecessaryVerbatimStringPrefixCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnnecessaryVerbatimStringPrefixCheckWhenSimpleVerbatimInterpolatedStringReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public string Run(string name)
+                {
+                    return $@"hello {name}";
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryVerbatimStringPrefixCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("verbatim string prefix `@`"));
+    }
+
+    [Test]
+    public void UnnecessaryVerbatimStringPrefixCheckWhenInterpolatedStringContainsBackslashesDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public string Run(string fileName)
+                {
+                    return $@"c:\temp\{fileName}";
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryVerbatimStringPrefixCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void UnobservedTaskResultCheckWhenTaskCallIsIgnoredReportsSuggestion()
     {
         const string source = """
