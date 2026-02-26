@@ -89,6 +89,7 @@ public sealed class CodeSmellReportAnalyzer
         new TaskRunAsyncCodeReviewCheck(),
         new PropertyCanBeAutoPropertyCodeReviewCheck(),
         new PrivatePropertyShouldBeFieldCodeReviewCheck(),
+        new PrivateFieldCanBeReadonlyCodeReviewCheck(),
         new MethodParameterCountCodeReviewCheck(),
         new GenericTypeNameSuffixCodeReviewCheck(),
         new IfElseBraceConsistencyCodeReviewCheck(),

@@ -55,6 +55,105 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void PrivateFieldCanBeReadonlyCheckWhenAssignedOnlyInConstructorReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private int count;
+
+                public Sample()
+                {
+                    this.count = 1;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new PrivateFieldCanBeReadonlyCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings[0].Message, Does.Contain("`count`"));
+        Assert.That(report.Findings[0].Message, Does.Contain("`readonly`"));
+    }
+
+    [Test]
+    public void PrivateFieldCanBeReadonlyCheckWhenAssignedInMethodDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private int count;
+
+                public void Update()
+                {
+                    this.count = 3;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new PrivateFieldCanBeReadonlyCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void PrivateFieldCanBeReadonlyCheckWhenFieldIsUnassignedDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private int count;
+            }
+            """;
+
+        var report = AnalyzeSource(new PrivateFieldCanBeReadonlyCodeReviewCheck(), "A", source, Enumerable.Range(1, 5));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void PrivateFieldCanBeReadonlyCheckWhenStaticFieldAssignedInStaticConstructorReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private static int count;
+
+                static Sample()
+                {
+                    count = 2;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new PrivateFieldCanBeReadonlyCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("`count`"));
+    }
+
+    [Test]
+    public void PrivateFieldCanBeReadonlyCheckWhenContainingTypeIsPartialDoesNotReport()
+    {
+        const string source = """
+            public partial class Sample
+            {
+                private int count;
+
+                public Sample()
+                {
+                    this.count = 1;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new PrivateFieldCanBeReadonlyCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void MethodParameterCountCheckWhenMethodHasSixParametersReportsHint()
     {
         const string source = """

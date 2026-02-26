@@ -24,6 +24,7 @@ public static class CodeReviewRuleIds
     public const string MissingTestsForPublicMethods = "missing-tests-public-methods";
     public const string PropertyCanBeAutoProperty = "property-can-be-auto-property";
     public const string PrivatePropertyShouldBeField = "private-property-should-be-field";
+    public const string PrivateFieldCanBeReadonly = "private-field-can-be-readonly";
     public const string MethodParameterCount = "method-parameter-count";
     public const string GenericTypeNameSuffix = "generic-type-name-suffix";
     public const string IfElseBraceConsistency = "if-else-brace-consistency";
