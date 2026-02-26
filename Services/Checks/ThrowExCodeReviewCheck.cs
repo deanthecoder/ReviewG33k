@@ -9,7 +9,6 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
-using System.IO;
 using System.Linq;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis;
@@ -32,36 +31,13 @@ public sealed class ThrowExCodeReviewCheck : CodeReviewCheckBase, IFixableCodeRe
 
     public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
     {
-        resultMessage = null;
-
-        if (!CanFix(finding))
+        if (!this.TryPrepareFix(
+                finding,
+                resolvedFilePath,
+                out var sourceText,
+                out var lineIndex,
+                out resultMessage))
         {
-            resultMessage = "Finding is not fixable.";
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(resolvedFilePath) || !File.Exists(resolvedFilePath))
-        {
-            resultMessage = "File path could not be resolved.";
-            return false;
-        }
-
-        string text;
-        try
-        {
-            text = File.ReadAllText(resolvedFilePath);
-        }
-        catch (Exception exception)
-        {
-            resultMessage = $"Could not read file: {exception.Message}";
-            return false;
-        }
-
-        var sourceText = SourceText.From(text);
-        var lineIndex = finding.LineNumber - 1;
-        if (lineIndex < 0 || lineIndex >= sourceText.Lines.Count)
-        {
-            resultMessage = "Finding line number is out of range for this file.";
             return false;
         }
 
@@ -96,13 +72,8 @@ public sealed class ThrowExCodeReviewCheck : CodeReviewCheckBase, IFixableCodeRe
         var updatedText = updatedRoot.ToFullString();
         updatedText = CodeReviewFixTextUtilities.CollapseConsecutiveBlankLinesNearLine(updatedText, lineIndex);
 
-        try
+        if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
         {
-            File.WriteAllText(resolvedFilePath, updatedText);
-        }
-        catch (Exception exception)
-        {
-            resultMessage = $"Could not write file: {exception.Message}";
             return false;
         }
 

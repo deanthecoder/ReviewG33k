@@ -11,15 +11,94 @@
 using System;
 using System.Linq;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
+using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
 
-public sealed class UnnecessaryVerbatimStringPrefixCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
+public sealed class UnnecessaryVerbatimStringPrefixCodeReviewCheck : RoslynSemanticCodeReviewCheckBase, IFixableCodeReviewCheck
 {
     public override string RuleId => CodeReviewRuleIds.UnnecessaryVerbatimStringPrefix;
 
     public override string DisplayName => "Unnecessary verbatim string prefix";
+
+    public bool CanFix(CodeSmellFinding finding) =>
+        finding != null &&
+        string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase) &&
+        finding.LineNumber > 0;
+
+    public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
+    {
+        if (!this.TryPrepareFix(
+                finding,
+                resolvedFilePath,
+                out var sourceText,
+                out var lineIndex,
+                out resultMessage))
+        {
+            return false;
+        }
+
+        var syntaxTree = CSharpSyntaxTree.ParseText(sourceText);
+        var root = syntaxTree.GetCompilationUnitRoot();
+
+        var lineStart = sourceText.Lines[lineIndex].Start;
+        var lineEnd = sourceText.Lines[lineIndex].End;
+        var lineSpan = TextSpan.FromBounds(lineStart, lineEnd);
+
+        var literal = root.DescendantNodes()
+            .OfType<LiteralExpressionSyntax>()
+            .FirstOrDefault(node =>
+                node.Span.IntersectsWith(lineSpan) &&
+                node.Token.Text.StartsWith("@\"", StringComparison.Ordinal) &&
+                CanBeRegularString(node.Token.ValueText));
+        if (literal != null)
+        {
+            var replacementTokenText = literal.Token.Text[1..];
+            var updatedText = sourceText.WithChanges(new TextChange(literal.Token.Span, replacementTokenText)).ToString();
+
+            if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
+            {
+                return false;
+            }
+
+            resultMessage = "Removed unnecessary verbatim string prefix.";
+            return true;
+        }
+
+        var interpolated = root.DescendantNodes()
+            .OfType<InterpolatedStringExpressionSyntax>()
+            .FirstOrDefault(node =>
+                node.Span.IntersectsWith(lineSpan) &&
+                node.StringStartToken.Text.Contains('@', StringComparison.Ordinal) &&
+                node.Contents.OfType<InterpolatedStringTextSyntax>().All(textNode => CanBeRegularString(textNode.TextToken.ValueText)));
+        if (interpolated != null)
+        {
+            var startTokenText = interpolated.StringStartToken.Text;
+            var atIndex = startTokenText.IndexOf('@');
+            if (atIndex < 0)
+            {
+                resultMessage = "Interpolated string does not contain a verbatim prefix.";
+                return false;
+            }
+
+            var replacementTokenText = startTokenText.Remove(atIndex, 1);
+            var updatedText = sourceText.WithChanges(new TextChange(interpolated.StringStartToken.Span, replacementTokenText)).ToString();
+
+            if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
+            {
+                return false;
+            }
+
+            resultMessage = "Removed unnecessary verbatim string prefix.";
+            return true;
+        }
+
+        resultMessage = "Could not find an unnecessary verbatim prefix on the target line.";
+        return false;
+    }
 
     protected override void AnalyzeFile(
         CodeReviewAnalysisContext context,

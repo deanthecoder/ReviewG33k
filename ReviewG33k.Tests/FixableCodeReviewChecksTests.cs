@@ -153,4 +153,111 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(updated, Does.Not.Contain("SuppressMessage"));
         Assert.That(updated, Does.Not.Contain("\n\n\n"));
     }
+
+    [Test]
+    public void MissingBlankLineBetweenMethodsCheckTryFixInsertsBlankLineBeforeSecondMethod()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                private int Foo()
+                {
+                    return 1;
+                }
+                private int Bar()
+                {
+                    return 2;
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.MissingBlankLineBetweenMethods,
+            "Sample.cs",
+            7,
+            "Add a blank line between methods.");
+
+        var check = new MissingBlankLineBetweenMethodsCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile.FullName, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Is.Not.Empty);
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Contain("}\n\n    private int Bar()"));
+    }
+
+    [Test]
+    public void UnnecessaryVerbatimStringPrefixCheckTryFixRemovesPrefixFromLiteral()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                public string Run()
+                {
+                    var foo = @"hello";
+                    return foo;
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.UnnecessaryVerbatimStringPrefix,
+            "Sample.cs",
+            5,
+            "Unnecessary verbatim string prefix.");
+
+        var check = new UnnecessaryVerbatimStringPrefixCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile.FullName, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Is.Not.Empty);
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Contain("var foo = \"hello\";"));
+        Assert.That(updated, Does.Not.Contain("@\"hello\""));
+    }
+
+    [Test]
+    public void UnnecessaryVerbatimStringPrefixCheckTryFixRemovesPrefixFromInterpolatedLiteral()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                public string Run(string name)
+                {
+                    return $@"hello {name}";
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.UnnecessaryVerbatimStringPrefix,
+            "Sample.cs",
+            5,
+            "Unnecessary verbatim string prefix.");
+
+        var check = new UnnecessaryVerbatimStringPrefixCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile.FullName, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Is.Not.Empty);
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Contain("return $\"hello {name}\";"));
+        Assert.That(updated, Does.Not.Contain("$@\""));
+        Assert.That(updated, Does.Not.Contain("@$\""));
+    }
 }

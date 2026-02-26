@@ -8,16 +8,63 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System;
 using System.Linq;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
+using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
 
-public sealed class MissingBlankLineBetweenMethodsCodeReviewCheck : CodeReviewCheckBase
+public sealed class MissingBlankLineBetweenMethodsCodeReviewCheck : CodeReviewCheckBase, IFixableCodeReviewCheck
 {
     public override string RuleId => CodeReviewRuleIds.MissingBlankLineBetweenMethods;
 
     public override string DisplayName => "Blank line between methods";
+
+    public bool CanFix(CodeSmellFinding finding) =>
+        finding != null &&
+        string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase) &&
+        finding.LineNumber > 1;
+
+    public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
+    {
+        if (!this.TryPrepareFix(
+                finding,
+                resolvedFilePath,
+                out var sourceText,
+                out var targetLineIndex,
+                out resultMessage))
+        {
+            return false;
+        }
+
+        if (targetLineIndex <= 0 || targetLineIndex >= sourceText.Lines.Count)
+        {
+            resultMessage = "Finding line number is out of range for this file.";
+            return false;
+        }
+
+        var previousLineText = sourceText.Lines[targetLineIndex - 1].ToString();
+        if (string.IsNullOrWhiteSpace(previousLineText))
+        {
+            resultMessage = "A blank line already exists before this method.";
+            return false;
+        }
+
+        var fileText = sourceText.ToString();
+        var newline = fileText.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var insertPosition = sourceText.Lines[targetLineIndex].Start;
+        var updatedText = sourceText.WithChanges(new TextChange(new TextSpan(insertPosition, 0), newline)).ToString();
+
+        if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
+        {
+            return false;
+        }
+
+        resultMessage = "Inserted a blank line between adjacent methods.";
+        return true;
+    }
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {

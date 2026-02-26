@@ -38,36 +38,13 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase, IFix
 
     public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
     {
-        resultMessage = null;
-
-        if (!CanFix(finding))
+        if (!this.TryPrepareFix(
+                finding,
+                resolvedFilePath,
+                out var sourceText,
+                out var lineIndex,
+                out resultMessage))
         {
-            resultMessage = "Finding is not fixable.";
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(resolvedFilePath) || !File.Exists(resolvedFilePath))
-        {
-            resultMessage = "File path could not be resolved.";
-            return false;
-        }
-
-        string text;
-        try
-        {
-            text = File.ReadAllText(resolvedFilePath);
-        }
-        catch (Exception exception)
-        {
-            resultMessage = $"Could not read file: {exception.Message}";
-            return false;
-        }
-
-        var sourceText = SourceText.From(text);
-        var lineIndex = finding.LineNumber - 1;
-        if (lineIndex < 0 || lineIndex >= sourceText.Lines.Count)
-        {
-            resultMessage = "Finding line number is out of range for this file.";
             return false;
         }
 
@@ -87,13 +64,8 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase, IFix
         var updatedText = sourceText.WithChanges(new TextChange(spanToRemove, string.Empty)).ToString();
         updatedText = CodeReviewFixTextUtilities.CollapseConsecutiveBlankLinesNearLine(updatedText, lineIndex);
 
-        try
+        if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
         {
-            File.WriteAllText(resolvedFilePath, updatedText);
-        }
-        catch (Exception exception)
-        {
-            resultMessage = $"Could not write file: {exception.Message}";
             return false;
         }
 

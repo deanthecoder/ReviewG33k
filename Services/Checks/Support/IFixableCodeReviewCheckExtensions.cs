@@ -1,0 +1,86 @@
+// Code authored by Dean Edis (DeanTheCoder).
+// Anyone is free to copy, modify, use, compile, or distribute this software,
+// either in source code form or as a compiled binary, for any purpose.
+//
+// If you modify the code, please retain this copyright header,
+// and consider contributing back to the repository or letting us know
+// about your modifications. Your contributions are valued!
+//
+// THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
+
+using System;
+using System.IO;
+using Microsoft.CodeAnalysis.Text;
+
+namespace ReviewG33k.Services.Checks.Support;
+
+public static class IFixableCodeReviewCheckExtensions
+{
+    public static bool TryPrepareFix(
+        this IFixableCodeReviewCheck check,
+        CodeSmellFinding finding,
+        string resolvedFilePath,
+        out SourceText sourceText,
+        out int lineIndex,
+        out string resultMessage)
+    {
+        sourceText = null;
+        lineIndex = -1;
+        resultMessage = null;
+
+        if (check == null || !check.CanFix(finding))
+        {
+            resultMessage = "Finding is not fixable.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(resolvedFilePath) || !File.Exists(resolvedFilePath))
+        {
+            resultMessage = "File path could not be resolved.";
+            return false;
+        }
+
+        string text;
+        try
+        {
+            text = File.ReadAllText(resolvedFilePath);
+        }
+        catch (Exception exception)
+        {
+            resultMessage = $"Could not read file: {exception.Message}";
+            return false;
+        }
+
+        sourceText = SourceText.From(text);
+        lineIndex = finding.LineNumber - 1;
+        if (lineIndex < 0 || lineIndex >= sourceText.Lines.Count)
+        {
+            resultMessage = "Finding line number is out of range for this file.";
+            sourceText = null;
+            lineIndex = -1;
+            return false;
+        }
+
+        return true;
+    }
+
+    public static bool TryWriteUpdatedText(
+        this IFixableCodeReviewCheck _,
+        string resolvedFilePath,
+        string updatedText,
+        out string resultMessage)
+    {
+        resultMessage = null;
+
+        try
+        {
+            File.WriteAllText(resolvedFilePath, updatedText);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            resultMessage = $"Could not write file: {exception.Message}";
+            return false;
+        }
+    }
+}
