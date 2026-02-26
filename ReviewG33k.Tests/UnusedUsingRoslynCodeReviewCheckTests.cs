@@ -84,6 +84,23 @@ public sealed class UnusedUsingRoslynCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void AnalyzeWhenFileHasSemanticErrorsDoesNotReportUnusedUsings()
+    {
+        const string source = """
+            using CSharp.Framework.Extensions;
+
+            public sealed class Sample
+            {
+                public string Run(object value) => value.ToSpecialString();
+            }
+            """;
+
+        var report = AnalyzeSource("A", source, [1, 2, 3, 4, 5, 6]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport AnalyzeSource(string status, string source, IReadOnlyCollection<int> addedLineNumbers)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');

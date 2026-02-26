@@ -92,6 +92,8 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase, IFix
 
             if (RoslynCodeReviewCheckUtilities.HasSourceErrorsForTree(diagnostics, syntaxTree))
                 continue;
+            if (HasSourceSemanticErrorsForTree(diagnostics, syntaxTree))
+                continue;
 
             var root = RoslynCodeReviewCheckUtilities.ParseRoot(file);
             foreach (var diagnostic in diagnostics.Where(IsUnusedUsingDiagnostic))
@@ -114,6 +116,18 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase, IFix
         diagnostic is { Id: UnusedUsingDiagnosticId } &&
         diagnostic.Location != Location.None &&
         diagnostic.Location.IsInSource;
+
+    private static bool HasSourceSemanticErrorsForTree(IEnumerable<Diagnostic> diagnostics, SyntaxTree syntaxTree)
+    {
+        if (diagnostics == null || syntaxTree == null)
+            return false;
+
+        return diagnostics.Any(diagnostic =>
+            diagnostic.Severity == DiagnosticSeverity.Error &&
+            diagnostic.Location != Location.None &&
+            diagnostic.Location.IsInSource &&
+            diagnostic.Location.SourceTree == syntaxTree);
+    }
 
     private static string BuildUsingText(UsingDirectiveSyntax usingDirective)
     {
