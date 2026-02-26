@@ -46,7 +46,7 @@ public sealed class CodeSmellReportAnalyzer
         var report = new CodeSmellReport();
         if (changedFileSource == null)
         {
-            report.AddInfo("Code review scan skipped: changed file source unavailable.");
+            report.AddInfo("Code review scan skipped: Changed file source unavailable.");
             return report;
         }
 

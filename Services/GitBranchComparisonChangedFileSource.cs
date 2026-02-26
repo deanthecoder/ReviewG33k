@@ -42,13 +42,13 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
 
         if (string.IsNullOrWhiteSpace(m_repositoryPath) || !Directory.Exists(m_repositoryPath))
         {
-            info.Add("Code review scan skipped: review worktree path not found.");
+            info.Add("Code review scan skipped: Review worktree path not found.");
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
         if (string.IsNullOrWhiteSpace(m_targetBranch))
         {
-            info.Add("Code review scan skipped: target branch unavailable from PR metadata.");
+            info.Add("Code review scan skipped: Target branch unavailable from PR metadata.");
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
@@ -63,7 +63,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
                 $"+refs/heads/{m_targetBranch}:{baseRef}");
             if (!fetchTargetResult.IsSuccess)
             {
-                info.Add($"Code review scan skipped: unable to fetch target branch '{m_targetBranch}'.");
+                info.Add($"Code review scan skipped: Unable to fetch target branch '{m_targetBranch}'.");
                 return new CodeReviewChangedFileSourceResult([], info);
             }
         }
@@ -77,17 +77,24 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             diffRange);
         if (!nameStatusResult.IsSuccess)
         {
-            info.Add("Code review scan skipped: unable to enumerate diff file status.");
+            info.Add("Code review scan skipped: Unable to enumerate diff file status.");
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
-        var changedFileEntries = ParseNameStatusOutput(nameStatusResult.StandardOutput)
+        var allChangedFileEntries = ParseNameStatusOutput(nameStatusResult.StandardOutput).ToArray();
+        if (allChangedFileEntries.Length == 0)
+        {
+            info.Add($"Code review scan: No differences between HEAD and {baseRef}.");
+            return new CodeReviewChangedFileSourceResult([], info);
+        }
+
+        var changedFileEntries = allChangedFileEntries
             .Where(entry => CodeReviewFileClassification.IsAnalyzableChangedCSharpPath(entry.Path))
             .ToArray();
 
         if (changedFileEntries.Length == 0)
         {
-            info.Add("Code review scan: no changed C# files detected.");
+            info.Add("Code review scan: No changed C# files detected.");
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
@@ -107,11 +114,11 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
 
         if (changedFiles.Count == 0)
         {
-            info.Add("Code review scan: no analyzable changed C# files found.");
+            info.Add("Code review scan: No analyzable changed C# files found.");
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
-        info.Add($"Code review scan: analyzing {changedFiles.Count} changed C# file(s).");
+        info.Add($"Code review scan: Analyzing {changedFiles.Count} changed C# file(s).");
         return new CodeReviewChangedFileSourceResult(changedFiles, info);
     }
 

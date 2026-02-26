@@ -258,7 +258,7 @@ public partial class MainWindow : Window
                 SetStatus("Review complete.");
             });
 
-        if (report != null)
+        if (report?.Findings.Count > 0)
             await ShowReviewResultsWindowAsync(report);
     }
 
@@ -300,7 +300,7 @@ public partial class MainWindow : Window
                 SetStatus("Local review complete.");
             });
 
-        if (report != null)
+        if (report?.Findings.Count > 0)
             await ShowReviewResultsWindowAsync(report);
     }
 
@@ -323,11 +323,12 @@ public partial class MainWindow : Window
         foreach (var info in report.Info)
             AppendLog(info);
 
-        LogCodeSmellCheckStatuses(report);
+        if (DidAnalyzeChangedFiles(report))
+            LogCodeSmellCheckStatuses(report);
 
         if (report.Findings.Count == 0)
         {
-            AppendLog("Code review scan: no findings.");
+            AppendLog("Code review scan: No findings.");
             return report;
         }
 
@@ -351,6 +352,9 @@ public partial class MainWindow : Window
                 AppendLog($"CHECK PASS: {check.DisplayName}");
         }
     }
+
+    private static bool DidAnalyzeChangedFiles(CodeSmellReport report) =>
+        report?.Info?.Any(info => info.StartsWith("Code review scan: Analyzing ", StringComparison.OrdinalIgnoreCase)) == true;
 
     private async Task ShowReviewResultsWindowAsync(CodeSmellReport report)
     {
