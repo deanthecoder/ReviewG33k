@@ -579,6 +579,68 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void UnnecessaryCastCheckWhenExpressionAlreadyHasTargetTypeReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Run()
+                {
+                    int bar = 1;
+                    int foo = (int)bar;
+                    return foo;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryCastCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings[0].Message, Does.Contain("Unnecessary cast to `int`"));
+    }
+
+    [Test]
+    public void UnnecessaryCastCheckWhenCastChangesTypeDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Run()
+                {
+                    long bar = 1;
+                    int foo = (int)bar;
+                    return foo;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryCastCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnnecessaryCastCheckWhenCastIsOutsideAddedLinesDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Run()
+                {
+                    int bar = 1;
+                    int foo = (int)bar;
+                    return foo;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryCastCodeReviewCheck(), "M", source, [1, 2, 3]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void UnobservedTaskResultCheckWhenTaskCallIsIgnoredReportsSuggestion()
     {
         const string source = """

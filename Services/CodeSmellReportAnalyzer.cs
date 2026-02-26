@@ -96,6 +96,7 @@ public sealed class CodeSmellReportAnalyzer
         new ThreadSleepCodeReviewCheck(),
         new ThrowExCodeReviewCheck(),
         new MethodCanBeStaticCodeReviewCheck(),
+        new UnnecessaryCastCodeReviewCheck(),
         new UnobservedTaskResultCodeReviewCheck(),
         new DisposableNotDisposedCodeReviewCheck(),
         new MultipleEnumerationCodeReviewCheck(),
