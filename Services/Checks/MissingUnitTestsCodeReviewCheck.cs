@@ -38,7 +38,7 @@ public sealed class MissingUnitTestsCodeReviewCheck : CodeReviewCheckBase
 
             if (!context.HasAnyAddedTestFiles)
             {
-                AddFinding(report, CodeReviewFindingSeverity.Suggestion, file.Path, declarationLineNumber, $"No new unit test added for new type '{typeName}'. Expected '{expectedTestFileName}'.");
+                AddFinding(report, CodeReviewFindingSeverity.Suggestion, file.Path, declarationLineNumber, $"No new unit test(s) added for new type '{typeName}'.");
                 continue;
             }
 

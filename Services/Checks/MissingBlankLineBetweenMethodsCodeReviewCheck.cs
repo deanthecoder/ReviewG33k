@@ -29,6 +29,18 @@ public sealed class MissingBlankLineBetweenMethodsCodeReviewCheck : CodeReviewCh
 
     public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
     {
+        if (finding == null)
+        {
+            resultMessage = "Finding is required.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(resolvedFilePath))
+        {
+            resultMessage = "File path could not be resolved.";
+            return false;
+        }
+
         if (!this.TryPrepareFix(
                 finding,
                 resolvedFilePath,
@@ -68,6 +80,9 @@ public sealed class MissingBlankLineBetweenMethodsCodeReviewCheck : CodeReviewCh
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
+        if (context == null || report == null)
+            return;
+
         foreach (var file in context.Files)
         {
             var root = RoslynCodeReviewCheckUtilities.ParseRoot(file);

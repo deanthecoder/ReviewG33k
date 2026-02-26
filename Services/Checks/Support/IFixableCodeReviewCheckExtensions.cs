@@ -28,6 +28,12 @@ public static class IFixableCodeReviewCheckExtensions
         lineIndex = -1;
         resultMessage = null;
 
+        if (finding == null)
+        {
+            resultMessage = "Finding is required.";
+            return false;
+        }
+
         if (check == null || !check.CanFix(finding))
         {
             resultMessage = "Finding is not fixable.";
@@ -71,6 +77,18 @@ public static class IFixableCodeReviewCheckExtensions
         out string resultMessage)
     {
         resultMessage = null;
+
+        if (string.IsNullOrWhiteSpace(resolvedFilePath))
+        {
+            resultMessage = "File path could not be resolved.";
+            return false;
+        }
+
+        if (updatedText == null)
+        {
+            resultMessage = "Updated text is required.";
+            return false;
+        }
 
         try
         {

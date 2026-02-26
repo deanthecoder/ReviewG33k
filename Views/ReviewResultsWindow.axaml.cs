@@ -455,13 +455,6 @@ public partial class ReviewResultsWindow : Window
                 .Append(location)
                 .AppendLine();
 
-            if (!string.IsNullOrWhiteSpace(finding.RuleId))
-            {
-                builder.Append("   Rule: ")
-                    .Append(finding.RuleId)
-                    .AppendLine();
-            }
-
             builder.Append("   ")
                 .AppendLine((finding.Message ?? string.Empty).Trim());
             builder.AppendLine();

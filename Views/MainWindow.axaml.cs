@@ -78,7 +78,7 @@ public partial class MainWindow : Window
         LocalRepositoryFolderTextBox.LostFocus += LocalRepositoryFolderTextBox_OnLostFocus;
         LocalBaseBranchTextBox.TextChanged += LocalBaseBranchTextBox_OnTextChanged;
         LocalBaseBranchTextBox.LostFocus += LocalBaseBranchTextBox_OnLostFocus;
-        LogListBox.AddHandler(InputElement.PointerPressedEvent, LogListBox_OnPointerPressed, RoutingStrategies.Bubble);
+        LogListBox.AddHandler(PointerPressedEvent, LogListBox_OnPointerPressed, RoutingStrategies.Bubble);
         Opened += MainWindow_OnOpened;
         Activated += MainWindow_OnActivated;
         Closing += MainWindow_OnClosing;
@@ -360,7 +360,7 @@ public partial class MainWindow : Window
     private async Task ShowReviewResultsWindowAsync(CodeSmellReport report)
     {
         var canOpenInVsCode = TryDetectVsCode(out _, out _);
-        var canCommentInBitbucket = m_latestPullRequest != null;
+        var canCommentInBitbucket = !IsLocalCommittedReviewMode() && m_latestPullRequest != null;
         var canFixLocally = m_settings.UseLocalCommittedReview;
         var findingFixer = canFixLocally ? new CodeReviewFixDispatcher(m_codeSmellReportAnalyzer.Checks) : null;
         var resultsWindow = new ReviewResultsWindow(
@@ -822,7 +822,7 @@ public partial class MainWindow : Window
         if (sender is not Button { DataContext: LogLineEntry entry })
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        var clipboard = GetTopLevel(this)?.Clipboard;
         if (clipboard == null)
             return;
 

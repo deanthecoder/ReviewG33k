@@ -39,6 +39,38 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void PrivateGetOnlyAutoPropertyFieldCheckWhenSimplePrivateGetOnlyPropertyIsAddedReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private int Count { get; }
+            }
+            """;
+
+        var report = AnalyzeSource(new PrivateGetOnlyAutoPropertyShouldBeFieldCodeReviewCheck(), "A", source, Enumerable.Range(1, 5));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings[0].Message, Does.Contain("`Count`"));
+    }
+
+    [Test]
+    public void PrivateGetOnlyAutoPropertyFieldCheckWhenPropertyHasSetterDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private int Count { get; set; }
+            }
+            """;
+
+        var report = AnalyzeSource(new PrivateGetOnlyAutoPropertyShouldBeFieldCodeReviewCheck(), "A", source, Enumerable.Range(1, 5));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void PrivatePropertyFieldCheckWhenSimplePrivateAutoPropertyIsAddedReportsHint()
     {
         const string source = """

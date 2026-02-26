@@ -65,6 +65,30 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheckTests
         Assert.That(report.Findings[0].Message, Does.Contain("parameter"));
     }
 
+    [Test]
+    public void AnalyzeWhenOutParameterIsPresentDoesNotRequireNullGuardForOutParameter()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public void Convert(object value, out string resultMessage)
+                {
+                    if (value == null)
+                    {
+                        resultMessage = string.Empty;
+                        return;
+                    }
+
+                    resultMessage = value.ToString();
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport AnalyzeSource(string source)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');

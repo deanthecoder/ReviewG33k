@@ -67,7 +67,7 @@ public sealed class PrivateFieldCanBeReadonlyCodeReviewCheck : RoslynSemanticCod
 
     private static bool CanAnalyzeContainingType(TypeDeclarationSyntax typeDeclaration) =>
         typeDeclaration != null &&
-        typeDeclaration.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PartialKeyword)) == false &&
+        !typeDeclaration.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PartialKeyword)) &&
         typeDeclaration is ClassDeclarationSyntax;
 
     private static bool CanBeReadonly(

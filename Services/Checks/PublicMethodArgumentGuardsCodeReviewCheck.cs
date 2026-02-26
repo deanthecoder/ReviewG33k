@@ -240,6 +240,9 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
 
         foreach (var rawParameter in SplitParameters(parameterListText))
         {
+            if (HasParameterModifier(rawParameter, "out"))
+                continue;
+
             if (!TryParseParameter(rawParameter, out var typeName, out var parameterName))
                 continue;
 
@@ -250,6 +253,31 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         }
 
         return parameterNames;
+    }
+
+    private static bool HasParameterModifier(string rawParameter, string modifier)
+    {
+        if (string.IsNullOrWhiteSpace(rawParameter) || string.IsNullOrWhiteSpace(modifier))
+            return false;
+
+        var parameterText = rawParameter;
+        while (true)
+        {
+            var attributeMatch = Regex.Match(parameterText, @"^\s*\[[^\]]+\]\s*");
+            if (!attributeMatch.Success)
+                break;
+
+            parameterText = parameterText[attributeMatch.Length..];
+        }
+
+        parameterText = parameterText.TrimStart();
+        if (parameterText.Length == 0)
+            return false;
+
+        return Regex.IsMatch(
+            parameterText,
+            $@"^(?:scoped\s+)?{Regex.Escape(modifier)}\b",
+            RegexOptions.IgnoreCase);
     }
 
     private static IEnumerable<string> SplitParameters(string parameterListText)
