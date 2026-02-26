@@ -90,6 +90,7 @@ public sealed class CodeSmellReportAnalyzer
         new PropertyCanBeAutoPropertyCodeReviewCheck(),
         new PrivatePropertyShouldBeFieldCodeReviewCheck(),
         new PrivateFieldCanBeReadonlyCodeReviewCheck(),
+        new MissingBlankLineBetweenMethodsCodeReviewCheck(),
         new MethodParameterCountCodeReviewCheck(),
         new GenericTypeNameSuffixCodeReviewCheck(),
         new IfElseBraceConsistencyCodeReviewCheck(),

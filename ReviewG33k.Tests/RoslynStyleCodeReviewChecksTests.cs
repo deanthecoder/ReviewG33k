@@ -154,6 +154,76 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void MissingBlankLineBetweenMethodsCheckWhenMethodsAreAdjacentReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private int Foo()
+                {
+                    return 1;
+                }
+                private int Bar()
+                {
+                    return 2;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MissingBlankLineBetweenMethodsCodeReviewCheck(), "A", source, Enumerable.Range(1, 12));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings[0].Message, Does.Contain("`Foo`"));
+        Assert.That(report.Findings[0].Message, Does.Contain("`Bar`"));
+    }
+
+    [Test]
+    public void MissingBlankLineBetweenMethodsCheckWhenMethodsAreSeparatedByBlankLineDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private int Foo()
+                {
+                    return 1;
+                }
+
+                private int Bar()
+                {
+                    return 2;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MissingBlankLineBetweenMethodsCodeReviewCheck(), "A", source, Enumerable.Range(1, 13));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void MissingBlankLineBetweenMethodsCheckWhenAdjacencyIsOutsideAddedLinesDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private int Foo()
+                {
+                    return 1;
+                }
+                private int Bar()
+                {
+                    return 2;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MissingBlankLineBetweenMethodsCodeReviewCheck(), "M", source, [1, 2]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void MethodParameterCountCheckWhenMethodHasSixParametersReportsHint()
     {
         const string source = """
