@@ -748,6 +748,97 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void BooleanLiteralComparisonCheckWhenComparedWithTrueReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public bool Run(bool myBool)
+                {
+                    if (myBool == true)
+                        return true;
+
+                    if (myBool != true)
+                        return false;
+
+                    return myBool;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new BooleanLiteralComparisonCodeReviewCheck(), "A", source, Enumerable.Range(1, 16));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(2));
+        Assert.That(report.Findings.All(finding => finding.Severity == CodeReviewFindingSeverity.Hint), Is.True);
+        Assert.That(report.Findings.Any(finding => finding.Message.Contains("`myBool == true`", StringComparison.Ordinal)), Is.True);
+        Assert.That(report.Findings.Any(finding => finding.Message.Contains("`myBool != true`", StringComparison.Ordinal)), Is.True);
+    }
+
+    [Test]
+    public void BooleanLiteralComparisonCheckWhenComparedWithFalseReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public bool Run(bool myBool)
+                {
+                    if (myBool == false)
+                        return false;
+
+                    if (myBool != false)
+                        return true;
+
+                    return myBool;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new BooleanLiteralComparisonCodeReviewCheck(), "A", source, Enumerable.Range(1, 16));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(2));
+        Assert.That(report.Findings.Any(finding => finding.Message.Contains("`myBool == false`", StringComparison.Ordinal)), Is.True);
+        Assert.That(report.Findings.Any(finding => finding.Message.Contains("`myBool != false`", StringComparison.Ordinal)), Is.True);
+    }
+
+    [Test]
+    public void BooleanLiteralComparisonCheckWhenLiteralIsOnLeftReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public bool Run(bool myBool)
+                {
+                    return true == myBool;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new BooleanLiteralComparisonCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("`true == myBool`"));
+        Assert.That(report.Findings[0].Message, Does.Contain("`myBool`"));
+    }
+
+    [Test]
+    public void BooleanLiteralComparisonCheckWhenNullableBooleanIsComparedDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public bool Run(bool? myBool)
+                {
+                    return myBool == true;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new BooleanLiteralComparisonCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void UnnecessaryCastCheckWhenExpressionAlreadyHasTargetTypeReportsHint()
     {
         const string source = """
