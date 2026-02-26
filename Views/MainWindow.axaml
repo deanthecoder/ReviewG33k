@@ -49,14 +49,29 @@
                             Click="BrowseRepositoryRootButton_OnClick"
                             Content="Browse..." />
 
-                    <CheckBox x:Name="LocalCommittedReviewCheckBox"
-                              Grid.Row="1"
-                              Grid.Column="0"
-                              Grid.ColumnSpan="3"
-                              Margin="0,10,0,0"
-                              Checked="LocalCommittedReviewCheckBox_OnChanged"
-                              Unchecked="LocalCommittedReviewCheckBox_OnChanged"
-                              Content="Review local committed changes (current branch vs base branch) instead of a Bitbucket PR" />
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="0"
+                               Margin="0,10,12,0"
+                               VerticalAlignment="Center"
+                               Text="Review Mode:" />
+                    <StackPanel Grid.Row="1"
+                                Grid.Column="1"
+                                Grid.ColumnSpan="2"
+                                Margin="0,10,0,0"
+                                Spacing="8"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <TextBlock VerticalAlignment="Center"
+                                   Text="PR" />
+                        <ToggleSwitch x:Name="ReviewModeToggleSwitch"
+                                      VerticalAlignment="Center"
+                                      Checked="ReviewModeToggleSwitch_OnChanged"
+                                      Unchecked="ReviewModeToggleSwitch_OnChanged"
+                                      OnContent=""
+                                      OffContent="" />
+                        <TextBlock VerticalAlignment="Center" Margin="-8,0,0,0"
+                                   Text="Local" />
+                    </StackPanel>
 
                     <TextBlock x:Name="PullRequestUrlLabelTextBlock"
                                Grid.Row="2"

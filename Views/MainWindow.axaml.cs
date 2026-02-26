@@ -90,7 +90,7 @@ public partial class MainWindow : Window
         LocalBaseBranchTextBox.Text = string.IsNullOrWhiteSpace(m_settings.LocalReviewBaseBranch)
             ? "main"
             : m_settings.LocalReviewBaseBranch;
-        LocalCommittedReviewCheckBox.IsChecked = m_settings.UseLocalCommittedReview;
+        ReviewModeToggleSwitch.IsChecked = m_settings.UseLocalCommittedReview;
         LogListBox.ItemsSource = m_logLines;
 
         ApplyReviewModeUi();
@@ -147,16 +147,17 @@ public partial class MainWindow : Window
         PersistLocalReviewRepositoryPath(path);
     }
 
-    private void LocalCommittedReviewCheckBox_OnChanged(object sender, RoutedEventArgs e)
+    private void ReviewModeToggleSwitch_OnChanged(object sender, RoutedEventArgs e)
     {
-        if (IsLocalCommittedReviewMode())
+        var isLocalMode = ReviewModeToggleSwitch.IsChecked == true;
+        if (isLocalMode)
         {
             m_latestPullRequest = null;
             UpdatePullRequestReviewState(null);
         }
 
         ApplyReviewModeUi();
-        PersistUseLocalCommittedReview(LocalCommittedReviewCheckBox.IsChecked == true);
+        PersistUseLocalCommittedReview(isLocalMode);
         _ = UpdatePullRequestPreviewAsync();
         UpdateActionButtonStates();
     }
@@ -676,7 +677,7 @@ public partial class MainWindow : Window
         UpdateActionButtonStates();
     }
 
-    private bool IsLocalCommittedReviewMode() => LocalCommittedReviewCheckBox.IsChecked == true;
+    private bool IsLocalCommittedReviewMode() => ReviewModeToggleSwitch.IsChecked == true;
 
     private void ApplyReviewModeUi()
     {
