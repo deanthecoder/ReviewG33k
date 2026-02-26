@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -955,38 +956,24 @@ public partial class MainWindow : Window
         }
 
         var target = $"{filePath}:{lineNumber}";
-        ProcessStartInfo startInfo;
-        if (useCommandShell)
+        Exception lastException = null;
+        foreach (var startInfo in BuildVsCodeLaunchAttempts(vsCodePath, useCommandShell, target))
         {
-            startInfo = new ProcessStartInfo("cmd.exe")
+            try
             {
-                Arguments = $"/c \"\"{vsCodePath}\" -g \"{target}\"\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-        }
-        else
-        {
-            startInfo = new ProcessStartInfo(vsCodePath)
+                var process = Process.Start(startInfo);
+                if (process != null)
+                    return true;
+            }
+            catch (Exception exception)
             {
-                Arguments = $"-g \"{target}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
+                lastException = exception;
+            }
         }
 
-        try
-        {
-            var process = Process.Start(startInfo);
-            if (process != null)
-                return true;
-        }
-        catch
-        {
-            // fall through to error below
-        }
-
-        error = "VS Code was detected but could not be launched.";
+        error = lastException == null
+            ? "VS Code was detected but could not be launched."
+            : $"VS Code was detected but could not be launched. {lastException.Message}";
         return false;
     }
 
@@ -1018,6 +1005,7 @@ public partial class MainWindow : Window
 
     private static IEnumerable<string> GetVsCodeCandidates()
     {
+        var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         var pathValue = Environment.GetEnvironmentVariable("PATH");
         if (!string.IsNullOrWhiteSpace(pathValue))
         {
@@ -1027,10 +1015,15 @@ public partial class MainWindow : Window
                 if (string.IsNullOrWhiteSpace(trimmedDirectory))
                     continue;
 
+                if (isWindows)
+                {
+                    yield return Path.Combine(trimmedDirectory, "code.cmd");
+                    yield return Path.Combine(trimmedDirectory, "code.exe");
+                    yield return Path.Combine(trimmedDirectory, "code.bat");
+                    continue;
+                }
+
                 yield return Path.Combine(trimmedDirectory, "code");
-                yield return Path.Combine(trimmedDirectory, "code.exe");
-                yield return Path.Combine(trimmedDirectory, "code.cmd");
-                yield return Path.Combine(trimmedDirectory, "code.bat");
             }
         }
 
@@ -1051,6 +1044,47 @@ public partial class MainWindow : Window
         var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
         if (!string.IsNullOrWhiteSpace(programFilesX86))
             yield return Path.Combine(programFilesX86, "Microsoft VS Code", "Code.exe");
+    }
+
+    private static IEnumerable<ProcessStartInfo> BuildVsCodeLaunchAttempts(string vsCodePath, bool useCommandShell, string target)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            if (useCommandShell)
+            {
+                yield return new ProcessStartInfo("cmd.exe")
+                {
+                    Arguments = $"/c \"\"{vsCodePath}\" --goto \"{target}\"\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+            }
+            else
+            {
+                yield return new ProcessStartInfo(vsCodePath)
+                {
+                    Arguments = $"--goto \"{target}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                yield return new ProcessStartInfo("cmd.exe")
+                {
+                    Arguments = $"/c \"\"{vsCodePath}\" --goto \"{target}\"\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+            }
+
+            yield break;
+        }
+
+        yield return new ProcessStartInfo(vsCodePath)
+        {
+            Arguments = $"--goto \"{target}\"",
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
     }
     
     private sealed class LogLineEntry

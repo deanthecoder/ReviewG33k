@@ -18,6 +18,8 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckBase
 {
+    private const int GuardWindowMaxLines = 24;
+
     private static readonly Regex PublicMethodSignatureRegex = new(
         @"^\s*public\s+(?:(?:static|virtual|override|sealed|abstract|unsafe|new|partial|extern|async)\s+)*(?<return>[A-Za-z_][A-Za-z0-9_<>,\.\[\]\?\s:]*)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\((?<params>.*)\)\s*(?:where\s+.+)?$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -68,7 +70,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
                 if (parametersToGuard.Count == 0)
                     continue;
 
-                var guardWindowLines = GetGuardWindow(file.Lines, bodyOpenLine, bodyCloseLine, maxLines: 10);
+                var guardWindowLines = GetGuardWindow(file.Lines, bodyOpenLine, bodyCloseLine, maxLines: GuardWindowMaxLines);
                 var methodBodyLines = GetMethodBodyLines(file.Lines, bodyOpenLine, bodyCloseLine);
                 var unguardedParameters = parametersToGuard
                     .Where(parameter => ParameterIsUsed(methodBodyLines, parameter))
@@ -397,7 +399,8 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         var throwIfNullPattern = $@"\bArgumentNullException\.ThrowIfNull\s*\(\s*{escapedParameterName}\s*\)";
         var nullCheckPattern = $@"\bif\s*\([^)]*\b{escapedParameterName}\s*(?:==\s*null|is\s+null)\b[^)]*\)";
         var nullCoalesceThrowPattern = $@"\b{escapedParameterName}\s*\?\?\s*throw\s+new\s+ArgumentNullException\b";
-        var stringGuardPattern = $@"\bstring\.(?:IsNullOrEmpty|IsNullOrWhiteSpace)\s*\(\s*{escapedParameterName}\s*\)";
+        var stringGuardPattern = $@"\b(?:(?:global::)?System\.)?String\.(?:IsNullOrEmpty|IsNullOrWhiteSpace)\s*\(\s*{escapedParameterName}\s*\)";
+        var stringAliasGuardPattern = $@"\bstring\.(?:IsNullOrEmpty|IsNullOrWhiteSpace)\s*\(\s*{escapedParameterName}\s*\)";
         var guardAgainstPattern = $@"\bGuard\.Against\.Null\s*\(\s*{escapedParameterName}\s*[,\)]";
 
         foreach (var line in methodOpeningLines)
@@ -406,6 +409,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
                 Regex.IsMatch(line, nullCheckPattern, RegexOptions.IgnoreCase) ||
                 Regex.IsMatch(line, nullCoalesceThrowPattern, RegexOptions.IgnoreCase) ||
                 Regex.IsMatch(line, stringGuardPattern, RegexOptions.IgnoreCase) ||
+                Regex.IsMatch(line, stringAliasGuardPattern, RegexOptions.IgnoreCase) ||
                 Regex.IsMatch(line, guardAgainstPattern, RegexOptions.IgnoreCase))
             {
                 return true;

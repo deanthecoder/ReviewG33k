@@ -89,6 +89,70 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void AnalyzeWhenStringIsNullOrWhiteSpaceGuardExistsAfterSeveralLinesDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public void Save(string resolvedFilePath)
+                {
+                    var a = 1;
+                    var b = 2;
+                    var c = 3;
+                    var d = 4;
+                    var e = 5;
+                    var f = 6;
+                    var g = 7;
+                    var h = 8;
+                    var i = 9;
+                    var j = 10;
+                    var k = 11;
+                    if (string.IsNullOrWhiteSpace(resolvedFilePath))
+                        return;
+
+                    _ = resolvedFilePath.Length;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenStringIsNullOrEmptyGuardExistsAfterSeveralLinesDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public void Save(string resolvedFilePath)
+                {
+                    var a = 1;
+                    var b = 2;
+                    var c = 3;
+                    var d = 4;
+                    var e = 5;
+                    var f = 6;
+                    var g = 7;
+                    var h = 8;
+                    var i = 9;
+                    var j = 10;
+                    var k = 11;
+                    if (string.IsNullOrEmpty(resolvedFilePath))
+                        return;
+
+                    _ = resolvedFilePath.Length;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport AnalyzeSource(string source)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
