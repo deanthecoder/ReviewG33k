@@ -7,6 +7,8 @@
 # ReviewG33k
 ReviewG33k is a lightweight Avalonia desktop app for fast, local code reviews. It can prepare isolated Bitbucket pull-request checkouts, run automated checks against the changed code, and jump straight to findings in VS Code.
 
+![Screenshot](img/ReviewG33k.png)
+
 ## Two review modes
 - **Bitbucket PR reviews**: Paste/drop a Bitbucket PR URL. ReviewG33k prepares an isolated `git worktree` under a `CodeReview` folder, opens the solution, and can post inline comments back to the PR.
 - **Local committed-change reviews**: Point ReviewG33k at a local repo folder and base branch (default `main`) to review `origin/<base>...HEAD` before you raise a PR. This mode does not require Bitbucket access and does not post PR comments.
