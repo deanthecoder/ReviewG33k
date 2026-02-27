@@ -15,7 +15,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class PropertyCanBeAutoPropertyCodeReviewCheck : CodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.PropertyCanBeAutoProperty;
+    public override string RuleId => "property-can-be-auto-property";
 
     public override string DisplayName => "New properties that can be auto-properties";
 

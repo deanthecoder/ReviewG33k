@@ -18,7 +18,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class DisposableNotDisposedCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.DisposableNotDisposed;
+    public override string RuleId => "disposable-not-disposed";
 
     public override string DisplayName => "Disposable created without disposal";
 

@@ -17,7 +17,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class BooleanLiteralComparisonCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.BooleanLiteralComparison;
+    public override string RuleId => "boolean-literal-comparison";
 
     public override string DisplayName => "Boolean literal comparison";
 

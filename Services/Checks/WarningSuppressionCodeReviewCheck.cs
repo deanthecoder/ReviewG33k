@@ -21,7 +21,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class WarningSuppressionCodeReviewCheck : CodeReviewCheckBase, IFixableCodeReviewCheck
 {
-    public override string RuleId => CodeReviewRuleIds.WarningSuppression;
+    public override string RuleId => "warning-suppression";
 
     public override string DisplayName => "Warning suppressions (`#pragma` / `[SuppressMessage]`)";
 

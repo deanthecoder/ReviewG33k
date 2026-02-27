@@ -20,7 +20,7 @@ public sealed class ResxUnexpectedExtraKeysCodeReviewCheck : CodeReviewCheckBase
 {
     private const int MaxPreviewKeys = 5;
 
-    public override string RuleId => CodeReviewRuleIds.ResxUnexpectedExtraKeys;
+    public override string RuleId => "resx-unexpected-extra-keys";
 
     public override string DisplayName => "RESX locale unexpected extra keys";
 

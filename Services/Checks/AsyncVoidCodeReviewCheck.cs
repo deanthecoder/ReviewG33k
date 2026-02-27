@@ -17,7 +17,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class AsyncVoidCodeReviewCheck : CodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.AsyncVoid;
+    public override string RuleId => "async-void";
 
     public override string DisplayName => "async void (non-event handlers)";
 

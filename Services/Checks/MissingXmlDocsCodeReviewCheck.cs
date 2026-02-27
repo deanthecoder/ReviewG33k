@@ -14,7 +14,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.MissingXmlDocs;
+    public override string RuleId => "missing-xml-docs";
 
     public override string DisplayName => "XML docs on new public types";
 

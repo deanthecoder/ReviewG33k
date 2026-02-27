@@ -17,7 +17,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class DisposeMethodWithoutIDisposableCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.DisposeWithoutIDisposable;
+    public override string RuleId => "dispose-without-idisposable";
 
     public override string DisplayName => "`Dispose()` method without `IDisposable`";
 

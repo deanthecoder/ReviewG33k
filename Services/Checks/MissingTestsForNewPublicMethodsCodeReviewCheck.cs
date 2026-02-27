@@ -19,7 +19,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.MissingTestsForPublicMethods;
+    public override string RuleId => "missing-tests-public-methods";
 
     public override string DisplayName => "new public methods have test changes";
 

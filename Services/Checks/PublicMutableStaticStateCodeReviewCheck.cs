@@ -17,7 +17,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class PublicMutableStaticStateCodeReviewCheck : CodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.PublicMutableStaticState;
+    public override string RuleId => "public-mutable-static-state";
 
     public override string DisplayName => "Public mutable static state";
 

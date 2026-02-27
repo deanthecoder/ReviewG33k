@@ -19,7 +19,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class MissingBlankLineBetweenMethodsCodeReviewCheck : CodeReviewCheckBase, IFixableCodeReviewCheck
 {
-    public override string RuleId => CodeReviewRuleIds.MissingBlankLineBetweenMethods;
+    public override string RuleId => "missing-blank-line-between-methods";
 
     public override string DisplayName => "Blank line between methods";
 

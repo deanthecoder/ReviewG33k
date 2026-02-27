@@ -15,7 +15,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class PrivatePropertyShouldBeFieldCodeReviewCheck : CodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.PrivatePropertyShouldBeField;
+    public override string RuleId => "private-property-should-be-field";
 
     public override string DisplayName => "Simple private properties that should be fields";
 

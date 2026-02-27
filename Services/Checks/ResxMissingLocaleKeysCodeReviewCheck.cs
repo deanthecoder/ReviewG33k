@@ -20,7 +20,7 @@ public sealed class ResxMissingLocaleKeysCodeReviewCheck : CodeReviewCheckBase
 {
     private const int MaxPreviewKeys = 5;
 
-    public override string RuleId => CodeReviewRuleIds.ResxMissingLocaleKeys;
+    public override string RuleId => "resx-missing-locale-keys";
 
     public override string DisplayName => "RESX locale missing base keys";
 

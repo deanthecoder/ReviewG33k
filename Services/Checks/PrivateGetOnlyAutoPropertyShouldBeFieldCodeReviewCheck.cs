@@ -17,7 +17,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class PrivateGetOnlyAutoPropertyShouldBeFieldCodeReviewCheck : CodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.PrivateGetOnlyAutoPropertyShouldBeField;
+    public override string RuleId => "private-get-only-auto-property-should-be-field";
 
     public override string DisplayName => "Private get-only auto properties that should be fields";
 

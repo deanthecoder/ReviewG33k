@@ -17,7 +17,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class PrivateFieldCanBeReadonlyCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.PrivateFieldCanBeReadonly;
+    public override string RuleId => "private-field-can-be-readonly";
 
     public override string DisplayName => "Private field can be readonly";
 

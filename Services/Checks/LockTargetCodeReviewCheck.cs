@@ -18,7 +18,7 @@ public sealed class LockTargetCodeReviewCheck : CodeReviewCheckBase
 {
     private static readonly Regex LockTargetRegex = new(@"\block\s*\(\s*(?<target>this|[A-Za-z_][A-Za-z0-9_]*)\s*\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    public override string RuleId => CodeReviewRuleIds.LockThisOrPublic;
+    public override string RuleId => "lock-this-or-public";
 
     public override string DisplayName => "lock(this) / lock on public objects";
 

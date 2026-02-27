@@ -14,7 +14,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class MissingUnitTestsCodeReviewCheck : CodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.MissingTests;
+    public override string RuleId => "missing-tests";
 
     public override string DisplayName => "new non-UI type has new test file";
 

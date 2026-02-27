@@ -17,7 +17,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class TaskRunAsyncCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.TaskRunAsync;
+    public override string RuleId => "task-run-async";
 
     public override string DisplayName => "Task.Run(async ...)";
 

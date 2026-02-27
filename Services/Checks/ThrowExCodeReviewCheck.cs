@@ -21,7 +21,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class ThrowExCodeReviewCheck : CodeReviewCheckBase, IFixableCodeReviewCheck
 {
-    public override string RuleId => CodeReviewRuleIds.ThrowExInCatch;
+    public override string RuleId => "throw-ex-in-catch";
 
     public override string DisplayName => "`throw ex;` in catch blocks";
 

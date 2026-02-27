@@ -21,7 +21,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewCheckBase, IFixableCodeReviewCheck
 {
-    public override string RuleId => CodeReviewRuleIds.MethodCanBeStatic;
+    public override string RuleId => "method-can-be-static";
 
     public override string DisplayName => "Methods that can be static";
 

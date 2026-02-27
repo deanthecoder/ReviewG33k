@@ -16,7 +16,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class ResxEmptyTranslationValuesCodeReviewCheck : CodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.ResxEmptyTranslationValues;
+    public override string RuleId => "resx-empty-translation-values";
 
     public override string DisplayName => "RESX empty translation values";
 

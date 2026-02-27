@@ -42,7 +42,7 @@ public sealed class MultipleEnumerationCodeReviewCheck : RoslynSemanticCodeRevie
         "Sum"
     ];
 
-    public override string RuleId => CodeReviewRuleIds.MultipleEnumeration;
+    public override string RuleId => "multiple-enumeration";
 
     public override string DisplayName => "Multiple enumeration of IEnumerable";
 

@@ -28,7 +28,7 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase, IFix
         .WithSpecificDiagnosticOptions(new Dictionary<string, ReportDiagnostic> { { UnusedUsingDiagnosticId, ReportDiagnostic.Warn } });
     private static readonly Lazy<IReadOnlyList<MetadataReference>> MetadataReferences = new(CreateMetadataReferences);
 
-    public override string RuleId => CodeReviewRuleIds.UnusedUsingsRoslyn;
+    public override string RuleId => "unused-usings-roslyn";
 
     public override string DisplayName => "Unused using directives (Roslyn)";
 

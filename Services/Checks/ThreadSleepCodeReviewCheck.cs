@@ -16,7 +16,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class ThreadSleepCodeReviewCheck : CodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.ThreadSleep;
+    public override string RuleId => "thread-sleep";
 
     public override string DisplayName => "Thread.Sleep usage";
 

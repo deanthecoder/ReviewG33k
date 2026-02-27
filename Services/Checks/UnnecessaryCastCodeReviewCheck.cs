@@ -16,7 +16,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class UnnecessaryCastCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.UnnecessaryCast;
+    public override string RuleId => "unnecessary-cast";
 
     public override string DisplayName => "Unnecessary cast";
 

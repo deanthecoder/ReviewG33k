@@ -18,7 +18,7 @@ public sealed class MethodParameterCountCodeReviewCheck : CodeReviewCheckBase
 {
     private const int ParameterThreshold = 6;
 
-    public override string RuleId => CodeReviewRuleIds.MethodParameterCount;
+    public override string RuleId => "method-parameter-count";
 
     public override string DisplayName => "Methods/constructors with high parameter count";
 

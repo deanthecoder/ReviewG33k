@@ -50,7 +50,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         "CancellationToken"
     };
 
-    public override string RuleId => CodeReviewRuleIds.PublicMethodArgumentGuards;
+    public override string RuleId => "public-method-argument-guards";
 
     public override string DisplayName => "new public methods guard nullable/reference args";
 

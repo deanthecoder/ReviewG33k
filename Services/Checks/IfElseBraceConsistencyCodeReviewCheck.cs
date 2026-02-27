@@ -21,7 +21,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class IfElseBraceConsistencyCodeReviewCheck : CodeReviewCheckBase, IFixableCodeReviewCheck
 {
-    public override string RuleId => CodeReviewRuleIds.IfElseBraceConsistency;
+    public override string RuleId => "if-else-brace-consistency";
 
     public override string DisplayName => "If/else brace consistency";
 

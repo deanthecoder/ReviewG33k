@@ -12,7 +12,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class SwallowingCatchCodeReviewCheck : CodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.SwallowingCatch;
+    public override string RuleId => "swallowing-catch";
 
     public override string DisplayName => "exception swallowing in catch";
 

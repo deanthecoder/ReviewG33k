@@ -20,7 +20,7 @@ public sealed class AsyncMethodNameSuffixCodeReviewCheck : CodeReviewCheckBase
         @"^\s*(?:public|private|internal)\s+(?:(?:static|virtual|override|sealed|abstract|unsafe|new|partial|extern)\s+)*async\s+[A-Za-z_][A-Za-z0-9_<>,\.\[\]\?]*\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\(",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    public override string RuleId => CodeReviewRuleIds.AsyncMethodNameSuffix;
+    public override string RuleId => "async-method-name-suffix";
 
     public override string DisplayName => "async method name ends with Async";
 

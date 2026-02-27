@@ -12,7 +12,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class EmptyCatchCodeReviewCheck : CodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.EmptyCatch;
+    public override string RuleId => "empty-catch";
 
     public override string DisplayName => "empty catch blocks";
 

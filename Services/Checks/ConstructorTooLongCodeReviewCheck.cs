@@ -17,7 +17,7 @@ public sealed class ConstructorTooLongCodeReviewCheck : CodeReviewCheckBase
 {
     private const int ConstructorLineThreshold = 15;
 
-    public override string RuleId => CodeReviewRuleIds.ConstructorTooLong;
+    public override string RuleId => "constructor-too-long";
 
     public override string DisplayName => "Large constructors";
 

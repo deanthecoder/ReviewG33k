@@ -18,7 +18,7 @@ public sealed class GenericTypeNameSuffixCodeReviewCheck : CodeReviewCheckBase
 {
     private static readonly string[] GenericSuffixes = ["Utils", "Helper", "Manager"];
 
-    public override string RuleId => CodeReviewRuleIds.GenericTypeNameSuffix;
+    public override string RuleId => "generic-type-name-suffix";
 
     public override string DisplayName => "Generic class name suffixes";
 

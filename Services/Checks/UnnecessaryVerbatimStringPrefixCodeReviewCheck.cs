@@ -21,7 +21,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class UnnecessaryVerbatimStringPrefixCodeReviewCheck : RoslynSemanticCodeReviewCheckBase, IFixableCodeReviewCheck
 {
-    public override string RuleId => CodeReviewRuleIds.UnnecessaryVerbatimStringPrefix;
+    public override string RuleId => "unnecessary-verbatim-string-prefix";
 
     public override string DisplayName => "Unnecessary verbatim string prefix";
 

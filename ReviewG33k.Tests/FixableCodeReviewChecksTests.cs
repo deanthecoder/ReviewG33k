@@ -27,7 +27,7 @@ public sealed class FixableCodeReviewChecksTests
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
-            CodeReviewRuleIds.UnusedUsingsRoslyn,
+            "unused-usings-roslyn",
             "Sample.cs",
             1,
             "Unused using");
@@ -71,7 +71,7 @@ public sealed class FixableCodeReviewChecksTests
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Important,
-            CodeReviewRuleIds.ThrowExInCatch,
+            "throw-ex-in-catch",
             "Sample.cs",
             13,
             "Use throw; instead of throw ex;");
@@ -325,7 +325,7 @@ public sealed class FixableCodeReviewChecksTests
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Important,
-            CodeReviewRuleIds.WarningSuppression,
+            "warning-suppression",
             "Sample.cs",
             3,
             "Suppression added");
@@ -359,7 +359,7 @@ public sealed class FixableCodeReviewChecksTests
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Important,
-            CodeReviewRuleIds.WarningSuppression,
+            "warning-suppression",
             "Sample.cs",
             4,
             "Suppression added");
@@ -397,7 +397,7 @@ public sealed class FixableCodeReviewChecksTests
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
-            CodeReviewRuleIds.MissingBlankLineBetweenMethods,
+            "missing-blank-line-between-methods",
             "Sample.cs",
             7,
             "Add a blank line between methods.");
@@ -409,7 +409,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(message, Is.Not.Empty);
 
         var updated = File.ReadAllText(tempFile.FullName);
-        Assert.That(updated, Does.Contain("}\n\n    private int Bar()"));
+        Assert.That(updated.Replace("\r\n", "\n"), Does.Contain("}\n\n    private int Bar()"));
     }
 
     [Test]
@@ -565,7 +565,7 @@ public sealed class FixableCodeReviewChecksTests
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
-            CodeReviewRuleIds.UnnecessaryVerbatimStringPrefix,
+            "unnecessary-verbatim-string-prefix",
             "Sample.cs",
             5,
             "Unnecessary verbatim string prefix.");
@@ -599,7 +599,7 @@ public sealed class FixableCodeReviewChecksTests
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
-            CodeReviewRuleIds.UnnecessaryVerbatimStringPrefix,
+            "unnecessary-verbatim-string-prefix",
             "Sample.cs",
             5,
             "Unnecessary verbatim string prefix.");

@@ -17,7 +17,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class UnobservedTaskResultCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
 {
-    public override string RuleId => CodeReviewRuleIds.UnobservedTaskResult;
+    public override string RuleId => "unobserved-task-result";
 
     public override string DisplayName => "Unobserved Task/ValueTask results";
 
