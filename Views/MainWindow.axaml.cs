@@ -310,14 +310,16 @@ public partial class MainWindow : Window
     private async Task<CodeSmellReport> RunCodeSmellScanAsync(string reviewWorktreePath, string targetBranch)
     {
         AppendLog("Code review scan starting...");
-        var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(reviewWorktreePath, targetBranch);
+        SetBusyProgressIndeterminate();
+        var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(reviewWorktreePath, targetBranch, AppendLog, UpdateBusyProgress);
         return ProcessCodeSmellReport(report);
     }
 
     private async Task<CodeSmellReport> RunCodeSmellScanAsync(ICodeReviewChangedFileSource changedFileSource)
     {
         AppendLog("Code review scan starting...");
-        var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(changedFileSource);
+        SetBusyProgressIndeterminate();
+        var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(changedFileSource, AppendLog, UpdateBusyProgress);
         return ProcessCodeSmellReport(report);
     }
 
@@ -722,7 +724,53 @@ public partial class MainWindow : Window
     {
         m_busy = isBusy;
         BusyIndicatorSpinner.IsVisible = isBusy;
+
+        if (!isBusy)
+        {
+            BusyIndicatorSpinner.IsIndeterminate = true;
+            BusyIndicatorSpinner.Minimum = 0;
+            BusyIndicatorSpinner.Maximum = 1;
+            BusyIndicatorSpinner.Value = 0;
+        }
+
         UpdateActionButtonStates();
+    }
+
+    private void SetBusyProgressIndeterminate()
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(SetBusyProgressIndeterminate);
+            return;
+        }
+
+        if (!m_busy)
+            return;
+
+        BusyIndicatorSpinner.IsIndeterminate = true;
+        BusyIndicatorSpinner.Minimum = 0;
+        BusyIndicatorSpinner.Maximum = 1;
+        BusyIndicatorSpinner.Value = 0;
+    }
+
+    private void UpdateBusyProgress(int completed, int total, string _)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => UpdateBusyProgress(completed, total, null));
+            return;
+        }
+
+        if (!m_busy || total <= 0)
+        {
+            BusyIndicatorSpinner.IsIndeterminate = true;
+            return;
+        }
+
+        BusyIndicatorSpinner.IsIndeterminate = false;
+        BusyIndicatorSpinner.Minimum = 0;
+        BusyIndicatorSpinner.Maximum = total;
+        BusyIndicatorSpinner.Value = Math.Clamp(completed, 0, total);
     }
 
     private bool IsLocalCommittedReviewMode() => ReviewModeToggleSwitch.IsChecked == true;

@@ -30,7 +30,11 @@ public sealed class CodeSmellReportAnalyzer
 
     public IReadOnlyList<ICodeReviewCheck> Checks => m_checks;
 
-    public async Task<CodeSmellReport> AnalyzeAsync(string reviewWorktreePath, string targetBranch)
+    public async Task<CodeSmellReport> AnalyzeAsync(
+        string reviewWorktreePath,
+        string targetBranch,
+        Action<string> progressLogger = null,
+        Action<int, int, string> progressReporter = null)
     {
         var changedFileSource = new GitBranchComparisonChangedFileSource(
             m_gitCommandRunner,
@@ -38,35 +42,50 @@ public sealed class CodeSmellReportAnalyzer
             targetBranch,
             fetchTargetBranch: true);
 
-        return await AnalyzeAsync(changedFileSource);
+        return await AnalyzeAsync(changedFileSource, progressLogger, progressReporter);
     }
 
-    public async Task<CodeSmellReport> AnalyzeAsync(ICodeReviewChangedFileSource changedFileSource)
+    public async Task<CodeSmellReport> AnalyzeAsync(
+        ICodeReviewChangedFileSource changedFileSource,
+        Action<string> progressLogger = null,
+        Action<int, int, string> progressReporter = null)
     {
-        var infoMessages = new List<string>();
+        var report = new CodeSmellReport();
         if (changedFileSource == null)
         {
-            var unavailableReport = new CodeSmellReport();
-            unavailableReport.AddInfo("Code review scan skipped: Changed file source unavailable.");
-            return unavailableReport;
+            report.AddInfo("Code review scan skipped: Changed file source unavailable.");
+            return report;
         }
 
         var sourceResult = await changedFileSource.LoadAsync();
         foreach (var infoMessage in sourceResult?.InfoMessages ?? [])
-            infoMessages.Add(infoMessage);
+            report.AddInfo(infoMessage);
 
         var changedFiles = sourceResult?.Files?.Where(file => file != null).ToArray() ?? [];
         if (changedFiles.Length == 0)
+            return report;
+
+        var context = BuildContext(changedFiles);
+        var totalChecks = m_checks.Count;
+        progressReporter?.Invoke(0, totalChecks, null);
+
+        var checkTasks = m_checks
+            .Select(check => Task.Run(() =>
+            {
+                var checkReport = new CodeSmellReport();
+                check.Analyze(context, checkReport);
+                return (Check: check, Report: checkReport);
+            }))
+            .ToArray();
+
+        for (var index = 0; index < totalChecks; index++)
         {
-            var emptyReport = new CodeSmellReport();
-            foreach (var infoMessage in infoMessages)
-                emptyReport.AddInfo(infoMessage);
-            return emptyReport;
+            progressLogger?.Invoke($"CHECK RUN: {index + 1}/{totalChecks} {m_checks[index].DisplayName}");
+            var checkResult = await checkTasks[index];
+            MergeReport(report, checkResult.Report);
+            progressReporter?.Invoke(index + 1, totalChecks, checkResult.Check.DisplayName);
         }
 
-        var report = AnalyzeFiles(changedFiles);
-        foreach (var infoMessage in infoMessages)
-            report.AddInfo(infoMessage);
         return report;
     }
 
@@ -85,6 +104,18 @@ public sealed class CodeSmellReportAnalyzer
             .ForAll(check => check.Analyze(context, report));
 
         return report;
+    }
+
+    private static void MergeReport(CodeSmellReport destination, CodeSmellReport source)
+    {
+        if (destination == null || source == null)
+            return;
+
+        foreach (var info in source.Info)
+            destination.AddInfo(info);
+
+        foreach (var finding in source.Findings)
+            destination.AddFinding(finding.Severity, finding.RuleId, finding.FilePath, finding.LineNumber, finding.Message);
     }
 
     private static CodeReviewAnalysisContext BuildContext(IReadOnlyList<CodeReviewChangedFile> changedFiles)

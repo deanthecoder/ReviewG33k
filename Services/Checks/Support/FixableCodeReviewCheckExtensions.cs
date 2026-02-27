@@ -15,7 +15,7 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace ReviewG33k.Services.Checks.Support;
 
-public static class IFixableCodeReviewCheckExtensions
+public static class FixableCodeReviewCheckExtensions
 {
     public static bool TryPrepareFix(
         this IFixableCodeReviewCheck check,
