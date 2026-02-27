@@ -179,6 +179,7 @@ public sealed class CodeSmellReportAnalyzer
         new ResxUnexpectedExtraKeysCodeReviewCheck(),
         new ResxEmptyTranslationValuesCodeReviewCheck(),
         new WarningSuppressionCodeReviewCheck(),
-        new UnusedUsingRoslynCodeReviewCheck()
+        new UnusedUsingRoslynCodeReviewCheck(),
+        new LocalVariableCanBeConstCodeReviewCheck()
     ];
 }

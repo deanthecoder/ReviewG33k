@@ -615,4 +615,95 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(updated, Does.Not.Contain("$@\""));
         Assert.That(updated, Does.Not.Contain("@$\""));
     }
+
+    [Test]
+    public void LocalVariableCanBeConstCheckTryFixAddsConstKeyword()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    var name = "World";
+                    System.Console.WriteLine($"Hello {name}");
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            "local-variable-can-be-const",
+            "Sample.cs",
+            5,
+            "Local variable `name` can be made `const`.");
+
+        var check = new LocalVariableCanBeConstCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile.FullName, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Is.Not.Empty);
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Contain("const string name = \"World\";"));
+    }
+
+    [Test]
+    public void LocalVariableCanBeConstCheckDoesNotDetectIfModified()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    var name = "World";
+                    name = "Something else";
+                    System.Console.WriteLine($"Hello {name}");
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var context = new CodeReviewAnalysisContext(
+            new[] { new CodeReviewChangedFile("M", "Sample.cs", tempFile.FullName, source, source.Split('\n'), new HashSet<int> { 5 }) },
+            new HashSet<string>());
+        var report = new CodeSmellReport();
+        var check = new LocalVariableCanBeConstCodeReviewCheck();
+        check.Analyze(context, report);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void LocalVariableCanBeConstCheckDetectsIfNeverModified()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    var name = "World";
+                    System.Console.WriteLine($"Hello {name}");
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var context = new CodeReviewAnalysisContext(
+            new[] { new CodeReviewChangedFile("M", "Sample.cs", tempFile.FullName, source, source.Split('\n'), new HashSet<int> { 5 }) },
+            new HashSet<string>());
+        var report = new CodeSmellReport();
+        var check = new LocalVariableCanBeConstCodeReviewCheck();
+        check.Analyze(context, report);
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].RuleId, Is.EqualTo("local-variable-can-be-const"));
+        Assert.That(report.Findings[0].LineNumber, Is.EqualTo(5));
+    }
 }
