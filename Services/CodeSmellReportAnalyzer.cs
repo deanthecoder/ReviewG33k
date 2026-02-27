@@ -126,6 +126,7 @@ public sealed class CodeSmellReportAnalyzer
         new UnnecessaryCastCodeReviewCheck(),
         new UnnecessaryVerbatimStringPrefixCodeReviewCheck(),
         new UnobservedTaskResultCodeReviewCheck(),
+        new DisposeMethodWithoutIDisposableCodeReviewCheck(),
         new DisposableNotDisposedCodeReviewCheck(),
         new MultipleEnumerationCodeReviewCheck(),
         new PublicMutableStaticStateCodeReviewCheck(),

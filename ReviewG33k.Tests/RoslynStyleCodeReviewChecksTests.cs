@@ -1252,6 +1252,88 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void DisposeMethodWithoutIDisposableCheckWhenClassDefinesDisposeWithoutInterfaceReportsSuggestion()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public void Dispose()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new DisposeMethodWithoutIDisposableCodeReviewCheck(), "A", source, Enumerable.Range(1, 7));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("`IDisposable`"));
+        Assert.That(report.Findings[0].Message, Does.Contain("`Sample`"));
+    }
+
+    [Test]
+    public void DisposeMethodWithoutIDisposableCheckWhenClassImplementsInterfaceDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample : IDisposable
+            {
+                public void Dispose()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new DisposeMethodWithoutIDisposableCodeReviewCheck(), "A", source, Enumerable.Range(1, 9));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void DisposeMethodWithoutIDisposableCheckWhenBaseTypeImplementsInterfaceDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public class SampleBase : IDisposable
+            {
+                public virtual void Dispose()
+                {
+                }
+            }
+
+            public sealed class Sample : SampleBase
+            {
+                public override void Dispose()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new DisposeMethodWithoutIDisposableCodeReviewCheck(), "A", source, Enumerable.Range(1, 16));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void DisposeMethodWithoutIDisposableCheckWhenInheritanceCannotBeResolvedDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample : UnknownBaseType
+            {
+                public void Dispose()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new DisposeMethodWithoutIDisposableCodeReviewCheck(), "A", source, Enumerable.Range(1, 7));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void DisposableNotDisposedCheckWhenDisposableCreatedWithoutUsingReportsSuggestion()
     {
         const string source = """
