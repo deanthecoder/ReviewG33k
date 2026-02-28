@@ -3,6 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
+        xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d"
         x:Class="ReviewG33k.Views.MainWindow"
         Width="980" Height="700"
@@ -45,9 +46,14 @@
                     <Button Grid.Row="0"
                             Grid.Column="2"
                             Margin="10,0,0,0"
-                            Padding="12,8"
+                            Width="40"
+                            Padding="8"
                             Click="BrowseRepositoryRootButton_OnClick"
-                            Content="Browse..." />
+                            ToolTip.Tip="Browse folder">
+                        <materialIcons:MaterialIcon Width="18"
+                                                    Height="18"
+                                                    Kind="FolderSearchOutline" />
+                    </Button>
 
                     <TextBlock Grid.Row="1"
                                Grid.Column="0"
@@ -127,9 +133,14 @@
                                  Watermark="Example: C:\source\MyRepo" />
                         <Button Grid.Column="2"
                                 Margin="10,0,0,0"
-                                Padding="12,8"
+                                Width="40"
+                                Padding="8"
                                 Click="BrowseLocalRepositoryButton_OnClick"
-                                Content="Browse..." />
+                                ToolTip.Tip="Browse folder">
+                            <materialIcons:MaterialIcon Width="18"
+                                                        Height="18"
+                                                        Kind="FolderSearchOutline" />
+                        </Button>
                         <TextBlock Grid.Column="3"
                                    Margin="14,0,8,0"
                                    VerticalAlignment="Center"
