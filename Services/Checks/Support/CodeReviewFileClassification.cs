@@ -23,6 +23,7 @@ internal static class CodeReviewFileClassification
     public static bool IsAnalyzableChangedCSharpPath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&
         (path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+         path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
          path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase) ||
          path.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase));
 

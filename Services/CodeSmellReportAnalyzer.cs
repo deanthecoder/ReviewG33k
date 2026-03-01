@@ -133,6 +133,7 @@ public sealed class CodeSmellReportAnalyzer
         new MissingXmlDocsCodeReviewCheck(),
         new MissingUnitTestsCodeReviewCheck(),
         new MissingTestsForNewPublicMethodsCodeReviewCheck(),
+        new MissingReadmeForNewProjectCodeReviewCheck(),
         new MissingTypedBindingContextCodeReviewCheck(),
         new MultipleClassesPerFileCodeReviewCheck(),
         new WarningSuppressionCodeReviewCheck(),

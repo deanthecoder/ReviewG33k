@@ -3,6 +3,7 @@
              xmlns:dialogHostAvalonia="clr-namespace:DialogHostAvalonia;assembly=DialogHost.Avalonia"
              xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              x:Class="ReviewG33k.Views.App"
+             x:Name="ReviewG33k"
              RequestedThemeVariant="Dark">
   <Application.Resources>
     <Color x:Key="Bg0">#070A10</Color>

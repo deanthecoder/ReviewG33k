@@ -48,4 +48,5 @@ public static class CodeReviewRuleIds
     public const string WarningSuppression = "warning-suppression";
     public const string MissingTypedBindingContext = "missing-typed-binding-context";
     public const string MultipleClassesPerFile = "multiple-classes-per-file";
+    public const string MissingReadmeForNewProject = "missing-readme-for-new-project";
 }

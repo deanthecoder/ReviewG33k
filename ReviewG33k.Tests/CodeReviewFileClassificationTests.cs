@@ -41,6 +41,14 @@ public sealed class CodeReviewFileClassificationTests
     }
 
     [Test]
+    public void IsAnalyzableChangedCSharpPathWhenPathIsProjectFileReturnsTrue()
+    {
+        var result = InvokeIsAnalyzableChangedCSharpPath("Packages/CSharp.Core/CSharp.Core.csproj");
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
     public void IsAnalyzableChangedCSharpPathWhenPathIsMarkupReturnsTrue()
     {
         var axamlResult = InvokeIsAnalyzableChangedCSharpPath("Views/ReviewResultsWindow.axaml");
