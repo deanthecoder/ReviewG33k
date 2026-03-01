@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System.IO;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
 
@@ -38,7 +39,7 @@ public sealed class RedundantSelfLookupCodeReviewCheckTests
     {
         var check = new RedundantSelfLookupCodeReviewCheck();
 
-        var success = check.TryFix(null, "Sample.cs", out var message);
+        var success = check.TryFix(null, new FileInfo("Sample.cs"), out var message);
 
         Assert.That(success, Is.False);
         Assert.That(message, Is.EqualTo("Finding is required."));
@@ -55,7 +56,7 @@ public sealed class RedundantSelfLookupCodeReviewCheckTests
             "Redundant self lookup.");
         var check = new RedundantSelfLookupCodeReviewCheck();
 
-        var success = check.TryFix(finding, " ", out var message);
+        var success = check.TryFix(finding, null, out var message);
 
         Assert.That(success, Is.False);
         Assert.That(message, Is.EqualTo("File path could not be resolved."));

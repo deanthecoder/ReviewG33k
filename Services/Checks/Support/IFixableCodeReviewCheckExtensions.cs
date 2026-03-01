@@ -10,6 +10,7 @@
 
 using System;
 using System.IO;
+using DTC.Core.Extensions;
 using Microsoft.CodeAnalysis.Text;
 
 namespace ReviewG33k.Services.Checks.Support;
@@ -19,7 +20,7 @@ public static class IFixableCodeReviewCheckExtensions
     public static bool TryPrepareFix(
         this IFixableCodeReviewCheck check,
         CodeSmellFinding finding,
-        string resolvedFilePath,
+        FileInfo resolvedFile,
         out SourceText sourceText,
         out int lineIndex,
         out string resultMessage)
@@ -40,7 +41,7 @@ public static class IFixableCodeReviewCheckExtensions
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(resolvedFilePath) || !File.Exists(resolvedFilePath))
+        if (resolvedFile?.Exists() != true)
         {
             resultMessage = "File path could not be resolved.";
             return false;
@@ -49,7 +50,7 @@ public static class IFixableCodeReviewCheckExtensions
         string text;
         try
         {
-            text = File.ReadAllText(resolvedFilePath);
+            text = resolvedFile.ReadAllText();
         }
         catch (Exception exception)
         {
@@ -72,13 +73,13 @@ public static class IFixableCodeReviewCheckExtensions
 
     public static bool TryWriteUpdatedText(
         this IFixableCodeReviewCheck _,
-        string resolvedFilePath,
+        FileInfo resolvedFile,
         string updatedText,
         out string resultMessage)
     {
         resultMessage = null;
 
-        if (string.IsNullOrWhiteSpace(resolvedFilePath))
+        if (resolvedFile == null)
         {
             resultMessage = "File path could not be resolved.";
             return false;
@@ -92,7 +93,7 @@ public static class IFixableCodeReviewCheckExtensions
 
         try
         {
-            File.WriteAllText(resolvedFilePath, updatedText);
+            resolvedFile.WriteAllText(updatedText);
             return true;
         }
         catch (Exception exception)

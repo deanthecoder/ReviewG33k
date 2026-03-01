@@ -26,6 +26,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using DTC.Core.Extensions;
 using DTC.Core.UI;
 using ReviewG33k.Models;
 using ReviewG33k.Services;
@@ -383,7 +384,7 @@ public partial class MainWindow : Window
             return;
 
         var lineNumber = finding.LineNumber > 0 ? finding.LineNumber : 1;
-        if (!TryResolveLogPath(finding.FilePath, out var resolvedPath))
+        if (!TryResolveLogFile(finding.FilePath, out var resolvedFile))
         {
             var error = $"Could not resolve file path: {finding.FilePath}";
             AppendLog($"WARNING: {error}");
@@ -391,14 +392,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!TryLaunchVsCodeAtLine(resolvedPath, lineNumber, out var launchError))
+        if (!TryLaunchVsCodeAtLine(resolvedFile.FullName, lineNumber, out var launchError))
         {
             AppendLog($"WARNING: {launchError}");
             SetStatus(launchError);
             return;
         }
 
-        SetStatus($"Opened in VS Code: {Path.GetFileName(resolvedPath)}:{lineNumber}");
+        SetStatus($"Opened in VS Code: {resolvedFile.Name}:{lineNumber}");
     }
 
     private string ResolveReviewFindingPath(CodeSmellFinding finding)
@@ -406,7 +407,7 @@ public partial class MainWindow : Window
         if (finding == null)
             return null;
 
-        return TryResolveLogPath(finding.FilePath, out var resolvedPath) ? resolvedPath : null;
+        return TryResolveLogFile(finding.FilePath, out var resolvedFile) ? resolvedFile.FullName : null;
     }
 
     private async Task<IReadOnlyList<CodeSmellFinding>> ResampleLocalFindingsForFileAsync(string filePath)
@@ -418,7 +419,7 @@ public partial class MainWindow : Window
         var baseBranch = LocalBaseBranchTextBox.Text?.Trim();
         if (string.IsNullOrWhiteSpace(localRepositoryPath) ||
             string.IsNullOrWhiteSpace(baseBranch) ||
-            !Directory.Exists(localRepositoryPath))
+            !localRepositoryPath.ToDir().Exists())
         {
             return [];
         }
@@ -515,7 +516,7 @@ public partial class MainWindow : Window
 
     private static async Task<IStorageFolder> GetStartFolderAsync(TopLevel topLevel, string existingPath)
     {
-        if (string.IsNullOrWhiteSpace(existingPath) || !Directory.Exists(existingPath))
+        if (string.IsNullOrWhiteSpace(existingPath) || !existingPath.ToDir().Exists())
             return null;
 
         return await topLevel.StorageProvider.TryGetFolderFromPathAsync(existingPath);
@@ -533,7 +534,7 @@ public partial class MainWindow : Window
             return false;
         }
 
-        if (!Directory.Exists(repositoryRoot))
+        if (!repositoryRoot.ToDir().Exists())
         {
             SetStatus($"Repo root folder does not exist: {repositoryRoot}");
             DialogService.Instance.ShowMessage("Repository root not found", repositoryRoot, null);
@@ -562,7 +563,7 @@ public partial class MainWindow : Window
             return false;
         }
 
-        if (!Directory.Exists(localRepositoryPath))
+        if (!localRepositoryPath.ToDir().Exists())
         {
             SetStatus($"Local repository folder does not exist: {localRepositoryPath}");
             DialogService.Instance.ShowMessage("Local repository not found", localRepositoryPath, null);
@@ -757,34 +758,34 @@ public partial class MainWindow : Window
         OpenPullRequestButton.IsEnabled = !m_busy && !isLocalMode && HasValidPullRequestInput();
         OpenSolutionButton.IsEnabled = !m_busy &&
                                       !string.IsNullOrWhiteSpace(m_latestSolutionPath) &&
-                                      File.Exists(m_latestSolutionPath);
+                                      m_latestSolutionPath.ToFile().Exists();
     }
 
     private string ResolveAvailableSolutionPath()
     {
-        if (!string.IsNullOrWhiteSpace(m_latestSolutionPath) && File.Exists(m_latestSolutionPath))
+        if (!string.IsNullOrWhiteSpace(m_latestSolutionPath) && m_latestSolutionPath.ToFile().Exists())
             return m_latestSolutionPath;
 
-        if (!string.IsNullOrWhiteSpace(m_latestReviewWorktreePath) && Directory.Exists(m_latestReviewWorktreePath))
+        if (!string.IsNullOrWhiteSpace(m_latestReviewWorktreePath) && m_latestReviewWorktreePath.ToDir().Exists())
         {
             var worktreeSolution = FindTopLevelSolutionFile(m_latestReviewWorktreePath);
-            if (!string.IsNullOrWhiteSpace(worktreeSolution) && File.Exists(worktreeSolution))
+            if (!string.IsNullOrWhiteSpace(worktreeSolution) && worktreeSolution.ToFile().Exists())
                 return worktreeSolution;
         }
 
         var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
-        if (!string.IsNullOrWhiteSpace(localRepositoryPath) && Directory.Exists(localRepositoryPath))
+        if (!string.IsNullOrWhiteSpace(localRepositoryPath) && localRepositoryPath.ToDir().Exists())
         {
             var localSolution = FindTopLevelSolutionFile(localRepositoryPath);
-            if (!string.IsNullOrWhiteSpace(localSolution) && File.Exists(localSolution))
+            if (!string.IsNullOrWhiteSpace(localSolution) && localSolution.ToFile().Exists())
                 return localSolution;
         }
 
         var repositoryRootPath = RepositoryRootTextBox.Text?.Trim();
-        if (!string.IsNullOrWhiteSpace(repositoryRootPath) && Directory.Exists(repositoryRootPath))
+        if (!string.IsNullOrWhiteSpace(repositoryRootPath) && repositoryRootPath.ToDir().Exists())
         {
             var rootSolution = FindTopLevelSolutionFile(repositoryRootPath);
-            if (!string.IsNullOrWhiteSpace(rootSolution) && File.Exists(rootSolution))
+            if (!string.IsNullOrWhiteSpace(rootSolution) && rootSolution.ToFile().Exists())
                 return rootSolution;
         }
 
@@ -801,7 +802,7 @@ public partial class MainWindow : Window
     private bool HasValidPullRequestPrepareInputs()
     {
         var repositoryRoot = RepositoryRootTextBox.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(repositoryRoot) || !Directory.Exists(repositoryRoot))
+        if (string.IsNullOrWhiteSpace(repositoryRoot) || !repositoryRoot.ToDir().Exists())
             return false;
 
         var prUrlText = PullRequestUrlTextBox.Text?.Trim();
@@ -814,7 +815,7 @@ public partial class MainWindow : Window
     private bool HasValidLocalPrepareInputs()
     {
         var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(localRepositoryPath) || !Directory.Exists(localRepositoryPath))
+        if (string.IsNullOrWhiteSpace(localRepositoryPath) || !localRepositoryPath.ToDir().Exists())
             return false;
 
         if (!LooksLikeGitRepository(localRepositoryPath))
@@ -926,19 +927,19 @@ public partial class MainWindow : Window
         if (!TryParseLogLocation(entry.Text, out var filePath, out var lineNumber))
             return;
 
-        if (!TryResolveLogPath(filePath, out var resolvedPath))
+        if (!TryResolveLogFile(filePath, out var resolvedFile))
         {
             SetStatus($"Could not resolve file path: {filePath}");
             return;
         }
 
-        if (!TryLaunchVsCodeAtLine(resolvedPath, lineNumber, out var launchError))
+        if (!TryLaunchVsCodeAtLine(resolvedFile.FullName, lineNumber, out var launchError))
         {
             SetStatus(launchError);
             return;
         }
 
-        SetStatus($"Opened in VS Code: {Path.GetFileName(resolvedPath)}:{lineNumber}");
+        SetStatus($"Opened in VS Code: {resolvedFile.Name}:{lineNumber}");
         e.Handled = true;
     }
 
@@ -992,9 +993,9 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private bool TryResolveLogPath(string pathFromLog, out string resolvedPath)
+    private bool TryResolveLogFile(string pathFromLog, out FileInfo resolvedFile)
     {
-        resolvedPath = null;
+        resolvedFile = null;
 
         if (string.IsNullOrWhiteSpace(pathFromLog))
             return false;
@@ -1005,21 +1006,22 @@ public partial class MainWindow : Window
 
         if (Path.IsPathRooted(normalizedRelativePath))
         {
-            if (!File.Exists(normalizedRelativePath))
+            var absoluteFile = normalizedRelativePath.ToFile();
+            if (!absoluteFile.Exists())
                 return false;
 
-            resolvedPath = normalizedRelativePath;
+            resolvedFile = absoluteFile;
             return true;
         }
 
         if (string.IsNullOrWhiteSpace(m_latestReviewWorktreePath))
             return false;
 
-        var candidatePath = Path.Combine(m_latestReviewWorktreePath, normalizedRelativePath);
-        if (!File.Exists(candidatePath))
+        var candidatePath = m_latestReviewWorktreePath.ToDir().GetFile(normalizedRelativePath);
+        if (!candidatePath.Exists())
             return false;
 
-        resolvedPath = candidatePath;
+        resolvedFile = candidatePath;
         return true;
     }
 
@@ -1066,7 +1068,7 @@ public partial class MainWindow : Window
         m_vsCodeDetectionAttempted = true;
         foreach (var candidatePath in GetVsCodeCandidates())
         {
-            if (!File.Exists(candidatePath))
+            if (!candidatePath.ToFile().Exists())
                 continue;
 
             m_vsCodeExecutablePath = candidatePath;
@@ -1094,13 +1096,14 @@ public partial class MainWindow : Window
 
                 if (isWindows)
                 {
-                    yield return Path.Combine(trimmedDirectory, "code.cmd");
-                    yield return Path.Combine(trimmedDirectory, "code.exe");
-                    yield return Path.Combine(trimmedDirectory, "code.bat");
+                    var folder = trimmedDirectory.ToDir();
+                    yield return folder.GetFile("code.cmd").FullName;
+                    yield return folder.GetFile("code.exe").FullName;
+                    yield return folder.GetFile("code.bat").FullName;
                     continue;
                 }
 
-                yield return Path.Combine(trimmedDirectory, "code");
+                yield return trimmedDirectory.ToDir().GetFile("code").FullName;
             }
         }
 
@@ -1112,15 +1115,15 @@ public partial class MainWindow : Window
 
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (!string.IsNullOrWhiteSpace(localAppData))
-            yield return Path.Combine(localAppData, "Programs", "Microsoft VS Code", "Code.exe");
+            yield return localAppData.ToDir().GetDir("Programs").GetDir("Microsoft VS Code").GetFile("Code.exe").FullName;
 
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         if (!string.IsNullOrWhiteSpace(programFiles))
-            yield return Path.Combine(programFiles, "Microsoft VS Code", "Code.exe");
+            yield return programFiles.ToDir().GetDir("Microsoft VS Code").GetFile("Code.exe").FullName;
 
         var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
         if (!string.IsNullOrWhiteSpace(programFilesX86))
-            yield return Path.Combine(programFilesX86, "Microsoft VS Code", "Code.exe");
+            yield return programFilesX86.ToDir().GetDir("Microsoft VS Code").GetFile("Code.exe").FullName;
     }
 
     private static IEnumerable<ProcessStartInfo> BuildVsCodeLaunchAttempts(string vsCodePath, bool useCommandShell, string target)
@@ -1255,7 +1258,7 @@ public partial class MainWindow : Window
     private async Task RunStartupCodeReviewCleanupAsync()
     {
         var repositoryRoot = RepositoryRootTextBox.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(repositoryRoot) || !Directory.Exists(repositoryRoot))
+        if (string.IsNullOrWhiteSpace(repositoryRoot) || !repositoryRoot.ToDir().Exists())
             return;
 
         await ExecuteBusyActionAsync(
@@ -1356,11 +1359,11 @@ public partial class MainWindow : Window
 
     private static bool LooksLikeGitRepository(string folderPath) =>
         !string.IsNullOrWhiteSpace(folderPath) &&
-        (Directory.Exists(Path.Combine(folderPath, ".git")) || File.Exists(Path.Combine(folderPath, ".git")));
+        (folderPath.ToDir().GetDir(".git").Exists() || folderPath.ToDir().GetFile(".git").Exists());
 
     private static string FindTopLevelSolutionFile(string rootFolder)
     {
-        if (string.IsNullOrWhiteSpace(rootFolder) || !Directory.Exists(rootFolder))
+        if (string.IsNullOrWhiteSpace(rootFolder) || !rootFolder.ToDir().Exists())
             return null;
 
         var rootDepth = rootFolder.Count(ch => ch == Path.DirectorySeparatorChar || ch == Path.AltDirectorySeparatorChar);
@@ -1437,7 +1440,7 @@ public partial class MainWindow : Window
 
     private void OpenSolutionButton_OnClick(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(m_latestSolutionPath) || !File.Exists(m_latestSolutionPath))
+        if (string.IsNullOrWhiteSpace(m_latestSolutionPath) || !m_latestSolutionPath.ToFile().Exists())
         {
             UpdateActionButtonStates();
             SetStatus("No solution is available from the latest review.");

@@ -17,6 +17,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using DTC.Core.Extensions;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
 using ReviewG33k.Services.Checks.Support;
@@ -130,8 +131,7 @@ public partial class ReviewResultsWindow : Window
         if (row.Finding == null)
             return;
 
-        var resolvedPath = m_resolveFindingPath?.Invoke(row.Finding);
-        if (string.IsNullOrWhiteSpace(resolvedPath))
+        if (!TryResolveFindingFile(row.Finding, out var resolvedFile))
         {
             SetPreviewText("Could not resolve file path for fix.", "Preview");
             return;
@@ -146,7 +146,7 @@ public partial class ReviewResultsWindow : Window
                 return;
             }
 
-            if (!m_findingFixer.TryFix(row.Finding, resolvedPath, out var fixMessage))
+            if (!m_findingFixer.TryFix(row.Finding, resolvedFile, out var fixMessage))
             {
                 SetPreviewText(fixMessage ?? "Fix failed.", "Preview");
                 return;
@@ -465,18 +465,17 @@ public partial class ReviewResultsWindow : Window
             return;
         }
 
-        var lineNumber = finding.LineNumber > 0 ? finding.LineNumber : 1;
-        var resolvedPath = m_resolveFindingPath?.Invoke(finding);
-        if (string.IsNullOrWhiteSpace(resolvedPath) || !File.Exists(resolvedPath))
+        if (!TryResolveFindingFile(finding, out var resolvedFile))
         {
             SetPreviewText($"Could not resolve file for '{finding.FilePath}'.", "Preview");
             return;
         }
 
+        var lineNumber = finding.LineNumber > 0 ? finding.LineNumber : 1;
         string[] lines;
         try
         {
-            lines = File.ReadAllLines(resolvedPath);
+            lines = resolvedFile.ReadAllLines() ?? [];
         }
         catch (Exception exception)
         {
@@ -486,7 +485,7 @@ public partial class ReviewResultsWindow : Window
 
         if (lines.Length == 0)
         {
-            SetPreviewText("(File is empty)", $"Preview: {Path.GetFileName(resolvedPath)}");
+            SetPreviewText("(File is empty)", $"Preview: {resolvedFile.Name}");
             return;
         }
 
@@ -505,7 +504,7 @@ public partial class ReviewResultsWindow : Window
                 .AppendLine(lines[line - 1]);
         }
 
-        SetPreviewText(builder.ToString().TrimEnd('\r', '\n'), $"Preview: {Path.GetFileName(resolvedPath)}");
+        SetPreviewText(builder.ToString().TrimEnd('\r', '\n'), $"Preview: {resolvedFile.Name}");
     }
 
     private void SetPreviewText(string text, string header)
@@ -596,28 +595,27 @@ public partial class ReviewResultsWindow : Window
             return false;
         }
 
-        var resolvedPath = m_resolveFindingPath?.Invoke(finding);
-        if (string.IsNullOrWhiteSpace(resolvedPath) || !File.Exists(resolvedPath))
+        if (!TryResolveFindingFile(finding, out var resolvedFile))
         {
             failureReason = $"Could not resolve file for '{finding.FilePath}'.";
             return false;
         }
 
-        if (!TryFindRepositoryRoot(resolvedPath, out var repositoryPath))
+        if (!TryFindRepositoryRoot(resolvedFile, out var repositoryPath))
         {
             failureReason = "Could not detect repository root from the selected file.";
             return false;
         }
 
         var issueLine = finding.LineNumber > 0 ? finding.LineNumber : 1;
-        var issuePath = GetPromptRelativePath(repositoryPath, resolvedPath, finding.FilePath);
+        var issuePath = GetPromptRelativePath(repositoryPath.FullName, resolvedFile.FullName, finding.FilePath);
         var issueMessage = string.IsNullOrWhiteSpace(finding.Message) ? "(no message)" : finding.Message.Trim();
-        var codeContext = BuildCodexPromptCodeContext(resolvedPath, issueLine);
+        var codeContext = BuildCodexPromptCodeContext(resolvedFile, issueLine);
 
         var builder = new StringBuilder();
         builder.AppendLine("You are fixing one local code review issue.");
         builder.AppendLine();
-        builder.Append("Repository path: ").AppendLine(repositoryPath);
+        builder.Append("Repository path: ").AppendLine(repositoryPath.FullName);
         builder.Append("File: ").Append(issuePath).Append(':').Append(issueLine).AppendLine();
         builder.Append("Issue: ").AppendLine(issueMessage);
         builder.AppendLine();
@@ -643,12 +641,12 @@ public partial class ReviewResultsWindow : Window
         return true;
     }
 
-    private static string BuildCodexPromptCodeContext(string resolvedPath, int lineNumber)
+    private static string BuildCodexPromptCodeContext(FileInfo resolvedFile, int lineNumber)
     {
         string[] lines;
         try
         {
-            lines = File.ReadAllLines(resolvedPath);
+            lines = resolvedFile.ReadAllLines() ?? [];
         }
         catch
         {
@@ -677,29 +675,36 @@ public partial class ReviewResultsWindow : Window
         return builder.ToString().TrimEnd('\r', '\n');
     }
 
-    private static bool TryFindRepositoryRoot(string resolvedPath, out string repositoryPath)
+    private bool TryResolveFindingFile(CodeSmellFinding finding, out FileInfo resolvedFile)
     {
-        repositoryPath = null;
+        resolvedFile = null;
+        if (finding == null)
+            return false;
+
+        var resolvedPath = m_resolveFindingPath?.Invoke(finding);
         if (string.IsNullOrWhiteSpace(resolvedPath))
             return false;
 
-        var current = Directory.Exists(resolvedPath)
-            ? resolvedPath
-            : Path.GetDirectoryName(resolvedPath);
-        while (!string.IsNullOrWhiteSpace(current))
+        resolvedFile = resolvedPath.ToFile();
+        return resolvedFile.Exists();
+    }
+
+    private static bool TryFindRepositoryRoot(FileInfo resolvedFile, out DirectoryInfo repositoryPath)
+    {
+        repositoryPath = null;
+        if (resolvedFile?.Exists() != true)
+            return false;
+
+        var current = resolvedFile.Directory;
+        while (current != null)
         {
-            var gitPath = Path.Combine(current, ".git");
-            if (Directory.Exists(gitPath) || File.Exists(gitPath))
+            if (current.GetDir(".git").Exists() || current.GetFile(".git").Exists())
             {
                 repositoryPath = current;
                 return true;
             }
 
-            var parent = Directory.GetParent(current)?.FullName;
-            if (string.IsNullOrWhiteSpace(parent) || string.Equals(parent, current, StringComparison.Ordinal))
-                break;
-
-            current = parent;
+            current = current.Parent;
         }
 
         return false;

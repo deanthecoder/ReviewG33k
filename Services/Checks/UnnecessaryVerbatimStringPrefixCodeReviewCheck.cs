@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
+using System.IO;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -29,7 +30,7 @@ public sealed class UnnecessaryVerbatimStringPrefixCodeReviewCheck : RoslynSeman
         string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase) &&
         finding.LineNumber > 0;
 
-    public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
+    public bool TryFix(CodeSmellFinding finding, FileInfo resolvedFile, out string resultMessage)
     {
         if (finding == null)
         {
@@ -37,7 +38,7 @@ public sealed class UnnecessaryVerbatimStringPrefixCodeReviewCheck : RoslynSeman
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(resolvedFilePath))
+        if (resolvedFile == null)
         {
             resultMessage = "File path could not be resolved.";
             return false;
@@ -45,7 +46,7 @@ public sealed class UnnecessaryVerbatimStringPrefixCodeReviewCheck : RoslynSeman
 
         if (!this.TryPrepareFix(
                 finding,
-                resolvedFilePath,
+                resolvedFile,
                 out var sourceText,
                 out var lineIndex,
                 out resultMessage))
@@ -71,7 +72,7 @@ public sealed class UnnecessaryVerbatimStringPrefixCodeReviewCheck : RoslynSeman
             var replacementTokenText = literal.Token.Text[1..];
             var updatedText = sourceText.WithChanges(new TextChange(literal.Token.Span, replacementTokenText)).ToString();
 
-            if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
+            if (!this.TryWriteUpdatedText(resolvedFile, updatedText, out resultMessage))
             {
                 return false;
             }
@@ -99,7 +100,7 @@ public sealed class UnnecessaryVerbatimStringPrefixCodeReviewCheck : RoslynSeman
             var replacementTokenText = startTokenText.Remove(atIndex, 1);
             var updatedText = sourceText.WithChanges(new TextChange(interpolated.StringStartToken.Span, replacementTokenText)).ToString();
 
-            if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
+            if (!this.TryWriteUpdatedText(resolvedFile, updatedText, out resultMessage))
             {
                 return false;
             }

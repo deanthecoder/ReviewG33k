@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using DTC.Core.Extensions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -36,11 +37,11 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase, IFix
         string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase) &&
         finding.LineNumber > 0;
 
-    public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
+    public bool TryFix(CodeSmellFinding finding, FileInfo resolvedFile, out string resultMessage)
     {
         if (!this.TryPrepareFix(
                 finding,
-                resolvedFilePath,
+                resolvedFile,
                 out var sourceText,
                 out var lineIndex,
                 out resultMessage))
@@ -64,7 +65,7 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase, IFix
         var updatedText = sourceText.WithChanges(new TextChange(spanToRemove, string.Empty)).ToString();
         updatedText = CodeReviewFixTextUtilities.CollapseConsecutiveBlankLinesNearLine(updatedText, lineIndex);
 
-        if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
+        if (!this.TryWriteUpdatedText(resolvedFile, updatedText, out resultMessage))
         {
             return false;
         }
@@ -147,7 +148,7 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase, IFix
         return trustedAssemblies
             .Split(Path.PathSeparator)
             .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Where(File.Exists)
+            .Where(path => path.ToFile().Exists())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(path => MetadataReference.CreateFromFile(path))
             .Cast<MetadataReference>()

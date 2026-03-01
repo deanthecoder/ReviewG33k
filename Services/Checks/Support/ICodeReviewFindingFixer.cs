@@ -8,12 +8,13 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System.IO;
+
 namespace ReviewG33k.Services.Checks.Support;
 
 public interface ICodeReviewFindingFixer
 {
     bool CanFix(CodeSmellFinding finding);
 
-    bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage);
+    bool TryFix(CodeSmellFinding finding, FileInfo resolvedFile, out string resultMessage);
 }
-

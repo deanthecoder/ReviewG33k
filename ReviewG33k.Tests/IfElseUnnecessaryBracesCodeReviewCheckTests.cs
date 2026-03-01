@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System.IO;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
 
@@ -37,7 +38,7 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheckTests
     {
         var check = new IfElseUnnecessaryBracesCodeReviewCheck();
 
-        Assert.Throws<ArgumentNullException>(() => check.TryFix(null, "Sample.cs", out _));
+        Assert.Throws<ArgumentNullException>(() => check.TryFix(null, new FileInfo("Sample.cs"), out _));
     }
 
     [Test]
@@ -51,7 +52,7 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheckTests
             "Unnecessary braces.");
         var check = new IfElseUnnecessaryBracesCodeReviewCheck();
 
-        var success = check.TryFix(finding, string.Empty, out var message);
+        var success = check.TryFix(finding, null, out var message);
 
         Assert.That(success, Is.False);
         Assert.That(message, Is.EqualTo("A valid file path is required."));

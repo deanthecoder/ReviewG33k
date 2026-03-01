@@ -33,7 +33,7 @@ public sealed class FixableCodeReviewChecksTests
             "Unused using");
 
         var check = new UnusedUsingRoslynCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
@@ -77,7 +77,7 @@ public sealed class FixableCodeReviewChecksTests
             "Use throw; instead of throw ex;");
 
         var check = new ThrowExCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
@@ -117,7 +117,7 @@ public sealed class FixableCodeReviewChecksTests
             "If/else branches should both use braces when either branch uses braces.");
 
         var check = new IfElseBraceConsistencyCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
@@ -161,7 +161,7 @@ public sealed class FixableCodeReviewChecksTests
             "If/else branches should both use braces when either branch uses braces.");
 
         var check = new IfElseBraceConsistencyCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
@@ -209,7 +209,7 @@ public sealed class FixableCodeReviewChecksTests
             "If/else braces are unnecessary when each branch contains a single simple statement.");
 
         var check = new IfElseUnnecessaryBracesCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
@@ -256,7 +256,7 @@ public sealed class FixableCodeReviewChecksTests
             "If/else braces are unnecessary when each branch contains a single simple statement.");
 
         var check = new IfElseUnnecessaryBracesCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.False);
         Assert.That(message, Is.EqualTo("Target line does not contain an if/else with unnecessary braces."));
@@ -295,7 +295,7 @@ public sealed class FixableCodeReviewChecksTests
             "If/else braces are unnecessary when each branch contains a single simple statement.");
 
         var check = new IfElseUnnecessaryBracesCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
@@ -331,7 +331,7 @@ public sealed class FixableCodeReviewChecksTests
             "Suppression added");
 
         var check = new WarningSuppressionCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
@@ -365,7 +365,7 @@ public sealed class FixableCodeReviewChecksTests
             "Suppression added");
 
         var check = new WarningSuppressionCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
@@ -403,7 +403,7 @@ public sealed class FixableCodeReviewChecksTests
             "Add a blank line between methods.");
 
         var check = new MissingBlankLineBetweenMethodsCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
@@ -451,7 +451,7 @@ public sealed class FixableCodeReviewChecksTests
             "Method `Add` can likely be made static.");
 
         var check = new MethodCanBeStaticCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Does.Contain("Add"));
@@ -493,7 +493,7 @@ public sealed class FixableCodeReviewChecksTests
             "Redundant self lookup.");
 
         var check = new RedundantSelfLookupCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Does.Contain("this"));
@@ -532,7 +532,7 @@ public sealed class FixableCodeReviewChecksTests
             "Private method `RunMachineForDuration` appears to be unused.");
 
         var check = new UnusedPrivateMemberCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Does.Contain("RunMachineForDuration"));
@@ -571,7 +571,7 @@ public sealed class FixableCodeReviewChecksTests
             "Unnecessary verbatim string prefix.");
 
         var check = new UnnecessaryVerbatimStringPrefixCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
@@ -605,7 +605,7 @@ public sealed class FixableCodeReviewChecksTests
             "Unnecessary verbatim string prefix.");
 
         var check = new UnnecessaryVerbatimStringPrefixCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, tempFile, out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);

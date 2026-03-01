@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
+using System.IO;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -32,11 +33,11 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
         string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase) &&
         IsPrivateMethodFindingMessage(finding.Message);
 
-    public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
+    public bool TryFix(CodeSmellFinding finding, FileInfo resolvedFile, out string resultMessage)
     {
         if (!this.TryPrepareFix(
                 finding,
-                resolvedFilePath,
+                resolvedFile,
                 out var sourceText,
                 out var lineIndex,
                 out resultMessage))
@@ -58,7 +59,7 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
         var updatedText = sourceText.WithChanges(new TextChange(spanToRemove, string.Empty)).ToString();
         updatedText = CodeReviewFixTextUtilities.CollapseConsecutiveBlankLinesNearLine(updatedText, lineIndex);
 
-        if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
+        if (!this.TryWriteUpdatedText(resolvedFile, updatedText, out resultMessage))
             return false;
 
         resultMessage = string.IsNullOrWhiteSpace(methodName)

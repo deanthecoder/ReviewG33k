@@ -11,6 +11,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using DTC.Core.Extensions;
 
 namespace ReviewG33k.Services.Checks;
 
@@ -52,8 +53,7 @@ public sealed class MissingReadmeForNewProjectCodeReviewCheck : CodeReviewCheckB
         if (string.IsNullOrWhiteSpace(projectDirectory))
             return false;
 
-        var readmePath = Path.Combine(projectDirectory, "README.md");
-        return File.Exists(readmePath);
+        return projectDirectory.ToDir().GetFile("README.md").Exists();
     }
 
     private static int GetLineNumber(CodeReviewChangedFile file) =>

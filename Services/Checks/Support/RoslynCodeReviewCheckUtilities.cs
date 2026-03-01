@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using DTC.Core.Extensions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -269,7 +270,7 @@ internal static class RoslynCodeReviewCheckUtilities
         return trustedAssemblies
             .Split(Path.PathSeparator)
             .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Where(File.Exists)
+            .Where(path => path.ToFile().Exists())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(path => MetadataReference.CreateFromFile(path))
             .Cast<MetadataReference>()

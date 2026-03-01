@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
+using System.IO;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -32,10 +33,10 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
         string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase) &&
         finding.LineNumber > 0;
 
-    public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
+    public bool TryFix(CodeSmellFinding finding, FileInfo resolvedFile, out string resultMessage)
     {
         ArgumentNullException.ThrowIfNull(finding);
-        if (string.IsNullOrWhiteSpace(resolvedFilePath))
+        if (resolvedFile == null)
         {
             resultMessage = "A valid file path is required.";
             return false;
@@ -43,7 +44,7 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
 
         if (!this.TryPrepareFix(
                 finding,
-                resolvedFilePath,
+                resolvedFile,
                 out var sourceText,
                 out var lineIndex,
                 out resultMessage))
@@ -71,7 +72,7 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
         var updatedText = updatedRoot.ToFullString();
         updatedText = CodeReviewFixTextUtilities.CollapseConsecutiveBlankLinesNearLine(updatedText, lineIndex);
 
-        if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
+        if (!this.TryWriteUpdatedText(resolvedFile, updatedText, out resultMessage))
             return false;
 
         resultMessage = "Removed unnecessary braces from if/else branches.";

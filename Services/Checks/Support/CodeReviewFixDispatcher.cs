@@ -10,6 +10,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace ReviewG33k.Services.Checks.Support;
@@ -35,7 +36,7 @@ public sealed class CodeReviewFixDispatcher : ICodeReviewFindingFixer
         return m_fixersByRuleId.TryGetValue(finding.RuleId, out var fixer) && fixer.CanFix(finding);
     }
 
-    public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
+    public bool TryFix(CodeSmellFinding finding, FileInfo resolvedFile, out string resultMessage)
     {
         resultMessage = null;
         if (finding == null || string.IsNullOrWhiteSpace(finding.RuleId))
@@ -56,7 +57,6 @@ public sealed class CodeReviewFixDispatcher : ICodeReviewFindingFixer
             return false;
         }
 
-        return fixer.TryFix(finding, resolvedFilePath, out resultMessage);
+        return fixer.TryFix(finding, resolvedFile, out resultMessage);
     }
 }
-

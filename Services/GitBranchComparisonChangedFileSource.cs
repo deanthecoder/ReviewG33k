@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using DTC.Core.Extensions;
 using ReviewG33k.Services.Checks;
 
 namespace ReviewG33k.Services;
@@ -39,8 +40,9 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
     public async Task<CodeReviewChangedFileSourceResult> LoadAsync()
     {
         var info = new List<string>();
+        var repositoryPathInfo = m_repositoryPath.ToDir();
 
-        if (string.IsNullOrWhiteSpace(m_repositoryPath) || !Directory.Exists(m_repositoryPath))
+        if (string.IsNullOrWhiteSpace(m_repositoryPath) || !repositoryPathInfo.Exists())
         {
             info.Add("Code review scan skipped: Review worktree path not found.");
             return new CodeReviewChangedFileSourceResult([], info);
@@ -106,11 +108,11 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
         var changedFiles = new List<CodeReviewChangedFile>(changedFileEntries.Length);
         foreach (var entry in changedFileEntries)
         {
-            var fullPath = Path.Combine(m_repositoryPath, entry.Path.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(fullPath))
+            var fullPath = repositoryPathInfo.GetFile(entry.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!fullPath.Exists())
                 continue;
 
-            var text = await File.ReadAllTextAsync(fullPath);
+            var text = await File.ReadAllTextAsync(fullPath.FullName);
             var lines = SplitLines(text);
             HashSet<int> addedLineNumbers;
             if (baseDiffPaths.Contains(NormalizeRepoPath(entry.Path)))
@@ -120,7 +122,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             else
                 addedLineNumbers = await GetAddedLineNumbersAsync("HEAD", entry.Path);
 
-            changedFiles.Add(new CodeReviewChangedFile(entry.Status, entry.Path, fullPath, text, lines, addedLineNumbers));
+            changedFiles.Add(new CodeReviewChangedFile(entry.Status, entry.Path, fullPath.FullName, text, lines, addedLineNumbers));
         }
 
         if (changedFiles.Count == 0)

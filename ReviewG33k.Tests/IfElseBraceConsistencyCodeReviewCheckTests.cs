@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System.IO;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
 
@@ -38,7 +39,7 @@ public sealed class IfElseBraceConsistencyCodeReviewCheckTests
     {
         var check = new IfElseBraceConsistencyCodeReviewCheck();
 
-        Assert.Throws<ArgumentNullException>(() => check.TryFix(null, "Sample.cs", out _));
+        Assert.Throws<ArgumentNullException>(() => check.TryFix(null, new FileInfo("Sample.cs"), out _));
     }
 
     [Test]
@@ -52,7 +53,7 @@ public sealed class IfElseBraceConsistencyCodeReviewCheckTests
             "If/else inconsistency.");
         var check = new IfElseBraceConsistencyCodeReviewCheck();
 
-        var success = check.TryFix(finding, " ", out var message);
+        var success = check.TryFix(finding, null, out var message);
 
         Assert.That(success, Is.False);
         Assert.That(message, Is.EqualTo("A valid file path is required."));

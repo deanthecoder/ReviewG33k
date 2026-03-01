@@ -15,6 +15,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using DTC.Core.Extensions;
 using ReviewG33k.Models;
 
 namespace ReviewG33k.Services;
@@ -39,7 +40,8 @@ public sealed class CodeReviewOrchestrator
         if (string.IsNullOrWhiteSpace(repositoryRoot))
             throw new InvalidOperationException("Repository root folder is required.");
 
-        if (!Directory.Exists(repositoryRoot))
+        var repositoryRootDir = repositoryRoot.ToDir();
+        if (!repositoryRootDir.Exists())
             throw new DirectoryNotFoundException($"Repository root folder does not exist: {repositoryRoot}");
 
         var localRepository = await FindOrCloneRepositoryAsync(repositoryRoot, pullRequest, log);
@@ -54,27 +56,34 @@ public sealed class CodeReviewOrchestrator
 
         EnsureCodeReviewMarker(repositoryRoot);
 
-        var reviewFolder = Path.Combine(repositoryRoot, CodeReviewFolderName, pullRequest.RepoSlug, $"PR-{pullRequest.PullRequestId}");
-        await RemoveWorktreeIfPresentAsync(localRepository, reviewFolder, log);
+        var reviewFolderInfo = repositoryRootDir
+            .GetDir(CodeReviewFolderName)
+            .GetDir(pullRequest.RepoSlug)
+            .GetDir($"PR-{pullRequest.PullRequestId}");
+        await RemoveWorktreeIfPresentAsync(localRepository, reviewFolderInfo.FullName, log);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(reviewFolder));
+        reviewFolderInfo.Parent?.Create();
 
-        log($"Creating worktree copy at '{reviewFolder}' on local branch '{reviewBranch}'...");
-        var addResult = await m_gitCommandRunner.RunAsync(localRepository, "worktree", "add", "--force", "-B", reviewBranch, reviewFolder, reviewRef);
+        log($"Creating worktree copy at '{reviewFolderInfo.FullName}' on local branch '{reviewBranch}'...");
+        var addResult = await m_gitCommandRunner.RunAsync(localRepository, "worktree", "add", "--force", "-B", reviewBranch, reviewFolderInfo.FullName, reviewRef);
         EnsureSuccess(addResult, "Failed to create review worktree.");
 
-        var solutionPath = FindBestSolutionFile(reviewFolder, changedPaths);
+        var solutionPath = FindBestSolutionFile(reviewFolderInfo.FullName, changedPaths);
 
-        return new PrepareReviewResult(localRepository, reviewFolder, solutionPath);
+        return new PrepareReviewResult(localRepository, reviewFolderInfo.FullName, solutionPath);
     }
 
     public async Task ClearCodeReviewFolderAsync(string repositoryRoot, Action<string> log, bool logWhenMissing = true)
     {
-        if (string.IsNullOrWhiteSpace(repositoryRoot) || !Directory.Exists(repositoryRoot))
+        if (string.IsNullOrWhiteSpace(repositoryRoot))
+            throw new DirectoryNotFoundException("Repository root folder does not exist.");
+
+        var repositoryRootDir = repositoryRoot.ToDir();
+        if (!repositoryRootDir.Exists())
             throw new DirectoryNotFoundException("Repository root folder does not exist.");
 
         var codeReviewRoot = GetCodeReviewRoot(repositoryRoot);
-        if (!Directory.Exists(codeReviewRoot))
+        if (!codeReviewRoot.Exists())
         {
             if (logWhenMissing)
                 log("CodeReview folder does not exist, nothing to clear.");
@@ -83,7 +92,7 @@ public sealed class CodeReviewOrchestrator
 
         if (!HasCodeReviewMarker(codeReviewRoot))
         {
-            log($"Safety check: missing '{CodeReviewMarkerFileName}' marker in '{codeReviewRoot}'. Skipping cleanup.");
+            log($"Safety check: missing '{CodeReviewMarkerFileName}' marker in '{codeReviewRoot.FullName}'. Skipping cleanup.");
             return;
         }
 
@@ -96,7 +105,7 @@ public sealed class CodeReviewOrchestrator
 
             foreach (var worktreePath in ParseWorktreePaths(worktreeList.StandardOutput))
             {
-                if (!IsChildPathOf(worktreePath, codeReviewRoot))
+                if (!IsChildPathOf(worktreePath, codeReviewRoot.FullName))
                     continue;
 
                 var removeResult = await m_gitCommandRunner.RunAsync(repositoryPath, "worktree", "remove", "--force", worktreePath);
@@ -107,32 +116,31 @@ public sealed class CodeReviewOrchestrator
             _ = await m_gitCommandRunner.RunAsync(repositoryPath, "worktree", "prune");
         }
 
-        if (Directory.Exists(codeReviewRoot))
-            Directory.Delete(codeReviewRoot, true);
+        if (codeReviewRoot.Exists())
+            codeReviewRoot.TryDelete();
 
         log("CodeReview folder cleared.");
     }
 
-    private static string GetCodeReviewRoot(string repositoryRoot) =>
-        Path.Combine(repositoryRoot, CodeReviewFolderName);
+    private static DirectoryInfo GetCodeReviewRoot(string repositoryRoot) =>
+        repositoryRoot.ToDir().GetDir(CodeReviewFolderName);
 
-    private static string GetCodeReviewMarkerPath(string codeReviewRoot) =>
-        Path.Combine(codeReviewRoot, CodeReviewMarkerFileName);
+    private static FileInfo GetCodeReviewMarkerPath(DirectoryInfo codeReviewRoot) =>
+        codeReviewRoot.GetFile(CodeReviewMarkerFileName);
 
-    private static bool HasCodeReviewMarker(string codeReviewRoot) =>
-        File.Exists(GetCodeReviewMarkerPath(codeReviewRoot));
+    private static bool HasCodeReviewMarker(DirectoryInfo codeReviewRoot) =>
+        GetCodeReviewMarkerPath(codeReviewRoot).Exists();
 
     private static void EnsureCodeReviewMarker(string repositoryRoot)
     {
         var codeReviewRoot = GetCodeReviewRoot(repositoryRoot);
-        Directory.CreateDirectory(codeReviewRoot);
+        codeReviewRoot.Create();
 
         var markerPath = GetCodeReviewMarkerPath(codeReviewRoot);
-        if (File.Exists(markerPath))
+        if (markerPath.Exists())
             return;
 
-        File.WriteAllText(
-            markerPath,
+        markerPath.WriteAllText(
             "This folder is managed by ReviewG33k. Cleanup operations are allowed only when this marker exists.");
     }
 
@@ -145,7 +153,7 @@ public sealed class CodeReviewOrchestrator
             return localRepository;
         }
 
-        var targetPath = GetAvailableRepositoryPath(Path.Combine(repositoryRoot, pullRequest.RepoSlug));
+        var targetPath = GetAvailableRepositoryPath(repositoryRoot.ToDir().GetDir(pullRequest.RepoSlug).FullName);
 
         log($"Local repository not found. Cloning '{pullRequest.CloneUrl}'...");
         var cloneResult = await m_gitCommandRunner.RunAsync(repositoryRoot, "clone", pullRequest.CloneUrl, targetPath);
@@ -257,7 +265,8 @@ public sealed class CodeReviewOrchestrator
 
     private async Task RemoveWorktreeIfPresentAsync(string localRepository, string reviewFolder, Action<string> log)
     {
-        if (Directory.Exists(reviewFolder))
+        var reviewFolderInfo = reviewFolder.ToDir();
+        if (reviewFolderInfo.Exists())
         {
             log($"Removing existing review folder at '{reviewFolder}'...");
             var removeResult = await m_gitCommandRunner.RunAsync(localRepository, "worktree", "remove", "--force", reviewFolder);
@@ -265,8 +274,8 @@ public sealed class CodeReviewOrchestrator
                 log($"Warning: git worktree remove reported an issue. {removeResult.GetCombinedOutput()}");
 
             // git worktree remove often deletes the folder itself.
-            if (Directory.Exists(reviewFolder))
-                Directory.Delete(reviewFolder, true);
+            if (reviewFolderInfo.Exists())
+                reviewFolderInfo.TryDelete();
         }
     }
 
@@ -282,34 +291,36 @@ public sealed class CodeReviewOrchestrator
 
     private static IEnumerable<string> EnumerateTopLevelGitRepositories(string repositoryRoot)
     {
-        foreach (var directory in Directory.EnumerateDirectories(repositoryRoot))
+        foreach (var directory in repositoryRoot.ToDir().EnumerateDirectories())
         {
-            if (Path.GetFileName(directory).Equals(CodeReviewFolderName, StringComparison.OrdinalIgnoreCase))
+            if (directory.Name.Equals(CodeReviewFolderName, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            if (!IsGitRepository(directory))
+            if (!IsGitRepository(directory.FullName))
                 continue;
 
-            yield return directory;
+            yield return directory.FullName;
         }
     }
 
     private static bool IsGitRepository(string directory) =>
-        Directory.Exists(Path.Combine(directory, ".git")) || File.Exists(Path.Combine(directory, ".git"));
+        !string.IsNullOrWhiteSpace(directory) &&
+        (directory.ToDir().GetDir(".git").Exists() || directory.ToDir().GetFile(".git").Exists());
 
     private static string GetAvailableRepositoryPath(string preferredPath)
     {
-        if (!Directory.Exists(preferredPath))
+        var preferredDirectory = preferredPath.ToDir();
+        if (!preferredDirectory.Exists())
             return preferredPath;
 
-        var parent = Path.GetDirectoryName(preferredPath) ?? throw new InvalidOperationException("Invalid repository path.");
-        var folderName = Path.GetFileName(preferredPath);
+        var parent = preferredDirectory.Parent?.FullName ?? throw new InvalidOperationException("Invalid repository path.");
+        var folderName = preferredDirectory.Name;
 
         for (var index = 2; index < 1000; index++)
         {
-            var candidate = Path.Combine(parent, $"{folderName}-{index}");
-            if (!Directory.Exists(candidate))
-                return candidate;
+            var candidate = parent.ToDir().GetDir($"{folderName}-{index}");
+            if (!candidate.Exists())
+                return candidate.FullName;
         }
 
         throw new InvalidOperationException("Could not find an available folder name for clone target.");
@@ -370,11 +381,11 @@ public sealed class CodeReviewOrchestrator
         if (string.IsNullOrWhiteSpace(normalizedRelativePath))
             return null;
 
-        var fullPath = Path.GetFullPath(Path.Combine(rootFolder, normalizedRelativePath));
+        var fullPath = Path.GetFullPath(rootFolder.ToDir().GetFile(normalizedRelativePath).FullName);
         if (!IsChildPathOf(fullPath, rootFolder))
             return null;
 
-        var currentDirectory = Directory.Exists(fullPath) ? fullPath : Path.GetDirectoryName(fullPath);
+        var currentDirectory = fullPath.ToDir().Exists() ? fullPath : fullPath.ToFile().Directory?.FullName;
         if (string.IsNullOrWhiteSpace(currentDirectory))
             return null;
 
