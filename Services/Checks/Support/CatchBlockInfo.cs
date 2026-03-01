@@ -12,13 +12,16 @@ namespace ReviewG33k.Services.Checks;
 
 internal sealed class CatchBlockInfo
 {
-    public CatchBlockInfo(int startLine, string bodyWithoutComments)
+    public CatchBlockInfo(int startLine, string bodyWithoutComments, bool hasComments)
     {
         StartLine = startLine;
         BodyWithoutComments = bodyWithoutComments ?? string.Empty;
+        HasComments = hasComments;
     }
 
     public int StartLine { get; }
 
     public string BodyWithoutComments { get; }
+
+    public bool HasComments { get; }
 }

@@ -18,6 +18,7 @@ namespace ReviewG33k.Services.Checks;
 internal static class CodeReviewCheckUtilities
 {
     private static readonly Regex CatchOpenRegex = new(@"\bcatch\b\s*(?:\([^)]*\))?\s*\{", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex CommentRegex = new(@"//|/\*", RegexOptions.Compiled);
     private static readonly Regex PublicTypeDeclarationRegex = new(
         @"^\s*public\s+(?:sealed\s+|abstract\s+|partial\s+|static\s+)*\b(class|interface|record|struct)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
         RegexOptions.Multiline | RegexOptions.Compiled);
@@ -99,7 +100,8 @@ internal static class CodeReviewCheckUtilities
 
             var body = file.Text.Substring(openBraceIndex + 1, closeBraceIndex - openBraceIndex - 1);
             var bodyWithoutComments = StripComments(body).Trim();
-            yield return new CatchBlockInfo(startLine, bodyWithoutComments);
+            var hasComments = ContainsComments(body);
+            yield return new CatchBlockInfo(startLine, bodyWithoutComments, hasComments);
         }
     }
 
@@ -162,4 +164,8 @@ internal static class CodeReviewCheckUtilities
         var withoutLineComments = Regex.Replace(withoutBlockComments, @"//.*?$", string.Empty, RegexOptions.Multiline);
         return withoutLineComments;
     }
+
+    private static bool ContainsComments(string text) =>
+        !string.IsNullOrWhiteSpace(text) &&
+        CommentRegex.IsMatch(text);
 }

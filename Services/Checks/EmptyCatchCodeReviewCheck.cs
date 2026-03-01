@@ -23,7 +23,12 @@ public sealed class EmptyCatchCodeReviewCheck : CodeReviewCheckBase
             foreach (var catchBlock in CodeReviewCheckUtilities.EnumerateAddedCatchBlocks(file))
             {
                 if (string.IsNullOrWhiteSpace(catchBlock.BodyWithoutComments))
-                    AddFinding(report, CodeReviewFindingSeverity.Important, file.Path, catchBlock.StartLine, "Empty catch block detected.");
+                {
+                    var severity = catchBlock.HasComments
+                        ? CodeReviewFindingSeverity.Suggestion
+                        : CodeReviewFindingSeverity.Important;
+                    AddFinding(report, severity, file.Path, catchBlock.StartLine, "Empty catch block detected.");
+                }
             }
         }
     }

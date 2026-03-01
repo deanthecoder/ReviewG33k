@@ -20,7 +20,7 @@
 
         <Grid Grid.Row="1"
               Margin="0,12,0,6"
-              ColumnDefinitions="34,90,*,Auto">
+              ColumnDefinitions="34,98,*,Auto">
             <TextBlock Grid.Column="1"
                        FontWeight="SemiBold"
                        Text="Severity" />
@@ -45,7 +45,7 @@
                         <DataTemplate>
                         <Grid Margin="0,1"
                               Background="Transparent"
-                              ColumnDefinitions="34,90,*,Auto">
+                              ColumnDefinitions="34,98,*,Auto">
                                 <Grid.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="{Binding UntickSameTypeMenuHeader}"
@@ -83,21 +83,19 @@
                                             HorizontalAlignment="Right"
                                             VerticalAlignment="Center"
                                             Spacing="6">
-                                    <Button Width="86"
+                                    <Button Padding="6"
                                             Click="FixFindingButton_OnClick"
                                             IsVisible="{Binding ShowFixButton}"
                                             IsEnabled="{Binding CanFixActive}"
                                             ToolTip.Tip="Apply a local quick-fix for this issue">
-                                        <StackPanel Orientation="Horizontal" Spacing="4">
-                                            <materialIcons:MaterialIcon Width="14"
-                                                                        Height="14"
-                                                Kind="MagicWand" />
-                                            <TextBlock Text="Fix" />
-                                        </StackPanel>
+                                        <materialIcons:MaterialIcon Width="18"
+                                                                    Height="18"
+                                                                    Kind="MagicWand" />
                                     </Button>
-                                    <Button Width="44"
+                                    <Button Padding="6"
                                             Click="CreateCodexPromptButton_OnClick"
                                             IsVisible="{Binding ShowCodexPromptButton}"
+                                            IsEnabled="{Binding CanCodexPromptActive}"
                                             Background="Transparent"
                                             ToolTip.Tip="Copy a ready-to-paste Codex prompt for this issue">
                                         <Viewbox Width="18" Height="18">
@@ -107,7 +105,7 @@
                                             </Canvas>
                                         </Viewbox>
                                     </Button>
-                                    <Button Width="78"
+                                    <Button
                                             Click="CommentFindingButton_OnClick"
                                             IsVisible="{Binding ShowCommentButton}"
                                             IsEnabled="{Binding CanCommentActive}"
@@ -136,7 +134,6 @@
                         <Button x:Name="OpenSelectedButton"
                                 Grid.Column="1"
                                 Margin="8,0,0,6"
-                                Width="110"
                                 Click="OpenSelectedButton_OnClick"
                                 Content="Open Selected" />
                     </Grid>
@@ -158,18 +155,15 @@
               ColumnDefinitions="Auto,Auto,*,Auto">
             <Button x:Name="ToggleAllButton"
                     Grid.Column="0"
-                    Width="110"
                     Click="ToggleAllButton_OnClick"
                     Content="Toggle All" />
             <Button x:Name="ExportToClipboardButton"
                     Grid.Column="1"
                     Margin="8,0,0,0"
-                    Width="150"
                     Click="ExportToClipboardButton_OnClick"
                     Content="Export To Clipboard" />
             <Button x:Name="CommentSelectedButton"
                     Grid.Column="3"
-                    Width="140"
                     Click="CommentSelectedButton_OnClick"
                     Content="Comment Selected" />
         </Grid>

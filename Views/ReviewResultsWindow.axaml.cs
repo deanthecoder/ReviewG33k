@@ -20,6 +20,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using ReviewG33k.Services;
+using ReviewG33k.Services.Checks;
 using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Views;
@@ -183,7 +184,7 @@ public partial class ReviewResultsWindow : Window
 
     private async void CreateCodexPromptButton_OnClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { DataContext: ReviewResultRow row } || !row.CanCreateCodexPrompt)
+        if (sender is not Button { DataContext: ReviewResultRow row } || !row.CanCodexPromptActive)
             return;
 
         var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
@@ -272,9 +273,7 @@ public partial class ReviewResultsWindow : Window
         UpdateBatchActionButtonStates();
 
         if (failureCount == 0)
-        {
             SetPreviewText($"Posted {successCount} comment(s).", "Preview");
-        }
         else
             SetPreviewText($"Posted {successCount} comment(s). {failureCount} failed. See log for details.", "Preview");
     }
@@ -365,7 +364,11 @@ public partial class ReviewResultsWindow : Window
         var canOpen = canOpenInVsCode && hasFileAndLine;
         var canComment = canCommentInBitbucket && hasFileAndLine;
         var canFix = canFixLocally && hasPathResolver && hasFileAndLine && findingFixer != null && findingFixer.CanFix(finding);
-        var canCreateCodexPrompt = canFixLocally && hasPathResolver && hasFileAndLine && !canFix;
+        var canCreateCodexPrompt = canFixLocally &&
+                                   hasPathResolver &&
+                                   hasFileAndLine &&
+                                   !canFix &&
+                                   CanUseCodexPromptForFinding(finding);
         return new ReviewResultRow(
             finding,
             finding.RuleId,
@@ -381,6 +384,13 @@ public partial class ReviewResultsWindow : Window
             canCreateCodexPrompt,
             canCreateCodexPrompt,
             false);
+    }
+
+    private static bool CanUseCodexPromptForFinding(CodeSmellFinding finding)
+    {
+        var ruleId = finding?.RuleId;
+        return !string.Equals(ruleId, CodeReviewRuleIds.EmptyCatch, StringComparison.OrdinalIgnoreCase) &&
+               !string.Equals(ruleId, CodeReviewRuleIds.SwallowingCatch, StringComparison.OrdinalIgnoreCase);
     }
 
     private void ReviewResultRow_OnPropertyChanged(object sender, PropertyChangedEventArgs e)
