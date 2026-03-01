@@ -409,6 +409,33 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void IfElseUnnecessaryBracesCheckWhenSingleStatementSpansMultipleLinesDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public string Run(bool flag)
+                {
+                    if (flag)
+                    {
+                        return string.Concat(
+                            "A",
+                            "B");
+                    }
+                    else
+                    {
+                        return "C";
+                    }
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new IfElseUnnecessaryBracesCodeReviewCheck(), "A", source, Enumerable.Range(1, 17));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void IfElseUnnecessaryBracesCheckWhenIfBranchHasBracesAndElseIfChainHasNoBracesReportsHint()
     {
         const string source = """
@@ -853,6 +880,29 @@ public sealed class RoslynStyleCodeReviewChecksTests
             """;
 
         var report = AnalyzeSource(new MethodCanBeStaticCodeReviewCheck(), "A", source, Enumerable.Range(1, 12), "Tests/SampleTests.cs");
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void MethodCanBeStaticCheckWhenMethodUsesUnresolvedCodeBehindMemberDoesNotReport()
+    {
+        const string source = """
+            public partial class ReviewResultsWindow
+            {
+                private void SetPreviewText(string text)
+                {
+                    PreviewHeaderTextBlock.Text = text ?? string.Empty;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(
+            new MethodCanBeStaticCodeReviewCheck(),
+            "A",
+            source,
+            Enumerable.Range(1, 7),
+            "Views/ReviewResultsWindow.axaml.cs");
 
         Assert.That(report.Findings, Is.Empty);
     }

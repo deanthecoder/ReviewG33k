@@ -8,18 +8,69 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
+using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
 
-public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
+public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewCheckBase, IFixableCodeReviewCheck
 {
     public override string RuleId => CodeReviewRuleIds.MethodCanBeStatic;
 
     public override string DisplayName => "Methods that can be static";
+
+    public bool CanFix(CodeSmellFinding finding) =>
+        finding != null &&
+        string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase) &&
+        finding.LineNumber > 0;
+
+    public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
+    {
+        if (!this.TryPrepareFix(
+                finding,
+                resolvedFilePath,
+                out var sourceText,
+                out var lineIndex,
+                out resultMessage))
+        {
+            return false;
+        }
+
+        var root = CSharpSyntaxTree.ParseText(sourceText).GetCompilationUnitRoot();
+        var lineSpan = TextSpan.FromBounds(sourceText.Lines[lineIndex].Start, sourceText.Lines[lineIndex].End);
+
+        var method = root
+            .DescendantNodes()
+            .OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(node => GetStartLine(node) == lineIndex + 1 && !node.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.StaticKeyword))) ??
+            root.DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .FirstOrDefault(node => node.Span.IntersectsWith(lineSpan) && !node.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.StaticKeyword)));
+        if (method == null)
+        {
+            resultMessage = "Target line does not contain a non-static method.";
+            return false;
+        }
+
+        var updatedMethod = AddStaticModifier(method);
+        var updatedRoot = root.ReplaceNode(method, updatedMethod);
+        var updatedText = updatedRoot.ToFullString();
+        updatedText = CodeReviewFixTextUtilities.CollapseConsecutiveBlankLinesNearLine(updatedText, lineIndex);
+
+        if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
+            return false;
+
+        var methodName = method.Identifier.ValueText;
+        resultMessage = string.IsNullOrWhiteSpace(methodName)
+            ? "Added static modifier to method."
+            : $"Added static modifier to method `{methodName}`.";
+        return true;
+    }
 
     protected override void AnalyzeFile(
         CodeReviewAnalysisContext context,
@@ -93,7 +144,18 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
             if (node is not IdentifierNameSyntax && node is not MemberAccessExpressionSyntax)
                 continue;
 
-            var symbol = semanticModel.GetSymbolInfo(node).Symbol;
+            var symbolInfo = semanticModel.GetSymbolInfo(node);
+            var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
+            if (symbol == null)
+            {
+                // In single-file semantic analysis (for example XAML code-behind), generated members may be unresolved.
+                // Be conservative to avoid false "can be static" suggestions when instance state is likely involved.
+                if (CouldReferenceInstanceMember(node))
+                    return true;
+
+                continue;
+            }
+
             if (!RequiresInstance(symbol, containingType))
                 continue;
 
@@ -134,4 +196,29 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
         return false;
     }
 
+    private static bool CouldReferenceInstanceMember(SyntaxNode node) =>
+        node is IdentifierNameSyntax or MemberAccessExpressionSyntax;
+
+    private static int GetStartLine(SyntaxNode node) =>
+        node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+
+    private static MethodDeclarationSyntax AddStaticModifier(MethodDeclarationSyntax method)
+    {
+        var staticToken = SyntaxFactory.Token(SyntaxKind.StaticKeyword)
+            .WithTrailingTrivia(SyntaxFactory.Space);
+        var modifiers = method.Modifiers;
+        var insertionIndex = 0;
+        for (var index = 0; index < modifiers.Count; index++)
+        {
+            if (modifiers[index].IsKind(SyntaxKind.PublicKeyword) ||
+                modifiers[index].IsKind(SyntaxKind.PrivateKeyword) ||
+                modifiers[index].IsKind(SyntaxKind.ProtectedKeyword) ||
+                modifiers[index].IsKind(SyntaxKind.InternalKeyword))
+            {
+                insertionIndex = index + 1;
+            }
+        }
+
+        return method.WithModifiers(modifiers.Insert(insertionIndex, staticToken));
+    }
 }

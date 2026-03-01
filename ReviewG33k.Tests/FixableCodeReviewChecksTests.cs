@@ -224,6 +224,46 @@ public sealed class FixableCodeReviewChecksTests
     }
 
     [Test]
+    public void IfElseUnnecessaryBracesCheckTryFixWhenStatementSpansMultipleLinesReturnsFalse()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                public string Run(bool flag)
+                {
+                    if (flag)
+                    {
+                        return string.Concat(
+                            "A",
+                            "B");
+                    }
+                    else
+                    {
+                        return "C";
+                    }
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.IfElseUnnecessaryBraces,
+            "Sample.cs",
+            5,
+            "If/else braces are unnecessary when each branch contains a single simple statement.");
+
+        var check = new IfElseUnnecessaryBracesCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile.FullName, out var message);
+
+        Assert.That(success, Is.False);
+        Assert.That(message, Is.EqualTo("Target line does not contain an if/else with unnecessary braces."));
+        Assert.That(File.ReadAllText(tempFile.FullName), Is.EqualTo(source.Replace("\r\n", "\n")));
+    }
+
+    [Test]
     public void IfElseUnnecessaryBracesCheckTryFixForElseIfChainRemovesOnlyUnnecessaryIfBracesAndKeepsIndentation()
     {
         using var tempFile = new TempFile(".cs");
@@ -385,6 +425,43 @@ public sealed class FixableCodeReviewChecksTests
         var check = new UnusedPrivateMemberCodeReviewCheck();
 
         Assert.That(check.CanFix(finding), Is.True);
+    }
+
+    [Test]
+    public void MethodCanBeStaticCheckTryFixAddsStaticModifier()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                public int Add(int a, int b)
+                {
+                    return a + b;
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.MethodCanBeStatic,
+            "Sample.cs",
+            3,
+            "Method `Add` can likely be made static.");
+
+        var check = new MethodCanBeStaticCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile.FullName, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Does.Contain("Add"));
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Contain("public static int Add"));
+
+        var root = CSharpSyntaxTree.ParseText(updated).GetCompilationUnitRoot();
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Single(node => node.Identifier.ValueText == "Add");
+        Assert.That(method.Modifiers.Any(modifier => modifier.RawKind == (int)SyntaxKind.StaticKeyword), Is.True);
     }
 
     [Test]

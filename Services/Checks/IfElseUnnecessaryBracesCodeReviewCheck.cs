@@ -149,6 +149,8 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
         var statement = block.Statements[0];
         if (!CanUseWithoutBraces(statement))
             return false;
+        if (!StatementSpansSingleLine(statement))
+            return false;
 
         return true;
     }
@@ -157,5 +159,14 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
     {
         var statement = block.Statements.Single();
         return statement;
+    }
+
+    private static bool StatementSpansSingleLine(StatementSyntax statement)
+    {
+        if (statement == null)
+            return false;
+
+        var lineSpan = statement.GetLocation().GetLineSpan();
+        return lineSpan.StartLinePosition.Line == lineSpan.EndLinePosition.Line;
     }
 }
