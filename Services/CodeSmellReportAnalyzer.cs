@@ -43,22 +43,41 @@ public sealed class CodeSmellReportAnalyzer
 
     public async Task<CodeSmellReport> AnalyzeAsync(ICodeReviewChangedFileSource changedFileSource)
     {
-        var report = new CodeSmellReport();
+        var infoMessages = new List<string>();
         if (changedFileSource == null)
         {
-            report.AddInfo("Code review scan skipped: Changed file source unavailable.");
-            return report;
+            var unavailableReport = new CodeSmellReport();
+            unavailableReport.AddInfo("Code review scan skipped: Changed file source unavailable.");
+            return unavailableReport;
         }
 
         var sourceResult = await changedFileSource.LoadAsync();
         foreach (var infoMessage in sourceResult?.InfoMessages ?? [])
-            report.AddInfo(infoMessage);
+            infoMessages.Add(infoMessage);
 
         var changedFiles = sourceResult?.Files?.Where(file => file != null).ToArray() ?? [];
         if (changedFiles.Length == 0)
+        {
+            var emptyReport = new CodeSmellReport();
+            foreach (var infoMessage in infoMessages)
+                emptyReport.AddInfo(infoMessage);
+            return emptyReport;
+        }
+
+        var report = AnalyzeFiles(changedFiles);
+        foreach (var infoMessage in infoMessages)
+            report.AddInfo(infoMessage);
+        return report;
+    }
+
+    public CodeSmellReport AnalyzeFiles(IReadOnlyList<CodeReviewChangedFile> changedFiles)
+    {
+        var report = new CodeSmellReport();
+        var files = changedFiles?.Where(file => file != null).ToArray() ?? [];
+        if (files.Length == 0)
             return report;
 
-        var context = BuildContext(changedFiles);
+        var context = BuildContext(files);
         m_checks
             .AsParallel()
             .ForAll(check => check.Analyze(context, report));
@@ -95,6 +114,7 @@ public sealed class CodeSmellReportAnalyzer
         new MethodParameterCountCodeReviewCheck(),
         new GenericTypeNameSuffixCodeReviewCheck(),
         new IfElseBraceConsistencyCodeReviewCheck(),
+        new IfElseUnnecessaryBracesCodeReviewCheck(),
         new ConstructorTooLongCodeReviewCheck(),
         new ThreadSleepCodeReviewCheck(),
         new ThrowExCodeReviewCheck(),

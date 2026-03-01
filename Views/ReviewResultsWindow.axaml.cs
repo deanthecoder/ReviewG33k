@@ -32,17 +32,22 @@ public partial class ReviewResultsWindow : Window
     private readonly Action<CodeSmellFinding> m_openFindingAction;
     private readonly Func<CodeSmellFinding, Task<bool>> m_commentFindingAction;
     private readonly Func<CodeSmellFinding, string> m_resolveFindingPath;
+    private readonly Func<string, Task<IReadOnlyList<CodeSmellFinding>>> m_resampleFileFindingsAction;
     private readonly ICodeReviewFindingFixer m_findingFixer;
-    private readonly ReviewResultRow[] m_rows;
+    private readonly List<ReviewResultRow> m_rows;
+    private readonly bool m_canOpenInVsCode;
+    private readonly bool m_canCommentInBitbucket;
+    private readonly bool m_canFixLocally;
+    private readonly bool m_hasPathResolver;
     private bool m_isBulkCommenting;
 
     public ReviewResultsWindow()
-        : this(Array.Empty<CodeSmellFinding>(), false, false, false, null, null, null, null)
+        : this(Array.Empty<CodeSmellFinding>(), false, false, false, null, null, null, null, null)
     {
     }
 
     public ReviewResultsWindow(IEnumerable<CodeSmellFinding> findings)
-        : this(findings, false, false, false, null, null, null, null)
+        : this(findings, false, false, false, null, null, null, null, null)
     {
     }
 
@@ -54,11 +59,17 @@ public partial class ReviewResultsWindow : Window
         ICodeReviewFindingFixer findingFixer,
         Action<CodeSmellFinding> openFindingAction,
         Func<CodeSmellFinding, Task<bool>> commentFindingAction,
-        Func<CodeSmellFinding, string> resolveFindingPath)
+        Func<CodeSmellFinding, string> resolveFindingPath,
+        Func<string, Task<IReadOnlyList<CodeSmellFinding>>> resampleFileFindingsAction)
     {
+        m_canOpenInVsCode = canOpenInVsCode;
+        m_canCommentInBitbucket = canCommentInBitbucket;
+        m_canFixLocally = canFixLocally;
+        m_hasPathResolver = resolveFindingPath != null;
         m_openFindingAction = openFindingAction;
         m_commentFindingAction = commentFindingAction;
         m_resolveFindingPath = resolveFindingPath;
+        m_resampleFileFindingsAction = resampleFileFindingsAction;
         m_findingFixer = findingFixer;
         InitializeComponent();
         ResultsListBox.SelectionChanged += ResultsListBox_OnSelectionChanged;
@@ -72,20 +83,18 @@ public partial class ReviewResultsWindow : Window
             .ThenBy(finding => finding.FilePath, StringComparer.OrdinalIgnoreCase)
             .ThenBy(finding => finding.LineNumber)
             .Select(finding => MapToRow(finding, canOpenInVsCode, canCommentInBitbucket, canFixLocally, resolveFindingPath != null, findingFixer))
-            .ToArray();
+            .ToList();
 
         foreach (var row in m_rows)
             row.PropertyChanged += ReviewResultRow_OnPropertyChanged;
 
-        ResultsListBox.ItemsSource = m_rows;
-        if (m_rows.Length > 0)
+        ResultsListBox.ItemsSource = m_rows.ToArray();
+        if (m_rows.Count > 0)
             ResultsListBox.SelectedIndex = 0;
         else
             SetPreviewText("Select an issue to preview surrounding file content.", "Preview");
 
-        SummaryTextBlock.Text = m_rows.Length == 0
-            ? "No review findings"
-            : $"{m_rows.Length} finding(s)";
+        UpdateSummaryText();
         UpdateBatchActionButtonStates();
         UpdateOpenSelectedButtonState();
     }
@@ -112,7 +121,7 @@ public partial class ReviewResultsWindow : Window
         }
     }
 
-    private void FixFindingButton_OnClick(object sender, RoutedEventArgs e)
+    private async void FixFindingButton_OnClick(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { DataContext: ReviewResultRow row } || !row.CanFixActive)
             return;
@@ -142,15 +151,22 @@ public partial class ReviewResultsWindow : Window
                 return;
             }
 
-            row.HasBeenFixed = true;
-            row.IsIncluded = false;
             SetPreviewText(fixMessage ?? "Fixed.", "Preview");
 
-            if (ResultsListBox.SelectedItem is ReviewResultRow selectedRow &&
-                ReferenceEquals(selectedRow, row) &&
-                row.Finding != null)
+            if (!string.IsNullOrWhiteSpace(row.Finding?.FilePath) && m_resampleFileFindingsAction != null)
             {
-                UpdatePreviewForFinding(row.Finding);
+                await RefreshFindingsForFileAsync(row.Finding.FilePath, row.Finding.LineNumber);
+            }
+            else
+            {
+                row.HasBeenFixed = true;
+                row.IsIncluded = false;
+                if (ResultsListBox.SelectedItem is ReviewResultRow selectedRow &&
+                    ReferenceEquals(selectedRow, row) &&
+                    row.Finding != null)
+                {
+                    UpdatePreviewForFinding(row.Finding);
+                }
             }
         }
         catch (Exception exception)
@@ -165,11 +181,11 @@ public partial class ReviewResultsWindow : Window
 
     private void ToggleAllButton_OnClick(object sender, RoutedEventArgs e)
     {
-        if (m_rows.Length == 0)
+        if (m_rows.Count == 0)
             return;
 
         var includedCount = m_rows.Count(row => row.IsIncluded);
-        var excludedCount = m_rows.Length - includedCount;
+        var excludedCount = m_rows.Count - includedCount;
         var nextIncludedState = includedCount <= excludedCount;
 
         foreach (var row in m_rows)
@@ -290,6 +306,15 @@ public partial class ReviewResultsWindow : Window
         m_openFindingAction?.Invoke(row.Finding);
     }
 
+    private ReviewResultRow MapToRow(CodeSmellFinding finding) =>
+        MapToRow(
+            finding,
+            m_canOpenInVsCode,
+            m_canCommentInBitbucket,
+            m_canFixLocally,
+            m_hasPathResolver,
+            m_findingFixer);
+
     private static ReviewResultRow MapToRow(
         CodeSmellFinding finding,
         bool canOpenInVsCode,
@@ -341,6 +366,65 @@ public partial class ReviewResultsWindow : Window
             UpdateOpenSelectedButtonState();
             UpdateBatchActionButtonStates();
         }
+    }
+
+    private async Task RefreshFindingsForFileAsync(string filePath, int preferredLineNumber)
+    {
+        if (m_resampleFileFindingsAction == null || string.IsNullOrWhiteSpace(filePath))
+            return;
+
+        IReadOnlyList<CodeSmellFinding> refreshedFindings;
+        try
+        {
+            refreshedFindings = await m_resampleFileFindingsAction(filePath) ?? [];
+        }
+        catch (Exception exception)
+        {
+            SetPreviewText($"Fixed, but failed to refresh findings: {exception.Message}", "Preview");
+            return;
+        }
+
+        var rowsToRemove = m_rows
+            .Where(row => AreSameRepoPath(row.Finding?.FilePath, filePath))
+            .ToArray();
+        foreach (var row in rowsToRemove)
+        {
+            row.PropertyChanged -= ReviewResultRow_OnPropertyChanged;
+            m_rows.Remove(row);
+        }
+
+        var refreshedRows = refreshedFindings
+            .Where(finding => finding != null)
+            .Where(finding => finding.Severity != CodeReviewFindingSeverity.Ok)
+            .Where(finding => AreSameRepoPath(finding.FilePath, filePath))
+            .Select(MapToRow)
+            .ToArray();
+        foreach (var row in refreshedRows)
+        {
+            row.PropertyChanged += ReviewResultRow_OnPropertyChanged;
+            m_rows.Add(row);
+        }
+
+        m_rows.Sort(CompareRows);
+        ResultsListBox.ItemsSource = m_rows.ToArray();
+        UpdateSummaryText();
+        UpdateBatchActionButtonStates();
+        UpdateOpenSelectedButtonState();
+
+        if (m_rows.Count == 0)
+        {
+            SetPreviewText("No review findings.", "Preview");
+            return;
+        }
+
+        var nextRow = m_rows
+            .Where(row => AreSameRepoPath(row.Finding?.FilePath, filePath))
+            .OrderBy(row => Math.Abs((row.Finding?.LineNumber ?? 0) - preferredLineNumber))
+            .ThenBy(row => row.Finding?.LineNumber ?? int.MaxValue)
+            .FirstOrDefault() ?? m_rows[0];
+        ResultsListBox.SelectedItem = nextRow;
+        if (nextRow.Finding != null)
+            UpdatePreviewForFinding(nextRow.Finding);
     }
 
     private void UpdatePreviewForFinding(CodeSmellFinding finding)
@@ -403,11 +487,18 @@ public partial class ReviewResultsWindow : Window
 
     private void UpdateBatchActionButtonStates()
     {
-        ToggleAllButton.IsEnabled = m_rows.Length > 0;
-        ExportToClipboardButton.IsEnabled = m_rows.Length > 0;
+        ToggleAllButton.IsEnabled = m_rows.Count > 0;
+        ExportToClipboardButton.IsEnabled = m_rows.Count > 0;
         CommentSelectedButton.IsEnabled = !m_isBulkCommenting &&
                                           m_commentFindingAction != null &&
                                           m_rows.Any(row => row.IsIncluded && row.CanCommentActive);
+    }
+
+    private void UpdateSummaryText()
+    {
+        SummaryTextBlock.Text = m_rows.Count == 0
+            ? "No review findings"
+            : $"{m_rows.Count} finding(s)";
     }
 
     private void UpdateOpenSelectedButtonState()
@@ -423,7 +514,7 @@ public partial class ReviewResultsWindow : Window
         var rowsToExport = m_rows.Where(row => row.IsIncluded).ToArray();
         exportedIncludedOnly = rowsToExport.Length > 0;
         if (!exportedIncludedOnly)
-            rowsToExport = m_rows;
+            rowsToExport = m_rows.ToArray();
 
         exportedCount = rowsToExport.Length;
         if (exportedCount == 0)
@@ -473,6 +564,44 @@ public partial class ReviewResultsWindow : Window
             CodeReviewFindingSeverity.Ok => 3,
             _ => 4
         };
+
+    private static int CompareRows(ReviewResultRow left, ReviewResultRow right)
+    {
+        if (ReferenceEquals(left, right))
+            return 0;
+        if (left == null)
+            return 1;
+        if (right == null)
+            return -1;
+
+        var leftFinding = left.Finding;
+        var rightFinding = right.Finding;
+        var severityCompare = GetSeveritySortOrder(leftFinding?.Severity ?? CodeReviewFindingSeverity.Ok)
+            .CompareTo(GetSeveritySortOrder(rightFinding?.Severity ?? CodeReviewFindingSeverity.Ok));
+        if (severityCompare != 0)
+            return severityCompare;
+
+        var ruleCompare = string.Compare(leftFinding?.RuleId, rightFinding?.RuleId, StringComparison.OrdinalIgnoreCase);
+        if (ruleCompare != 0)
+            return ruleCompare;
+
+        var fileCompare = string.Compare(leftFinding?.FilePath, rightFinding?.FilePath, StringComparison.OrdinalIgnoreCase);
+        if (fileCompare != 0)
+            return fileCompare;
+
+        return (leftFinding?.LineNumber ?? int.MaxValue).CompareTo(rightFinding?.LineNumber ?? int.MaxValue);
+    }
+
+    private static bool AreSameRepoPath(string leftPath, string rightPath)
+    {
+        if (string.IsNullOrWhiteSpace(leftPath) || string.IsNullOrWhiteSpace(rightPath))
+            return false;
+
+        return string.Equals(NormalizeRepoPath(leftPath), NormalizeRepoPath(rightPath), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeRepoPath(string path) =>
+        (path ?? string.Empty).Replace('\\', '/').Trim();
 
     private sealed class ReviewResultRow : INotifyPropertyChanged
     {

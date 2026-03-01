@@ -372,7 +372,8 @@ public partial class MainWindow : Window
             findingFixer,
             OpenReviewFindingInVsCode,
             CommentOnReviewFindingAsync,
-            ResolveReviewFindingPath);
+            ResolveReviewFindingPath,
+            ResampleLocalFindingsForFileAsync);
         await resultsWindow.ShowDialog(this);
     }
 
@@ -407,6 +408,51 @@ public partial class MainWindow : Window
 
         return TryResolveLogPath(finding.FilePath, out var resolvedPath) ? resolvedPath : null;
     }
+
+    private async Task<IReadOnlyList<CodeSmellFinding>> ResampleLocalFindingsForFileAsync(string filePath)
+    {
+        if (!IsLocalCommittedReviewMode() || string.IsNullOrWhiteSpace(filePath))
+            return [];
+
+        var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
+        var baseBranch = LocalBaseBranchTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(localRepositoryPath) ||
+            string.IsNullOrWhiteSpace(baseBranch) ||
+            !Directory.Exists(localRepositoryPath))
+        {
+            return [];
+        }
+
+        var changedFileSource = new GitBranchComparisonChangedFileSource(
+            m_gitCommandRunner,
+            localRepositoryPath,
+            baseBranch,
+            fetchTargetBranch: false);
+        var sourceResult = await changedFileSource.LoadAsync();
+        var changedFiles = sourceResult?.Files ?? [];
+        var targetFile = changedFiles
+            .FirstOrDefault(file => AreSameRepoPath(file?.Path, filePath));
+        if (targetFile == null)
+            return [];
+
+        var report = m_codeSmellReportAnalyzer.AnalyzeFiles([targetFile]);
+        return report.Findings
+            .Where(finding => finding != null)
+            .Where(finding => AreSameRepoPath(finding.FilePath, filePath))
+            .OrderBy(finding => finding.LineNumber)
+            .ToArray();
+    }
+
+    private static bool AreSameRepoPath(string leftPath, string rightPath)
+    {
+        if (string.IsNullOrWhiteSpace(leftPath) || string.IsNullOrWhiteSpace(rightPath))
+            return false;
+
+        return string.Equals(NormalizeRepoPath(leftPath), NormalizeRepoPath(rightPath), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeRepoPath(string path) =>
+        (path ?? string.Empty).Replace('\\', '/').Trim();
 
     private async Task<bool> CommentOnReviewFindingAsync(CodeSmellFinding finding)
     {

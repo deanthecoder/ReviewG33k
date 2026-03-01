@@ -30,6 +30,7 @@ public static class CodeReviewRuleIds
     public const string MethodParameterCount = "method-parameter-count";
     public const string GenericTypeNameSuffix = "generic-type-name-suffix";
     public const string IfElseBraceConsistency = "if-else-brace-consistency";
+    public const string IfElseUnnecessaryBraces = "if-else-unnecessary-braces";
     public const string ConstructorTooLong = "constructor-too-long";
     public const string ThreadSleep = "thread-sleep";
     public const string ThrowExInCatch = "throw-ex-in-catch";

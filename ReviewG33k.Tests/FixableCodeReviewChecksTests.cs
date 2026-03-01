@@ -1,4 +1,6 @@
 using DTC.Core;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
 
@@ -84,6 +86,141 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(updated, Does.Not.Contain("throw ex;"));
         Assert.That(updated, Does.Contain("throw;"));
         Assert.That(updated, Does.Not.Contain("\n\n\n"));
+    }
+
+    [Test]
+    public void IfElseBraceConsistencyCheckTryFixRemovesUnnecessaryBraceWhenSafe()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                public int Run(bool flag)
+                {
+                    if (flag)
+                    {
+                        return 1;
+                    }
+                    else
+                        return 0;
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Suggestion,
+            CodeReviewRuleIds.IfElseBraceConsistency,
+            "Sample.cs",
+            5,
+            "If/else branches should both use braces when either branch uses braces.");
+
+        var check = new IfElseBraceConsistencyCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile.FullName, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Is.Not.Empty);
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Not.Contain("\n\n\n"));
+
+        var root = CSharpSyntaxTree.ParseText(updated).GetCompilationUnitRoot();
+        var ifStatement = root.DescendantNodes().OfType<IfStatementSyntax>().Single();
+        Assert.That(ifStatement.Statement, Is.Not.TypeOf<BlockSyntax>());
+        Assert.That(ifStatement.Else.Statement, Is.Not.TypeOf<BlockSyntax>());
+    }
+
+    [Test]
+    public void IfElseBraceConsistencyCheckTryFixAddsMissingBracesWhenRemovalIsUnsafe()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                public int Run(bool flag)
+                {
+                    if (flag)
+                    {
+                        var x = 1;
+                        return x;
+                    }
+                    else
+                        return 0;
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Suggestion,
+            CodeReviewRuleIds.IfElseBraceConsistency,
+            "Sample.cs",
+            5,
+            "If/else branches should both use braces when either branch uses braces.");
+
+        var check = new IfElseBraceConsistencyCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile.FullName, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Is.Not.Empty);
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Not.Contain("\n\n\n"));
+        var normalized = updated.Replace("\r\n", "\n");
+        Assert.That(normalized, Does.Not.Contain("else\n\n{"));
+        Assert.That(normalized, Does.Match(@"else\s*\n\s*\{\s*\n\s*return 0;\s*\n\s*\}"));
+
+        var root = CSharpSyntaxTree.ParseText(updated).GetCompilationUnitRoot();
+        var ifStatement = root.DescendantNodes().OfType<IfStatementSyntax>().Single();
+        Assert.That(ifStatement.Statement, Is.TypeOf<BlockSyntax>());
+        Assert.That(ifStatement.Else.Statement, Is.TypeOf<BlockSyntax>());
+    }
+
+    [Test]
+    public void IfElseUnnecessaryBracesCheckTryFixRemovesBracesFromBothBranches()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                public int Run(bool flag)
+                {
+                    if (flag)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.IfElseUnnecessaryBraces,
+            "Sample.cs",
+            5,
+            "If/else braces are unnecessary when each branch contains a single simple statement.");
+
+        var check = new IfElseUnnecessaryBracesCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile.FullName, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Is.Not.Empty);
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Not.Contain("\n\n\n"));
+
+        var root = CSharpSyntaxTree.ParseText(updated).GetCompilationUnitRoot();
+        var ifStatement = root.DescendantNodes().OfType<IfStatementSyntax>().Single();
+        Assert.That(ifStatement.Statement, Is.Not.TypeOf<BlockSyntax>());
+        Assert.That(ifStatement.Else.Statement, Is.Not.TypeOf<BlockSyntax>());
     }
 
     [Test]
