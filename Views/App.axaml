@@ -5,19 +5,34 @@
              x:Class="ReviewG33k.Views.App"
              RequestedThemeVariant="Dark">
   <Application.Resources>
-    <SolidColorBrush x:Key="AppGradientStartBrush">#FF0D1521</SolidColorBrush>
-    <SolidColorBrush x:Key="AppGradientEndBrush">#FF141B2A</SolidColorBrush>
-    <LinearGradientBrush x:Key="AppGradientBrush" StartPoint="0,0" EndPoint="1,1">
-      <GradientStop Offset="0" Color="#FF0D1521" />
-      <GradientStop Offset="1" Color="#FF141B2A" />
-    </LinearGradientBrush>
+    <Color x:Key="Bg0">#070A10</Color>
+    <Color x:Key="Bg1">#0B1020</Color>
+    <Color x:Key="Bg2">#0F1730</Color>
+    <Color x:Key="Text0">#E8F0FF</Color>
+    <Color x:Key="Text1">#9FB0D0</Color>
 
-    <SolidColorBrush x:Key="ZonePrimaryBrush">#CC1B2636</SolidColorBrush>
-    <SolidColorBrush x:Key="ZoneSecondaryBrush">#CC1A2432</SolidColorBrush>
-    <SolidColorBrush x:Key="ZoneTertiaryBrush">#CC19202D</SolidColorBrush>
-    <SolidColorBrush x:Key="ZoneBorderBrush">#FF364A64</SolidColorBrush>
-    <SolidColorBrush x:Key="AccentBrush">#FF4F8FD8</SolidColorBrush>
-    <SolidColorBrush x:Key="AccentHoverBrush">#FF5A9BE5</SolidColorBrush>
+    <Color x:Key="NeonCyan">#00E5FF</Color>
+    <Color x:Key="NeonMagenta">#FF3DF2</Color>
+    <Color x:Key="NeonAmber">#FFD166</Color>
+    <Color x:Key="NeonRed">#FF4D6D</Color>
+
+    <SolidColorBrush x:Key="BrushBg0" Color="{StaticResource Bg0}" />
+    <SolidColorBrush x:Key="BrushBg1" Color="{StaticResource Bg1}" />
+    <SolidColorBrush x:Key="BrushBg2" Color="{StaticResource Bg2}" />
+    <SolidColorBrush x:Key="BrushText0" Color="{StaticResource Text0}" />
+    <SolidColorBrush x:Key="BrushText1" Color="{StaticResource Text1}" />
+
+    <SolidColorBrush x:Key="BrushNeonCyan" Color="{StaticResource NeonCyan}" />
+    <SolidColorBrush x:Key="BrushNeonMagenta" Color="{StaticResource NeonMagenta}" />
+    <SolidColorBrush x:Key="BrushNeonAmber" Color="{StaticResource NeonAmber}" />
+    <SolidColorBrush x:Key="BrushNeonRed" Color="{StaticResource NeonRed}" />
+
+    <SolidColorBrush x:Key="ZonePrimaryBrush" Color="{StaticResource Bg1}" />
+    <SolidColorBrush x:Key="ZoneSecondaryBrush" Color="{StaticResource Bg1}" />
+    <SolidColorBrush x:Key="ZoneTertiaryBrush" Color="{StaticResource Bg1}" />
+    <SolidColorBrush x:Key="ZoneBorderBrush" Color="#2A3A60" />
+    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource NeonCyan}" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#5EF0FF" />
   </Application.Resources>
 
   <Application.Styles>
@@ -26,44 +41,116 @@
     <dialogHostAvalonia:DialogHostStyles />
 
     <Style Selector="Window">
-      <Setter Property="Background" Value="{DynamicResource AppGradientBrush}" />
+      <Setter Property="Background" Value="{StaticResource BrushBg0}" />
+    </Style>
+
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource BrushText0}" />
     </Style>
 
     <Style Selector="Border.zone">
+      <Setter Property="Background" Value="{StaticResource BrushBg1}" />
       <Setter Property="CornerRadius" Value="12" />
       <Setter Property="Padding" Value="14" />
-      <Setter Property="BorderBrush" Value="{DynamicResource ZoneBorderBrush}" />
+      <Setter Property="BorderBrush" Value="#2A3A60" />
       <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BoxShadow" Value="0 0 10 0 #6600E5FF, 0 0 28 2 #2200E5FF" />
+    </Style>
+
+    <Style Selector="Border.neonFrame">
+      <Setter Property="Background" Value="{StaticResource BrushBg1}" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="#2A3A60" />
+      <Setter Property="BoxShadow" Value="0 0 10 0 #6600E5FF, 0 0 28 2 #2200E5FF" />
+    </Style>
+
+    <Style Selector="Border.neonHero">
+      <Setter Property="Background" Value="{StaticResource BrushBg1}" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="#40FF3DF2" />
+      <Setter Property="BoxShadow" Value="0 0 12 0 #66FF3DF2, 0 0 34 2 #22FF3DF2" />
+    </Style>
+
+    <Style Selector="ListBoxItem">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+
+    <Style Selector="ListBoxItem:selected">
+      <Setter Property="Background">
+        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+          <GradientStop Color="#2200E5FF" Offset="0" />
+          <GradientStop Color="#1200E5FF" Offset="1" />
+        </LinearGradientBrush>
+      </Setter>
+      <Setter Property="BorderBrush" Value="{StaticResource BrushNeonCyan}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style Selector="Border.sevPill">
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="10,3" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Background" Value="#101728" />
+      <Setter Property="BorderBrush" Value="#2A3A60" />
+    </Style>
+
+    <Style Selector="Border.sevImportant">
+      <Setter Property="BorderBrush" Value="{StaticResource BrushNeonRed}" />
+      <Setter Property="BoxShadow" Value="0 0 14 0 #55FF4D6D" />
+    </Style>
+
+    <Style Selector="Border.sevSuggestion">
+      <Setter Property="BorderBrush" Value="{StaticResource BrushNeonAmber}" />
+      <Setter Property="BoxShadow" Value="0 0 12 0 #44FFD166" />
     </Style>
 
     <Style Selector="Button">
       <Setter Property="MinHeight" Value="34" />
-      <Setter Property="Background" Value="#FF2A3A4F" />
-      <Setter Property="BorderBrush" Value="#FF4B627E" />
+      <Setter Property="Foreground" Value="{StaticResource BrushText0}" />
+      <Setter Property="Background" Value="#0E1A2B" />
+      <Setter Property="BorderBrush" Value="#2A3A60" />
       <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
 
     <Style Selector="Button:pointerover">
-      <Setter Property="Background" Value="#FF314661" />
+      <Setter Property="BorderBrush" Value="{StaticResource BrushNeonCyan}" />
+      <Setter Property="Background" Value="#13243A" />
     </Style>
 
     <Style Selector="Button.accent">
-      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="{StaticResource BrushNeonCyan}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BrushNeonCyan}" />
+      <Setter Property="Foreground" Value="#081018" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
     <Style Selector="Button.accent:pointerover">
-      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
+      <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource AccentHoverBrush}" />
+    </Style>
+
+    <Style Selector="Button.neon">
+      <Setter Property="Padding" Value="14,8" />
+      <Setter Property="Background" Value="#0E1A2B" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="#2A3A60" />
+    </Style>
+
+    <Style Selector="Button.neon:pointerover">
+      <Setter Property="BorderBrush" Value="{StaticResource BrushNeonCyan}" />
+      <Setter Property="Background" Value="#13243A" />
     </Style>
 
     <Style Selector="TextBox">
-      <Setter Property="Background" Value="#FF111A28" />
-      <Setter Property="BorderBrush" Value="#FF405774" />
+      <Setter Property="Foreground" Value="{StaticResource BrushText0}" />
+      <Setter Property="Background" Value="{StaticResource BrushBg2}" />
+      <Setter Property="BorderBrush" Value="#2A3A60" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="Padding" Value="10,8" />
     </Style>

@@ -24,10 +24,10 @@ public sealed class ReviewResultRow : INotifyPropertyChanged
         Enabled
     }
 
-    private static readonly IBrush IncludedIssueBrush = Brushes.Gainsboro;
-    private static readonly IBrush ExcludedIssueBrush = Brushes.Gray;
-    private static readonly IBrush IncludedLocationBrush = Brushes.Gray;
-    private static readonly IBrush ExcludedLocationBrush = new SolidColorBrush(Color.Parse("#6B6B6B"));
+    private static readonly IBrush IncludedIssueBrush = new SolidColorBrush(Color.Parse("#E8F0FF"));
+    private static readonly IBrush ExcludedIssueBrush = new SolidColorBrush(Color.Parse("#6F7D9A"));
+    private static readonly IBrush IncludedLocationBrush = new SolidColorBrush(Color.Parse("#9FB0D0"));
+    private static readonly IBrush ExcludedLocationBrush = new SolidColorBrush(Color.Parse("#5D6A84"));
 
     private readonly ActionAvailability m_commentAvailability;
     private readonly ActionAvailability m_fixAvailability;
@@ -77,6 +77,10 @@ public sealed class ReviewResultRow : INotifyPropertyChanged
     public string IssueFull { get; }
 
     public string IssueLocation { get; }
+
+    public bool IsImportantSeverity => Finding?.Severity == CodeReviewFindingSeverity.Important;
+
+    public bool IsSuggestionSeverity => Finding?.Severity == CodeReviewFindingSeverity.Suggestion;
 
     public bool CanOpen { get; }
 
