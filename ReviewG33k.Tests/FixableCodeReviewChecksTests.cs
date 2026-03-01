@@ -373,6 +373,64 @@ public sealed class FixableCodeReviewChecksTests
     }
 
     [Test]
+    public void UnusedPrivateMemberCheckCanFixWhenFindingTargetsPrivateMethod()
+    {
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.UnusedPrivateMember,
+            "Sample.cs",
+            10,
+            "Private method `RunMachineForDuration` appears to be unused.");
+
+        var check = new UnusedPrivateMemberCodeReviewCheck();
+
+        Assert.That(check.CanFix(finding), Is.True);
+    }
+
+    [Test]
+    public void UnusedPrivateMemberCheckTryFixRemovesPrivateMethod()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                public int Run()
+                {
+                    return 42;
+                }
+
+                private void RunMachineForDuration()
+                {
+                    var x = 1;
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.UnusedPrivateMember,
+            "Sample.cs",
+            8,
+            "Private method `RunMachineForDuration` appears to be unused.");
+
+        var check = new UnusedPrivateMemberCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile.FullName, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Does.Contain("RunMachineForDuration"));
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Not.Contain("RunMachineForDuration"));
+        Assert.That(updated, Does.Contain("public int Run()"));
+        Assert.That(updated, Does.Not.Contain("\n\n\n"));
+
+        var root = CSharpSyntaxTree.ParseText(updated).GetCompilationUnitRoot();
+        Assert.That(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Any(method => method.Identifier.ValueText == "RunMachineForDuration"), Is.False);
+    }
+
+    [Test]
     public void UnnecessaryVerbatimStringPrefixCheckTryFixRemovesPrefixFromLiteral()
     {
         using var tempFile = new TempFile(".cs");

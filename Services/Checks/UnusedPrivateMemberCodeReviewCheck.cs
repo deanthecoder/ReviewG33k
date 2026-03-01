@@ -8,18 +8,64 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
+using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
 
-public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeReviewCheckBase
+public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeReviewCheckBase, IFixableCodeReviewCheck
 {
+    private const string PrivateMethodPrefix = "Private method `";
+
     public override string RuleId => CodeReviewRuleIds.UnusedPrivateMember;
 
     public override string DisplayName => "Unused private members";
+
+    public bool CanFix(CodeSmellFinding finding) =>
+        finding != null &&
+        finding.LineNumber > 0 &&
+        string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase) &&
+        IsPrivateMethodFindingMessage(finding.Message);
+
+    public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
+    {
+        if (!this.TryPrepareFix(
+                finding,
+                resolvedFilePath,
+                out var sourceText,
+                out var lineIndex,
+                out resultMessage))
+        {
+            return false;
+        }
+
+        var tree = CSharpSyntaxTree.ParseText(sourceText);
+        var root = tree.GetCompilationUnitRoot();
+        var targetMethod = FindPrivateMethodForLine(root, sourceText, lineIndex);
+        if (targetMethod == null)
+        {
+            resultMessage = "Could not find a private method at the selected line.";
+            return false;
+        }
+
+        var methodName = targetMethod.Identifier.ValueText;
+        var spanToRemove = targetMethod.FullSpan;
+        var updatedText = sourceText.WithChanges(new TextChange(spanToRemove, string.Empty)).ToString();
+        updatedText = CodeReviewFixTextUtilities.CollapseConsecutiveBlankLinesNearLine(updatedText, lineIndex);
+
+        if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
+            return false;
+
+        resultMessage = string.IsNullOrWhiteSpace(methodName)
+            ? "Removed unused private method."
+            : $"Removed unused private method `{methodName}`.";
+        return true;
+    }
 
     protected override void AnalyzeFile(
         CodeReviewAnalysisContext context,
@@ -49,8 +95,7 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
                 if (!RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, variable.Span))
                     continue;
 
-                var symbol = semanticModel.GetDeclaredSymbol(variable) as IFieldSymbol;
-                if (symbol == null || symbol.IsImplicitlyDeclared)
+                if (semanticModel.GetDeclaredSymbol(variable) is not IFieldSymbol symbol || symbol.IsImplicitlyDeclared)
                     continue;
                 if (HasAnyReference(root, semanticModel, symbol))
                     continue;
@@ -74,8 +119,7 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
             if (IsInPartialType(method))
                 continue;
 
-            var symbol = semanticModel.GetDeclaredSymbol(method) as IMethodSymbol;
-            if (symbol == null || symbol.IsImplicitlyDeclared)
+            if (semanticModel.GetDeclaredSymbol(method) is not { } symbol || symbol.IsImplicitlyDeclared)
                 continue;
             if (symbol.DeclaredAccessibility != Accessibility.Private)
                 continue;
@@ -102,8 +146,7 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
             if (IsInPartialType(property))
                 continue;
 
-            var symbol = semanticModel.GetDeclaredSymbol(property) as IPropertySymbol;
-            if (symbol == null || symbol.IsImplicitlyDeclared)
+            if (semanticModel.GetDeclaredSymbol(property) is not { } symbol || symbol.IsImplicitlyDeclared)
                 continue;
             if (symbol.DeclaredAccessibility != Accessibility.Private)
                 continue;
@@ -145,4 +188,28 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
         return typeDeclaration?.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PartialKeyword)) == true;
     }
 
+    private static MethodDeclarationSyntax FindPrivateMethodForLine(
+        CompilationUnitSyntax root,
+        SourceText sourceText,
+        int lineIndex)
+    {
+        if (root == null || sourceText == null || lineIndex < 0 || lineIndex >= sourceText.Lines.Count)
+            return null;
+
+        var lineSpan = sourceText.Lines[lineIndex].Span;
+        var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
+        var byStartLine = methods.FirstOrDefault(method =>
+            method.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PrivateKeyword)) &&
+            method.GetLocation().GetLineSpan().StartLinePosition.Line == lineIndex);
+        if (byStartLine != null)
+            return byStartLine;
+
+        return methods.FirstOrDefault(method =>
+            method.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PrivateKeyword)) &&
+            method.Span.IntersectsWith(lineSpan));
+    }
+
+    private static bool IsPrivateMethodFindingMessage(string message) =>
+        !string.IsNullOrWhiteSpace(message) &&
+        message.StartsWith(PrivateMethodPrefix, StringComparison.Ordinal);
 }
