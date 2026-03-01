@@ -409,6 +409,32 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void IfElseUnnecessaryBracesCheckWhenIfBranchHasBracesAndElseIfChainHasNoBracesReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Run(bool a, bool b)
+                {
+                    if (a)
+                    {
+                        return 1;
+                    }
+                    else if (b)
+                        return 2;
+                    else
+                        return 3;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new IfElseUnnecessaryBracesCodeReviewCheck(), "A", source, Enumerable.Range(1, 15));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+    }
+
+    [Test]
     public void ConstructorTooLongCheckWhenConstructorHasFifteenCodeLinesReportsSuggestion()
     {
         const string source = """

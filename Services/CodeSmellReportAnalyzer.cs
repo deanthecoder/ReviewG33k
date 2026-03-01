@@ -72,8 +72,10 @@ public sealed class CodeSmellReportAnalyzer
 
     public CodeSmellReport AnalyzeFiles(IReadOnlyList<CodeReviewChangedFile> changedFiles)
     {
+        ArgumentNullException.ThrowIfNull(changedFiles);
+
         var report = new CodeSmellReport();
-        var files = changedFiles?.Where(file => file != null).ToArray() ?? [];
+        var files = changedFiles.Where(file => file != null).ToArray();
         if (files.Length == 0)
             return report;
 

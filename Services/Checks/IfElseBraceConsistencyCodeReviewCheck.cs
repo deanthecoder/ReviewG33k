@@ -31,6 +31,13 @@ public sealed class IfElseBraceConsistencyCodeReviewCheck : CodeReviewCheckBase,
 
     public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
     {
+        ArgumentNullException.ThrowIfNull(finding);
+        if (string.IsNullOrWhiteSpace(resolvedFilePath))
+        {
+            resultMessage = "A valid file path is required.";
+            return false;
+        }
+
         if (!this.TryPrepareFix(
                 finding,
                 resolvedFilePath,
@@ -107,6 +114,9 @@ public sealed class IfElseBraceConsistencyCodeReviewCheck : CodeReviewCheckBase,
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(report);
+
         foreach (var file in context.Files)
         {
             var root = RoslynCodeReviewCheckUtilities.ParseRoot(file);
@@ -166,9 +176,7 @@ public sealed class IfElseBraceConsistencyCodeReviewCheck : CodeReviewCheckBase,
     private static StatementSyntax UnwrapBlock(BlockSyntax block)
     {
         var statement = block.Statements.Single();
-        var mergedLeading = block.GetLeadingTrivia().Concat(statement.GetLeadingTrivia());
-        var mergedTrailing = statement.GetTrailingTrivia().Concat(block.GetTrailingTrivia());
-        return statement.WithLeadingTrivia(mergedLeading).WithTrailingTrivia(mergedTrailing);
+        return statement;
     }
 
     private static bool CanUseWithoutBraces(StatementSyntax statement) =>

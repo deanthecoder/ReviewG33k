@@ -81,7 +81,12 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
-        var allChangedFileEntries = ParseNameStatusOutput(nameStatusResult.StandardOutput).ToArray();
+        var baseDiffEntries = ParseNameStatusOutput(nameStatusResult.StandardOutput).ToArray();
+        var workingTreeEntries = await LoadWorkingTreeChangedFileEntriesAsync();
+        var allChangedFileEntries = MergeChangedFileEntries(baseDiffEntries, workingTreeEntries).ToArray();
+        var baseDiffPaths = new HashSet<string>(
+            baseDiffEntries.Select(entry => NormalizeRepoPath(entry.Path)),
+            StringComparer.OrdinalIgnoreCase);
         if (allChangedFileEntries.Length == 0)
         {
             info.Add($"Code review scan: No differences between HEAD and {baseRef}.");
@@ -107,7 +112,13 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
 
             var text = await File.ReadAllTextAsync(fullPath);
             var lines = SplitLines(text);
-            var addedLineNumbers = await GetAddedLineNumbersAsync(diffRange, entry.Path);
+            HashSet<int> addedLineNumbers;
+            if (baseDiffPaths.Contains(NormalizeRepoPath(entry.Path)))
+                addedLineNumbers = await GetAddedLineNumbersAsync(diffRange, entry.Path);
+            else if (entry.Status.Equals("A", StringComparison.OrdinalIgnoreCase))
+                addedLineNumbers = new HashSet<int>(Enumerable.Range(1, lines.Count));
+            else
+                addedLineNumbers = await GetAddedLineNumbersAsync("HEAD", entry.Path);
 
             changedFiles.Add(new CodeReviewChangedFile(entry.Status, entry.Path, fullPath, text, lines, addedLineNumbers));
         }
@@ -214,6 +225,76 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
 
         return entries;
     }
+
+    private async Task<IReadOnlyList<(string Status, string Path)>> LoadWorkingTreeChangedFileEntriesAsync()
+    {
+        var entries = new List<(string Status, string Path)>();
+
+        var trackedChangesResult = await m_gitCommandRunner.RunAsync(
+            m_repositoryPath,
+            "diff",
+            "--name-status",
+            "--find-renames",
+            "HEAD");
+        if (trackedChangesResult.IsSuccess)
+            entries.AddRange(ParseNameStatusOutput(trackedChangesResult.StandardOutput));
+
+        var untrackedResult = await m_gitCommandRunner.RunAsync(
+            m_repositoryPath,
+            "ls-files",
+            "--others",
+            "--exclude-standard");
+        if (untrackedResult.IsSuccess)
+            entries.AddRange(ParseUntrackedOutput(untrackedResult.StandardOutput));
+
+        return entries;
+    }
+
+    private static IReadOnlyList<(string Status, string Path)> ParseUntrackedOutput(string output)
+    {
+        var entries = new List<(string Status, string Path)>();
+        if (string.IsNullOrWhiteSpace(output))
+            return entries;
+
+        foreach (var rawLine in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var path = rawLine.Trim();
+            if (!string.IsNullOrWhiteSpace(path))
+                entries.Add(("A", path));
+        }
+
+        return entries;
+    }
+
+    private static IReadOnlyList<(string Status, string Path)> MergeChangedFileEntries(
+        IReadOnlyList<(string Status, string Path)> baseEntries,
+        IReadOnlyList<(string Status, string Path)> additionalEntries)
+    {
+        var merged = new Dictionary<string, (string Status, string Path)>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in baseEntries ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(entry.Path))
+                continue;
+
+            merged[NormalizeRepoPath(entry.Path)] = entry;
+        }
+
+        foreach (var entry in additionalEntries ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(entry.Path))
+                continue;
+
+            var key = NormalizeRepoPath(entry.Path);
+            if (!merged.ContainsKey(key))
+                merged[key] = entry;
+        }
+
+        return merged.Values.ToArray();
+    }
+
+    private static string NormalizeRepoPath(string path) =>
+        (path ?? string.Empty).Replace('\\', '/').Trim();
 
     private static IReadOnlyList<string> SplitLines(string text) =>
         (text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');

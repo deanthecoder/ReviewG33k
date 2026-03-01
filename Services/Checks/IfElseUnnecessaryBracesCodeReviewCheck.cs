@@ -18,6 +18,9 @@ using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
 
+/// <summary>
+/// Finds and optionally fixes if/else pairs where braces are unnecessary for both branches.
+/// </summary>
 public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase, IFixableCodeReviewCheck
 {
     public override string RuleId => CodeReviewRuleIds.IfElseUnnecessaryBraces;
@@ -31,6 +34,13 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
 
     public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
     {
+        ArgumentNullException.ThrowIfNull(finding);
+        if (string.IsNullOrWhiteSpace(resolvedFilePath))
+        {
+            resultMessage = "A valid file path is required.";
+            return false;
+        }
+
         if (!this.TryPrepareFix(
                 finding,
                 resolvedFilePath,
@@ -47,15 +57,15 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
             .DescendantNodes()
             .OfType<IfStatementSyntax>()
             .FirstOrDefault(node => node.Span.IntersectsWith(lineSpan) && HasUnnecessaryBraces(node));
-        if (ifStatement?.Statement is not BlockSyntax ifBlock || ifStatement.Else?.Statement is not BlockSyntax elseBlock)
+        if (ifStatement?.Statement is not BlockSyntax ifBlock || !CanUnwrapBlock(ifBlock))
         {
             resultMessage = "Target line does not contain an if/else with unnecessary braces.";
             return false;
         }
 
-        var updatedIfStatement = ifStatement
-            .WithStatement(UnwrapBlock(ifBlock))
-            .WithElse(ifStatement.Else.WithStatement(UnwrapBlock(elseBlock)));
+        var updatedIfStatement = ifStatement.WithStatement(UnwrapBlock(ifBlock));
+        if (ifStatement.Else?.Statement is BlockSyntax elseBlock && CanUnwrapBlock(elseBlock))
+            updatedIfStatement = updatedIfStatement.WithElse(ifStatement.Else.WithStatement(UnwrapBlock(elseBlock)));
 
         var updatedRoot = root.ReplaceNode(ifStatement, updatedIfStatement);
         var updatedText = updatedRoot.ToFullString();
@@ -70,6 +80,9 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(report);
+
         foreach (var file in context.Files)
         {
             var root = RoslynCodeReviewCheckUtilities.ParseRoot(file);
@@ -94,23 +107,47 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
 
     private static bool HasUnnecessaryBraces(IfStatementSyntax ifStatement)
     {
-        if (ifStatement?.Else == null || RoslynCodeReviewCheckUtilities.IsElseIf(ifStatement))
+        if (ifStatement?.Else == null)
             return false;
-        if (ifStatement.Statement is not BlockSyntax ifBlock || ifStatement.Else.Statement is not BlockSyntax elseBlock)
+        if (ifStatement.Statement is not BlockSyntax ifBlock)
             return false;
-        if (!CanUnwrapBlock(ifBlock) || !CanUnwrapBlock(elseBlock))
+
+        if (ifStatement.Else.Statement is BlockSyntax elseBlock)
+            return CanUnwrapBlock(ifBlock) && CanUnwrapBlock(elseBlock);
+        if (RoslynCodeReviewCheckUtilities.IsElseIf(ifStatement))
+            return CanUnwrapBlock(ifBlock);
+
+        return false;
+    }
+
+    private static bool HasOnlyWhitespaceTrivia(SyntaxTriviaList trivia) =>
+        trivia.All(item => item.IsKind(SyntaxKind.WhitespaceTrivia) || item.IsKind(SyntaxKind.EndOfLineTrivia));
+
+    private static bool HasSafeBraceTrivia(BlockSyntax block)
+    {
+        if (!HasOnlyWhitespaceTrivia(block.OpenBraceToken.LeadingTrivia) ||
+            !HasOnlyWhitespaceTrivia(block.OpenBraceToken.TrailingTrivia) ||
+            !HasOnlyWhitespaceTrivia(block.CloseBraceToken.LeadingTrivia) ||
+            !HasOnlyWhitespaceTrivia(block.CloseBraceToken.TrailingTrivia))
+        {
             return false;
+        }
 
         return true;
     }
+
+    private static bool CanUseWithoutBraces(StatementSyntax statement) =>
+        statement is not LocalDeclarationStatementSyntax and not IfStatementSyntax;
 
     private static bool CanUnwrapBlock(BlockSyntax block)
     {
         if (block == null || block.Statements.Count != 1)
             return false;
+        if (!HasSafeBraceTrivia(block))
+            return false;
 
         var statement = block.Statements[0];
-        if (statement is LocalDeclarationStatementSyntax or IfStatementSyntax)
+        if (!CanUseWithoutBraces(statement))
             return false;
 
         return true;
@@ -119,8 +156,6 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
     private static StatementSyntax UnwrapBlock(BlockSyntax block)
     {
         var statement = block.Statements.Single();
-        var mergedLeading = block.GetLeadingTrivia().Concat(statement.GetLeadingTrivia());
-        var mergedTrailing = statement.GetTrailingTrivia().Concat(block.GetTrailingTrivia());
-        return statement.WithLeadingTrivia(mergedLeading).WithTrailingTrivia(mergedTrailing);
+        return statement;
     }
 }
