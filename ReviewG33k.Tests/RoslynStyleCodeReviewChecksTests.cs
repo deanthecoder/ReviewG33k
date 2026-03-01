@@ -908,6 +908,31 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void RedundantSelfLookupCheckWhenTypeCallsGetTypeWithThisReportsHint()
+    {
+        const string source = """
+            public class Owner
+            {
+                public static Owner GetOwner(Owner value) => value;
+            }
+
+            public sealed class Derived : Owner
+            {
+                public string Describe()
+                {
+                    return Owner.GetOwner(this).ToString();
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new RedundantSelfLookupCodeReviewCheck(), "A", source, Enumerable.Range(1, 12));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings[0].Message, Does.Contain("Owner.GetOwner(this)"));
+    }
+
+    [Test]
     public void BooleanLiteralComparisonCheckWhenComparedWithTrueReportsHint()
     {
         const string source = """

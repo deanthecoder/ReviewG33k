@@ -121,6 +121,7 @@ public sealed class CodeSmellReportAnalyzer
         new ThreadSleepCodeReviewCheck(),
         new ThrowExCodeReviewCheck(),
         new MethodCanBeStaticCodeReviewCheck(),
+        new RedundantSelfLookupCodeReviewCheck(),
         new BooleanLiteralComparisonCodeReviewCheck(),
         new UnnecessaryCastCodeReviewCheck(),
         new UnnecessaryVerbatimStringPrefixCodeReviewCheck(),
@@ -132,6 +133,8 @@ public sealed class CodeSmellReportAnalyzer
         new MissingXmlDocsCodeReviewCheck(),
         new MissingUnitTestsCodeReviewCheck(),
         new MissingTestsForNewPublicMethodsCodeReviewCheck(),
+        new MissingTypedBindingContextCodeReviewCheck(),
+        new MultipleClassesPerFileCodeReviewCheck(),
         new WarningSuppressionCodeReviewCheck(),
         new UnusedUsingRoslynCodeReviewCheck()
     ];

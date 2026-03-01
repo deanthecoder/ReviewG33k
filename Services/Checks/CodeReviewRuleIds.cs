@@ -35,6 +35,7 @@ public static class CodeReviewRuleIds
     public const string ThreadSleep = "thread-sleep";
     public const string ThrowExInCatch = "throw-ex-in-catch";
     public const string MethodCanBeStatic = "method-can-be-static";
+    public const string RedundantSelfLookup = "redundant-self-lookup";
     public const string UnnecessaryCast = "unnecessary-cast";
     public const string UnnecessaryVerbatimStringPrefix = "unnecessary-verbatim-string-prefix";
     public const string BooleanLiteralComparison = "boolean-literal-comparison";
@@ -45,4 +46,6 @@ public static class CodeReviewRuleIds
     public const string UnusedPrivateMember = "unused-private-member";
     public const string UnusedUsingsRoslyn = "unused-usings-roslyn";
     public const string WarningSuppression = "warning-suppression";
+    public const string MissingTypedBindingContext = "missing-typed-binding-context";
+    public const string MultipleClassesPerFile = "multiple-classes-per-file";
 }

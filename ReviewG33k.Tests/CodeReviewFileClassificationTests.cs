@@ -41,10 +41,36 @@ public sealed class CodeReviewFileClassificationTests
     }
 
     [Test]
+    public void IsAnalyzableChangedCSharpPathWhenPathIsMarkupReturnsTrue()
+    {
+        var axamlResult = InvokeIsAnalyzableChangedCSharpPath("Views/ReviewResultsWindow.axaml");
+        var xamlResult = InvokeIsAnalyzableChangedCSharpPath("Views/MainWindow.xaml");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(axamlResult, Is.True);
+            Assert.That(xamlResult, Is.True);
+        });
+    }
+
+    [Test]
     public void IsCodeBehindFilePathWhenPathIsAxamlOrXamlCodeBehindReturnsTrue()
     {
         var axamlResult = InvokeIsCodeBehindFilePath("Views/ReviewResultsWindow.axaml.cs");
         var xamlResult = InvokeIsCodeBehindFilePath("Views/MainWindow.xaml.cs");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(axamlResult, Is.True);
+            Assert.That(xamlResult, Is.True);
+        });
+    }
+
+    [Test]
+    public void IsMarkupFilePathWhenPathIsAxamlOrXamlReturnsTrue()
+    {
+        var axamlResult = InvokeIsMarkupFilePath("Views/ReviewResultsWindow.axaml");
+        var xamlResult = InvokeIsMarkupFilePath("Views/MainWindow.xaml");
 
         Assert.Multiple(() =>
         {
@@ -71,6 +97,17 @@ public sealed class CodeReviewFileClassificationTests
             BindingFlags.Public | BindingFlags.Static);
 
         Assert.That(method, Is.Not.Null, "Could not find IsCodeBehindFilePath via reflection.");
+
+        return (bool)method.Invoke(null, [path]);
+    }
+
+    private static bool InvokeIsMarkupFilePath(string path)
+    {
+        var method = ResolveClassificationMethod(
+            "IsMarkupFilePath",
+            BindingFlags.Public | BindingFlags.Static);
+
+        Assert.That(method, Is.Not.Null, "Could not find IsMarkupFilePath via reflection.");
 
         return (bool)method.Invoke(null, [path]);
     }

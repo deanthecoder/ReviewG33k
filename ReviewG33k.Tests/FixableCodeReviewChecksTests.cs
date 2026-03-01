@@ -465,6 +465,45 @@ public sealed class FixableCodeReviewChecksTests
     }
 
     [Test]
+    public void RedundantSelfLookupCheckTryFixReplacesLookupCallWithThis()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public class Owner
+            {
+                public static Owner GetOwner(Owner value) => value;
+            }
+
+            public sealed class Derived : Owner
+            {
+                public string Describe()
+                {
+                    return Owner.GetOwner(this).ToString();
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.RedundantSelfLookup,
+            "Sample.cs",
+            10,
+            "Redundant self lookup.");
+
+        var check = new RedundantSelfLookupCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile.FullName, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Does.Contain("this"));
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Not.Contain("Owner.GetOwner(this)"));
+        Assert.That(updated, Does.Contain("return this.ToString();"));
+    }
+
+    [Test]
     public void UnusedPrivateMemberCheckTryFixRemovesPrivateMethod()
     {
         using var tempFile = new TempFile(".cs");

@@ -99,7 +99,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
 
         if (changedFileEntries.Length == 0)
         {
-            info.Add("Code review scan: No changed C# files detected.");
+            info.Add("Code review scan: No changed analyzable files detected.");
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
@@ -125,11 +125,11 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
 
         if (changedFiles.Count == 0)
         {
-            info.Add("Code review scan: No analyzable changed C# files found.");
+            info.Add("Code review scan: No analyzable changed files found.");
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
-        info.Add($"Code review scan: Analyzing {changedFiles.Count} changed C# file(s).");
+        info.Add($"Code review scan: Analyzing {changedFiles.Count} changed analyzable file(s).");
         return new CodeReviewChangedFileSourceResult(changedFiles, info);
     }
 

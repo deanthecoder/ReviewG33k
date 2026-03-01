@@ -900,7 +900,7 @@ public partial class MainWindow : Window
         if (sender is not Button { DataContext: LogLineEntry entry })
             return;
 
-        var clipboard = GetTopLevel(this)?.Clipboard;
+        var clipboard = Clipboard;
         if (clipboard == null)
             return;
 
@@ -1275,14 +1275,13 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(PullRequestUrlTextBox.Text))
             return;
 
-        var topLevel = GetTopLevel(this);
-        if (topLevel?.Clipboard == null)
+        if (Clipboard == null)
             return;
 
         string clipboardText;
         try
         {
-            clipboardText = await topLevel.Clipboard.GetTextAsync();
+            clipboardText = await Clipboard.GetTextAsync();
         }
         catch
         {
