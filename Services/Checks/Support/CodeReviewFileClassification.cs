@@ -22,9 +22,7 @@ internal static class CodeReviewFileClassification
 
     public static bool IsAnalyzableChangedCSharpPath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&
-        path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) &&
-        !path.EndsWith(".axaml.cs", StringComparison.OrdinalIgnoreCase) &&
-        !path.EndsWith(".xaml.cs", StringComparison.OrdinalIgnoreCase);
+        path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
 
     public static bool IsTestFilePath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&
@@ -40,6 +38,11 @@ internal static class CodeReviewFileClassification
          path.EndsWith(".g.i.cs", StringComparison.OrdinalIgnoreCase) ||
          path.EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase) ||
          path.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase));
+
+    public static bool IsCodeBehindFilePath(string path) =>
+        !string.IsNullOrWhiteSpace(path) &&
+        (path.EndsWith(".axaml.cs", StringComparison.OrdinalIgnoreCase) ||
+         path.EndsWith(".xaml.cs", StringComparison.OrdinalIgnoreCase));
 
     public static bool IsLikelyInterfaceFilePath(string path)
     {

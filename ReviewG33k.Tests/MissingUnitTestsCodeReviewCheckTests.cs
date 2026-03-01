@@ -55,6 +55,26 @@ public sealed class MissingUnitTestsCodeReviewCheckTests
         Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
     }
 
+    [Test]
+    public void AnalyzeWhenFileIsCodeBehindDoesNotReportMissingUnitTests()
+    {
+        const string source = """
+            public sealed class ReviewResultsWindow
+            {
+                public void Refresh()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeAddedFile(
+            path: "Views/ReviewResultsWindow.axaml.cs",
+            source: source,
+            hasAnyAddedTestFiles: false);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport AnalyzeAddedFile(string path, string source, bool hasAnyAddedTestFiles)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');

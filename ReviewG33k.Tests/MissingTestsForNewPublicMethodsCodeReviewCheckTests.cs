@@ -85,7 +85,8 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheckTests
 
         Assert.That(report.Findings, Has.Count.EqualTo(1));
         Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
-        Assert.That(report.Findings[0].Message, Does.Contain("OrderServiceTests.cs"));
+        Assert.That(report.Findings[0].Message, Does.Contain("Submit"));
+        Assert.That(report.Findings[0].Message, Does.Contain("likely matching unit test(s)"));
     }
 
     [Test]
@@ -105,11 +106,34 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
-    private static CodeSmellReport Analyze(string productionSource, params (string Path, string Status, string Source)[] additionalFiles)
+    [Test]
+    public void AnalyzeWhenFileIsCodeBehindDoesNotReport()
+    {
+        const string source = """
+            public sealed class ReviewResultsWindow
+            {
+                public void Refresh()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeWithProductionPath(source, "Views/ReviewResultsWindow.xaml.cs");
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    private static CodeSmellReport Analyze(string productionSource, params (string Path, string Status, string Source)[] additionalFiles) =>
+        AnalyzeWithProductionPath(productionSource, "Services/OrderService.cs", additionalFiles);
+
+    private static CodeSmellReport AnalyzeWithProductionPath(
+        string productionSource,
+        string productionPath,
+        params (string Path, string Status, string Source)[] additionalFiles)
     {
         var files = new List<CodeReviewChangedFile>
         {
-            CreateChangedFile("Services/OrderService.cs", "A", productionSource)
+            CreateChangedFile(productionPath, "A", productionSource)
         };
 
         foreach (var (path, status, source) in additionalFiles ?? [])

@@ -37,6 +37,7 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
         {
             if (CodeReviewFileClassification.IsTestFilePath(file.Path) ||
                 CodeReviewFileClassification.IsGeneratedFilePath(file.Path) ||
+                CodeReviewFileClassification.IsCodeBehindFilePath(file.Path) ||
                 CodeReviewFileClassification.IsLikelyUiCodeFile(file))
                 continue;
 
@@ -61,7 +62,6 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
 
                 var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(method);
                 var methodName = method.Identifier.ValueText;
-                var expectedTestFileName = $"{typeName}Tests.cs";
                 var severity = hasAnyChangedTests
                     ? CodeReviewFindingSeverity.Hint
                     : CodeReviewFindingSeverity.Suggestion;
@@ -73,7 +73,7 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
                         severity,
                         file.Path,
                         lineNumber,
-                        $"New public method '{methodName}' on '{typeName}' has no likely matching changed test file (expected '{expectedTestFileName}').");
+                        $"New public method '{methodName}' has no likely matching unit test(s).");
                 }
                 else
                 {
@@ -82,7 +82,7 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
                         severity,
                         file.Path,
                         lineNumber,
-                        $"New public method '{methodName}' on '{typeName}' has no test changes in this PR (expected '{expectedTestFileName}' or similar).");
+                        $"New public method '{methodName}' has no unit test changes in this PR.");
                 }
             }
         }

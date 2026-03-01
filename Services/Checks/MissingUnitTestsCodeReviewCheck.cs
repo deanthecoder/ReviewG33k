@@ -26,6 +26,8 @@ public sealed class MissingUnitTestsCodeReviewCheck : CodeReviewCheckBase
                 continue;
             if (CodeReviewFileClassification.IsLikelyInterfaceFilePath(file.Path))
                 continue;
+            if (CodeReviewFileClassification.IsCodeBehindFilePath(file.Path))
+                continue;
             if (CodeReviewFileClassification.IsLikelyUiCodeFile(file))
                 continue;
 
