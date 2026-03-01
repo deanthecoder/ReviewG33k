@@ -5,70 +5,95 @@
 </p>
 
 # ReviewG33k
-ReviewG33k is a lightweight Avalonia desktop app for fast, local code reviews. It can prepare isolated Bitbucket pull-request checkouts, run automated checks against the changed code, and jump straight to findings in VS Code.
+ReviewG33k is a lightweight Avalonia desktop app for fast, local code reviews. Give it a Bitbucket PR URL (or a local repo + base branch), run automated checks on the diff, and jump straight to findings in VS Code.
 
 ![Screenshot](img/ReviewG33k.png)
 
-## Two review modes
-- **Bitbucket PR reviews**: Paste/drop a Bitbucket PR URL. ReviewG33k prepares an isolated `git worktree` under a `CodeReview` folder, opens the solution, and can post inline comments back to the PR.
-- **Local committed-change reviews**: Point ReviewG33k at a local repo folder and base branch (default `main`) to review `origin/<base>...HEAD` before you raise a PR. This mode does not require Bitbucket access and does not post PR comments.
+## What it can do
+- Review **Bitbucket pull requests** (paste/drop a PR URL) and optionally post inline PR comments.
+- Review **local committed changes** against a base branch (default `main`) before you raise a PR (no Bitbucket required).
+- Prepare an isolated review checkout using `git worktree` so your working tree stays untouched.
+- Run opinionated automated checks on the changed files/lines (async, exceptions, suppressions, test hygiene, and more).
+- Open findings at `file:line` in VS Code (requires the `code` CLI); apply a few safe auto-fixes in local mode.
+- Export findings to the clipboard and copy a focused Codex prompt for issues that need manual/AI help.
 
-## Highlights
-- **Paste or drop PR URL**: Supports Bitbucket PR links directly from clipboard or drag/drop.
-- **PR branch preview**: Uses Bitbucket REST API to show `source -> target` branch names in the preview line.
-- **Canonical PR URLs**: Normalizes links by stripping `/overview` and query-string noise.
-- **Smart local repo matching**: Reuses your existing local repository when available.
-- **Clone on demand**: Clones missing repos automatically into your chosen repo root.
-- **Isolated PR worktrees**: Uses `git worktree` (`CodeReview/<repo>/PR-<id>`) so your main working tree stays untouched.
-- **Fast handoff to IDE**: Finds a `.sln` and opens it with your default solution app.
-- **Open findings in VS Code**: One click to jump to `file:line` (requires the `code` CLI).
-- **Local quick-fixes**: Some findings can be auto-fixed in-place when reviewing a local repo (for example, removing unused `using` directives).
-- **Codex prompt copy button**: For local findings that do not have an auto-fix, copy a ready-to-paste Codex prompt for that exact issue.
-- **Export to clipboard**: Copy findings as text to paste into Codex (or similar) to help automate fixes.
-- **Opinionated automated checks**: Flags common pitfalls (async, exceptions, test hygiene, suppressions, and more) on the changed lines.
+## How it works (high level)
+1. You give it either a Bitbucket PR URL or a local repo folder + base branch.
+2. It reuses an existing local clone when possible (or clones into your repo root), then creates an isolated review worktree under `CodeReview/...`.
+3. It computes the diff (PR source → target, or `origin/<base>...HEAD`) and runs checks against the changed code.
+4. It shows findings with context plus actions to open, fix/export, and (for PRs) comment.
 
-## Automated checks (highlights)
-ReviewG33k runs a set of checks against changed files/lines. A few of the most useful ones are:
-- **Async footguns**: flags `async void` and `Task.Run(async ...)` patterns that tend to hide bugs.
-- **Unobserved tasks**: catches fire-and-forget `Task` calls where the result is ignored.
-- **Exception mistakes**: flags `throw ex;` and suspicious/empty catch blocks.
-- **Warning suppressions**: highlights newly added `#pragma warning disable` and `[SuppressMessage]` usage.
-- **Test gates**: nudges when new code appears without corresponding test changes (including newly added public methods).
-- **Dead code cleanup**: detects unused `using`s and unused private members.
-
-And more: `IDisposable` not disposed, multiple enumeration, public mutable static state, lock targets, constructor length, parameter count, brace consistency, and other small "paper cut" checks.
-
-## Review results UX
-- **Preview**: Shows surrounding file content around the selected finding.
-- **Open Selected**: Opens the selected finding in VS Code at the right line.
-- **Fix/Codex actions (local mode)**: Use the wand **Fix** button for auto-fixable findings, or **Codex** to copy a focused prompt.
-- **Export To Clipboard**: Copies the findings text (included items by default).
-- **Triage tools**: Tick/untick findings, bulk toggle, and "untick all of this rule id".
-- **Optional PR commenting**: When a Bitbucket PR is in context, findings can be posted as inline PR comments.
-
-## Typical workflow
-### PR review mode
-1. Set your repo root folder (for example, `C:\source`).
-2. Paste/drop a Bitbucket PR URL.
-3. Click **Prepare Review Checkout**.
-4. Review findings, open them in VS Code, and optionally comment back to the PR.
-
-### Local committed-change mode
-1. Choose **Local committed review**.
-2. Select a local repository folder and base branch (for example, `main`).
-3. Run the review and iterate before opening a PR. Use **Fix** where available, or **Codex** / **Export To Clipboard** for AI-assisted fixes.
+## Quick start
+- **PR review**: set repo root → paste/drop PR URL → **Prepare Review Checkout** → review findings/open in VS Code → optionally comment back to the PR.
+- **Local review**: choose **Local committed review** → pick repo + base branch → run review → fix/export before opening a PR.
 
 ## Build and run
+Prereqs: .NET 8 SDK and `git`. Optional: VS Code `code` CLI.
 ```bash
 dotnet build ReviewG33k.sln
 dotnet run --project ReviewG33k.csproj
 ```
 
-## Notes
-- Requires `git` on `PATH`.
-- For VS Code integration, install the `code` CLI (in VS Code: Command Palette, "Shell Command: Install 'code' command in PATH").
-- Clone URL format: `https://<host>/scm/<project-lower>/<repo>.git`.
-- PR fetch ref: `refs/pull-requests/<id>/from`.
+## Supported checks
+### Async and threading
+| Check | What it flags |
+| --- | --- |
+| Async void (non-event handlers) | `async void` methods that are likely to hide failures. |
+| Async method naming | `async` methods that do not end with `Async`. |
+| Task.Run(async ...) | Async work wrapped in `Task.Run(...)` where it may be unnecessary or risky. |
+| Unobserved task results | Fire-and-forget task calls whose result is ignored. |
+| Thread.Sleep usage | Blocking sleeps in newly added code paths. |
+| Lock targets | `lock(this)` or locks on likely public objects. |
+
+### Exceptions and reliability
+| Check | What it flags |
+| --- | --- |
+| Empty catch blocks | `catch` blocks with no real handling logic. |
+| Swallowing catch blocks | `catch` blocks that silently consume exceptions. |
+| `throw ex;` in catch blocks | Re-throw patterns that lose original stack trace context. |
+| `IDisposable` not disposed | Disposable objects created without clear disposal. |
+| Multiple enumeration | Re-enumerating deferred `IEnumerable` values unexpectedly. |
+| Public method argument guards | Missing null guards in newly added public methods. |
+
+### Design and maintainability
+| Check | What it flags |
+| --- | --- |
+| Property can be auto-property | Verbose property patterns that can be simplified to auto-properties. |
+| Private get-only property should be field | Private get-only auto-properties better represented as fields. |
+| Private property should be field | Simple private properties that are effectively field wrappers. |
+| Private field can be readonly | Private fields written only during construction. |
+| Method can be static | Instance methods that do not use instance state. |
+| Multiple classes per file | Files that define more than one class (prefer one class per file). |
+| Redundant self lookup | Needlessly resolving an object from itself (or equivalent redundant lookup). |
+| Public mutable static state | Exposed mutable static fields/properties. |
+| Unused private members | Newly added private code that is never used. |
+| Unused `using` directives | Newly added imports that are never referenced. |
+
+### Readability and style
+| Check | What it flags |
+| --- | --- |
+| Missing blank lines between methods | Method blocks that run together and reduce readability. |
+| High parameter count | Methods/constructors with too many parameters. |
+| Generic type name suffix | Generic type names that do not follow expected suffix conventions. |
+| If/else brace consistency | Mismatched bracing style between `if` and `else` blocks. |
+| Unnecessary if/else braces | Extra braces around simple single-line branches. |
+| Large constructors | Constructors doing too much inline setup work. |
+| Boolean literal comparison | Comparisons like `== true` / `== false` that can be simplified. |
+| Unnecessary casts | Casts that do not change type or behavior. |
+| Unnecessary verbatim string prefix | `@` string prefix where no escaping benefit is used. |
+
+### Test and documentation coverage
+| Check | What it flags |
+| --- | --- |
+| Missing XML docs | New public types without XML documentation. |
+| Missing unit test updates | New production changes with no corresponding test changes. |
+| Missing tests for new public methods | Added public methods without test coverage changes. |
+
+### Framework and suppressions
+| Check | What it flags |
+| --- | --- |
+| Missing typed binding context (Avalonia) | XAML bindings without typed context where expected. |
+| Warning suppressions | New `#pragma warning disable` or `[SuppressMessage]` suppressions. |
 
 ## License
 Licensed under the MIT License. See [LICENSE](LICENSE) for details.
