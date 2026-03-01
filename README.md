@@ -23,6 +23,7 @@ ReviewG33k is a lightweight Avalonia desktop app for fast, local code reviews. I
 - **Fast handoff to IDE**: Finds a `.sln` and opens it with your default solution app.
 - **Open findings in VS Code**: One click to jump to `file:line` (requires the `code` CLI).
 - **Local quick-fixes**: Some findings can be auto-fixed in-place when reviewing a local repo (for example, removing unused `using` directives).
+- **Codex prompt copy button**: For local findings that do not have an auto-fix, copy a ready-to-paste Codex prompt for that exact issue.
 - **Export to clipboard**: Copy findings as text to paste into Codex (or similar) to help automate fixes.
 - **Opinionated automated checks**: Flags common pitfalls (async, exceptions, test hygiene, suppressions, and more) on the changed lines.
 
@@ -40,6 +41,7 @@ And more: `IDisposable` not disposed, multiple enumeration, public mutable stati
 ## Review results UX
 - **Preview**: Shows surrounding file content around the selected finding.
 - **Open Selected**: Opens the selected finding in VS Code at the right line.
+- **Fix/Codex actions (local mode)**: Use the wand **Fix** button for auto-fixable findings, or **Codex** to copy a focused prompt.
 - **Export To Clipboard**: Copies the findings text (included items by default).
 - **Triage tools**: Tick/untick findings, bulk toggle, and "untick all of this rule id".
 - **Optional PR commenting**: When a Bitbucket PR is in context, findings can be posted as inline PR comments.
@@ -54,7 +56,7 @@ And more: `IDisposable` not disposed, multiple enumeration, public mutable stati
 ### Local committed-change mode
 1. Choose **Local committed review**.
 2. Select a local repository folder and base branch (for example, `main`).
-3. Run the review and iterate before opening a PR. Use **Export To Clipboard** if you want help automating fixes.
+3. Run the review and iterate before opening a PR. Use **Fix** where available, or **Codex** / **Export To Clipboard** for AI-assisted fixes.
 
 ## Build and run
 ```bash

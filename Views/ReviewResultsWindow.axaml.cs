@@ -28,6 +28,8 @@ public partial class ReviewResultsWindow : Window
 {
     private const int PreviewLinesBefore = 4;
     private const int PreviewLinesAfter = 8;
+    private const int CodexPromptLinesBefore = 8;
+    private const int CodexPromptLinesAfter = 14;
 
     private readonly Action<CodeSmellFinding> m_openFindingAction;
     private readonly Func<CodeSmellFinding, Task<bool>> m_commentFindingAction;
@@ -179,6 +181,35 @@ public partial class ReviewResultsWindow : Window
         }
     }
 
+    private async void CreateCodexPromptButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: ReviewResultRow row } || !row.CanCreateCodexPrompt)
+            return;
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard == null)
+        {
+            SetPreviewText("Clipboard is unavailable in this window.", "Preview");
+            return;
+        }
+
+        if (!TryBuildCodexPrompt(row.Finding, out var promptText, out var failureReason))
+        {
+            SetPreviewText(failureReason ?? "Could not create Codex prompt.", "Preview");
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(promptText);
+            SetPreviewText("Copied Codex prompt to clipboard.", "Preview");
+        }
+        catch (Exception exception)
+        {
+            SetPreviewText($"Failed to copy Codex prompt: {exception.Message}", "Preview");
+        }
+    }
+
     private void ToggleAllButton_OnClick(object sender, RoutedEventArgs e)
     {
         if (m_rows.Count == 0)
@@ -241,7 +272,9 @@ public partial class ReviewResultsWindow : Window
         UpdateBatchActionButtonStates();
 
         if (failureCount == 0)
+        {
             SetPreviewText($"Posted {successCount} comment(s).", "Preview");
+        }
         else
             SetPreviewText($"Posted {successCount} comment(s). {failureCount} failed. See log for details.", "Preview");
     }
@@ -332,15 +365,7 @@ public partial class ReviewResultsWindow : Window
         var canOpen = canOpenInVsCode && hasFileAndLine;
         var canComment = canCommentInBitbucket && hasFileAndLine;
         var canFix = canFixLocally && hasPathResolver && hasFileAndLine && findingFixer != null && findingFixer.CanFix(finding);
-        var openToolTipBase = canOpen
-            ? "Open file and line in VS Code"
-            : "VS Code not detected or no valid file/line for this issue";
-        var commentToolTipBase = canComment
-            ? "Post this issue as a Bitbucket PR inline comment"
-            : "Bitbucket PR context is unavailable or no valid file/line for this issue";
-        var fixToolTipBase = canFix
-            ? "Apply a local quick-fix for this issue"
-            : "This issue cannot be auto-fixed";
+        var canCreateCodexPrompt = canFixLocally && hasPathResolver && hasFileAndLine && !canFix;
         return new ReviewResultRow(
             finding,
             finding.RuleId,
@@ -349,13 +374,12 @@ public partial class ReviewResultsWindow : Window
             issueFull,
             issueLocation,
             canOpen,
-            openToolTipBase,
             canComment,
-            commentToolTipBase,
             canCommentInBitbucket,
-            canFixLocally,
             canFix,
-            fixToolTipBase,
+            canFix,
+            canCreateCodexPrompt,
+            canCreateCodexPrompt,
             false);
     }
 
@@ -555,6 +579,145 @@ public partial class ReviewResultsWindow : Window
         return builder.ToString().TrimEnd('\r', '\n');
     }
 
+    private bool TryBuildCodexPrompt(CodeSmellFinding finding, out string promptText, out string failureReason)
+    {
+        promptText = string.Empty;
+        failureReason = null;
+
+        if (finding == null)
+        {
+            failureReason = "No finding selected.";
+            return false;
+        }
+
+        var resolvedPath = m_resolveFindingPath?.Invoke(finding);
+        if (string.IsNullOrWhiteSpace(resolvedPath) || !File.Exists(resolvedPath))
+        {
+            failureReason = $"Could not resolve file for '{finding.FilePath}'.";
+            return false;
+        }
+
+        if (!TryFindRepositoryRoot(resolvedPath, out var repositoryPath))
+        {
+            failureReason = "Could not detect repository root from the selected file.";
+            return false;
+        }
+
+        var issueLine = finding.LineNumber > 0 ? finding.LineNumber : 1;
+        var issuePath = GetPromptRelativePath(repositoryPath, resolvedPath, finding.FilePath);
+        var issueMessage = string.IsNullOrWhiteSpace(finding.Message) ? "(no message)" : finding.Message.Trim();
+        var codeContext = BuildCodexPromptCodeContext(resolvedPath, issueLine);
+
+        var builder = new StringBuilder();
+        builder.AppendLine("You are fixing one local code review issue.");
+        builder.AppendLine();
+        builder.Append("Repository path: ").AppendLine(repositoryPath);
+        builder.Append("File: ").Append(issuePath).Append(':').Append(issueLine).AppendLine();
+        builder.Append("Issue: ").AppendLine(issueMessage);
+        builder.AppendLine();
+        builder.AppendLine("Code context:");
+        builder.AppendLine("```");
+        builder.AppendLine(codeContext);
+        builder.AppendLine("```");
+        builder.AppendLine();
+        builder.AppendLine("Task:");
+        builder.AppendLine("- Implement the smallest safe fix for this issue in this repository.");
+        builder.AppendLine("- Keep behavior unchanged except for resolving this issue.");
+        builder.AppendLine("- Run relevant build/tests if practical.");
+        builder.AppendLine();
+        builder.AppendLine("Return:");
+        builder.AppendLine("* Summary of the fix");
+        builder.AppendLine("* Test/build commands run (or why none were run)");
+        builder.AppendLine("* Risks or follow-up checks");
+
+        promptText = builder.ToString().TrimEnd('\r', '\n');
+        return true;
+    }
+
+    private static string BuildCodexPromptCodeContext(string resolvedPath, int lineNumber)
+    {
+        string[] lines;
+        try
+        {
+            lines = File.ReadAllLines(resolvedPath);
+        }
+        catch
+        {
+            return "(Unable to read file contents.)";
+        }
+
+        if (lines.Length == 0)
+            return "(File is empty.)";
+
+        var boundedLineNumber = Math.Clamp(lineNumber, 1, lines.Length);
+        var startLine = Math.Max(1, boundedLineNumber - CodexPromptLinesBefore);
+        var endLine = Math.Min(lines.Length, boundedLineNumber + CodexPromptLinesAfter);
+        var lineNumberWidth = endLine.ToString().Length;
+
+        var builder = new StringBuilder();
+        for (var line = startLine; line <= endLine; line++)
+        {
+            var marker = line == boundedLineNumber ? ">" : " ";
+            builder.Append(marker)
+                .Append(' ')
+                .Append(line.ToString().PadLeft(lineNumberWidth))
+                .Append(": ")
+                .AppendLine(lines[line - 1]);
+        }
+
+        return builder.ToString().TrimEnd('\r', '\n');
+    }
+
+    private static bool TryFindRepositoryRoot(string resolvedPath, out string repositoryPath)
+    {
+        repositoryPath = null;
+        if (string.IsNullOrWhiteSpace(resolvedPath))
+            return false;
+
+        var current = Directory.Exists(resolvedPath)
+            ? resolvedPath
+            : Path.GetDirectoryName(resolvedPath);
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            var gitPath = Path.Combine(current, ".git");
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
+            {
+                repositoryPath = current;
+                return true;
+            }
+
+            var parent = Directory.GetParent(current)?.FullName;
+            if (string.IsNullOrWhiteSpace(parent) || string.Equals(parent, current, StringComparison.Ordinal))
+                break;
+
+            current = parent;
+        }
+
+        return false;
+    }
+
+    private static string GetPromptRelativePath(string repositoryPath, string resolvedPath, string fallbackPath)
+    {
+        if (string.IsNullOrWhiteSpace(repositoryPath) || string.IsNullOrWhiteSpace(resolvedPath))
+            return NormalizeRepoPath(fallbackPath);
+
+        try
+        {
+            var relativePath = Path.GetRelativePath(repositoryPath, resolvedPath);
+            if (!string.IsNullOrWhiteSpace(relativePath) &&
+                !relativePath.StartsWith("..", StringComparison.Ordinal))
+            {
+                return NormalizeRepoPath(relativePath);
+            }
+        }
+        catch
+        {
+            // Fall back to the finding path below.
+        }
+
+        return NormalizeRepoPath(fallbackPath);
+    }
+
     private static int GetSeveritySortOrder(CodeReviewFindingSeverity severity) =>
         severity switch
         {
@@ -610,9 +773,6 @@ public partial class ReviewResultsWindow : Window
         private static readonly IBrush IncludedLocationBrush = Brushes.Gray;
         private static readonly IBrush ExcludedLocationBrush = new SolidColorBrush(Color.Parse("#6B6B6B"));
 
-        private readonly string m_openToolTipBase;
-        private readonly string m_commentToolTipBase;
-        private readonly string m_fixToolTipBase;
         private bool m_isIncluded = true;
         private bool m_isPostingComment;
         private bool m_hasPostedComment;
@@ -627,13 +787,12 @@ public partial class ReviewResultsWindow : Window
             string issueFull,
             string issueLocation,
             bool canOpen,
-            string openToolTipBase,
             bool canComment,
-            string commentToolTipBase,
             bool showCommentButton,
             bool showFixButton,
             bool canFix,
-            string fixToolTipBase,
+            bool showCodexPromptButton,
+            bool canCreateCodexPrompt,
             bool hasExistingComment)
         {
             Finding = finding;
@@ -647,9 +806,8 @@ public partial class ReviewResultsWindow : Window
             ShowCommentButton = showCommentButton;
             ShowFixButton = showFixButton;
             CanFix = canFix;
-            m_openToolTipBase = openToolTipBase ?? string.Empty;
-            m_commentToolTipBase = commentToolTipBase ?? string.Empty;
-            m_fixToolTipBase = fixToolTipBase ?? string.Empty;
+            ShowCodexPromptButton = showCodexPromptButton;
+            CanCreateCodexPrompt = canCreateCodexPrompt;
             m_hasPostedComment = hasExistingComment;
         }
 
@@ -677,6 +835,10 @@ public partial class ReviewResultsWindow : Window
 
         public bool CanFix { get; }
 
+        public bool ShowCodexPromptButton { get; }
+
+        public bool CanCreateCodexPrompt { get; }
+
         public bool IsIncluded
         {
             get => m_isIncluded;
@@ -690,9 +852,7 @@ public partial class ReviewResultsWindow : Window
                 RaisePropertyChanged(nameof(CanOpenActive));
                 RaisePropertyChanged(nameof(CanCommentActive));
                 RaisePropertyChanged(nameof(CanFixActive));
-                RaisePropertyChanged(nameof(OpenToolTip));
-                RaisePropertyChanged(nameof(CommentToolTip));
-                RaisePropertyChanged(nameof(FixToolTip));
+                RaisePropertyChanged(nameof(CanCodexPromptActive));
                 RaisePropertyChanged(nameof(IssueForeground));
                 RaisePropertyChanged(nameof(IssueLocationForeground));
             }
@@ -709,7 +869,6 @@ public partial class ReviewResultsWindow : Window
                 m_isPostingComment = value;
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(CanCommentActive));
-                RaisePropertyChanged(nameof(CommentToolTip));
             }
         }
 
@@ -724,7 +883,6 @@ public partial class ReviewResultsWindow : Window
                 m_isFixing = value;
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(CanFixActive));
-                RaisePropertyChanged(nameof(FixToolTip));
             }
         }
 
@@ -739,7 +897,6 @@ public partial class ReviewResultsWindow : Window
                 m_hasBeenFixed = value;
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(CanFixActive));
-                RaisePropertyChanged(nameof(FixToolTip));
             }
         }
 
@@ -754,7 +911,6 @@ public partial class ReviewResultsWindow : Window
                 m_hasPostedComment = value;
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(CanCommentActive));
-                RaisePropertyChanged(nameof(CommentToolTip));
             }
         }
 
@@ -764,35 +920,7 @@ public partial class ReviewResultsWindow : Window
 
         public bool CanFixActive => CanFix && IsIncluded && !IsFixing && !HasBeenFixed;
 
-        public string OpenToolTip => !IsIncluded ? "Issue is ignored." : m_openToolTipBase;
-
-        public string CommentToolTip
-        {
-            get
-            {
-                if (!IsIncluded)
-                    return "Issue is ignored.";
-                if (HasPostedComment)
-                    return "Comment already posted for this issue.";
-                if (IsPostingComment)
-                    return "Posting comment...";
-                return m_commentToolTipBase;
-            }
-        }
-
-        public string FixToolTip
-        {
-            get
-            {
-                if (!IsIncluded)
-                    return "Issue is ignored.";
-                if (HasBeenFixed)
-                    return "Issue has been fixed locally.";
-                if (IsFixing)
-                    return "Applying fix...";
-                return m_fixToolTipBase;
-            }
-        }
+        public bool CanCodexPromptActive => CanCreateCodexPrompt && IsIncluded;
 
         public string UntickSameTypeMenuHeader =>
             string.IsNullOrWhiteSpace(RuleId)
