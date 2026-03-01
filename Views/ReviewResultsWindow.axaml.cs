@@ -353,11 +353,6 @@ public partial class ReviewResultsWindow : Window
         bool hasPathResolver,
         ICodeReviewFindingFixer findingFixer)
     {
-        var issueLocation = finding.LineNumber > 0
-            ? $"{finding.FilePath}:{finding.LineNumber}"
-            : finding.FilePath;
-        var issueSummary = finding.Message ?? string.Empty;
-        var issueFull = issueSummary;
         var hasFileAndLine = !string.IsNullOrWhiteSpace(finding.FilePath) && finding.LineNumber > 0;
         var canOpen = canOpenInVsCode && hasFileAndLine;
         var canComment = canCommentInBitbucket && hasFileAndLine;
@@ -367,21 +362,24 @@ public partial class ReviewResultsWindow : Window
                                    hasFileAndLine &&
                                    !canFix &&
                                    CanUseCodexPromptForFinding(finding);
+        var commentAvailability = canCommentInBitbucket
+            ? canComment
+                ? ReviewResultRow.ActionAvailability.Enabled
+                : ReviewResultRow.ActionAvailability.Disabled
+            : ReviewResultRow.ActionAvailability.Hidden;
+        var fixAvailability = canFix
+            ? ReviewResultRow.ActionAvailability.Enabled
+            : ReviewResultRow.ActionAvailability.Hidden;
+        var codexPromptAvailability = canCreateCodexPrompt
+            ? ReviewResultRow.ActionAvailability.Enabled
+            : ReviewResultRow.ActionAvailability.Hidden;
+
         return new ReviewResultRow(
             finding,
-            finding.RuleId,
-            finding.Severity.ToString().ToUpperInvariant(),
-            issueSummary,
-            issueFull,
-            issueLocation,
             canOpen,
-            canComment,
-            canCommentInBitbucket,
-            canFix,
-            canFix,
-            canCreateCodexPrompt,
-            canCreateCodexPrompt,
-            false);
+            commentAvailability,
+            fixAvailability,
+            codexPromptAvailability);
     }
 
     private static bool CanUseCodexPromptForFinding(CodeSmellFinding finding)

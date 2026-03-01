@@ -17,10 +17,21 @@ namespace ReviewG33k.Views;
 
 public sealed class ReviewResultRow : INotifyPropertyChanged
 {
+    public enum ActionAvailability
+    {
+        Hidden,
+        Disabled,
+        Enabled
+    }
+
     private static readonly IBrush IncludedIssueBrush = Brushes.Gainsboro;
     private static readonly IBrush ExcludedIssueBrush = Brushes.Gray;
     private static readonly IBrush IncludedLocationBrush = Brushes.Gray;
     private static readonly IBrush ExcludedLocationBrush = new SolidColorBrush(Color.Parse("#6B6B6B"));
+
+    private readonly ActionAvailability m_commentAvailability;
+    private readonly ActionAvailability m_fixAvailability;
+    private readonly ActionAvailability m_codexPromptAvailability;
 
     private bool m_isIncluded = true;
     private bool m_isPostingComment;
@@ -30,33 +41,26 @@ public sealed class ReviewResultRow : INotifyPropertyChanged
 
     public ReviewResultRow(
         CodeSmellFinding finding,
-        string ruleId,
-        string severityText,
-        string issueSummary,
-        string issueFull,
-        string issueLocation,
         bool canOpen,
-        bool canComment,
-        bool showCommentButton,
-        bool showFixButton,
-        bool canFix,
-        bool showCodexPromptButton,
-        bool canCreateCodexPrompt,
-        bool hasExistingComment)
+        ActionAvailability commentAvailability,
+        ActionAvailability fixAvailability,
+        ActionAvailability codexPromptAvailability,
+        bool hasExistingComment = false)
     {
         Finding = finding;
-        RuleId = ruleId ?? string.Empty;
-        SeverityText = severityText ?? string.Empty;
-        IssueSummary = issueSummary ?? string.Empty;
-        IssueFull = issueFull ?? string.Empty;
-        IssueLocation = issueLocation ?? string.Empty;
+        RuleId = finding?.RuleId ?? string.Empty;
+        SeverityText = finding == null ? string.Empty : finding.Severity.ToString().ToUpperInvariant();
+        IssueSummary = finding?.Message ?? string.Empty;
+        IssueFull = IssueSummary;
+        IssueLocation = finding == null
+            ? string.Empty
+            : finding.LineNumber > 0
+                ? $"{finding.FilePath}:{finding.LineNumber}"
+                : finding.FilePath ?? string.Empty;
         CanOpen = canOpen;
-        CanComment = canComment;
-        ShowCommentButton = showCommentButton;
-        ShowFixButton = showFixButton;
-        CanFix = canFix;
-        ShowCodexPromptButton = showCodexPromptButton;
-        CanCreateCodexPrompt = canCreateCodexPrompt;
+        m_commentAvailability = commentAvailability;
+        m_fixAvailability = fixAvailability;
+        m_codexPromptAvailability = codexPromptAvailability;
         m_hasPostedComment = hasExistingComment;
     }
 
@@ -76,17 +80,17 @@ public sealed class ReviewResultRow : INotifyPropertyChanged
 
     public bool CanOpen { get; }
 
-    public bool CanComment { get; }
+    public bool CanComment => m_commentAvailability == ActionAvailability.Enabled;
 
-    public bool ShowCommentButton { get; }
+    public bool ShowCommentButton => m_commentAvailability != ActionAvailability.Hidden;
 
-    public bool ShowFixButton { get; }
+    public bool ShowFixButton => m_fixAvailability != ActionAvailability.Hidden;
 
-    public bool CanFix { get; }
+    public bool CanFix => m_fixAvailability == ActionAvailability.Enabled;
 
-    public bool ShowCodexPromptButton { get; }
+    public bool ShowCodexPromptButton => m_codexPromptAvailability != ActionAvailability.Hidden;
 
-    public bool CanCreateCodexPrompt { get; }
+    public bool CanCreateCodexPrompt => m_codexPromptAvailability == ActionAvailability.Enabled;
 
     public bool IsIncluded
     {
