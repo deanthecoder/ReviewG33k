@@ -748,6 +748,7 @@ public partial class MainWindow : Window
     {
         var canReviewCurrentPullRequest = m_previewPullRequestIsOpen != false;
         var isLocalMode = IsLocalCommittedReviewMode();
+        m_latestSolutionPath = ResolveAvailableSolutionPath();
         PrepareReviewButton.IsEnabled = !m_busy &&
                                         m_isGitAvailable &&
                                         (isLocalMode
@@ -755,9 +756,39 @@ public partial class MainWindow : Window
                                             : canReviewCurrentPullRequest && HasValidPullRequestPrepareInputs());
         OpenPullRequestButton.IsEnabled = !m_busy && !isLocalMode && HasValidPullRequestInput();
         OpenSolutionButton.IsEnabled = !m_busy &&
-                                      (isLocalMode || canReviewCurrentPullRequest) &&
                                       !string.IsNullOrWhiteSpace(m_latestSolutionPath) &&
                                       File.Exists(m_latestSolutionPath);
+    }
+
+    private string ResolveAvailableSolutionPath()
+    {
+        if (!string.IsNullOrWhiteSpace(m_latestSolutionPath) && File.Exists(m_latestSolutionPath))
+            return m_latestSolutionPath;
+
+        if (!string.IsNullOrWhiteSpace(m_latestReviewWorktreePath) && Directory.Exists(m_latestReviewWorktreePath))
+        {
+            var worktreeSolution = FindTopLevelSolutionFile(m_latestReviewWorktreePath);
+            if (!string.IsNullOrWhiteSpace(worktreeSolution) && File.Exists(worktreeSolution))
+                return worktreeSolution;
+        }
+
+        var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(localRepositoryPath) && Directory.Exists(localRepositoryPath))
+        {
+            var localSolution = FindTopLevelSolutionFile(localRepositoryPath);
+            if (!string.IsNullOrWhiteSpace(localSolution) && File.Exists(localSolution))
+                return localSolution;
+        }
+
+        var repositoryRootPath = RepositoryRootTextBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(repositoryRootPath) && Directory.Exists(repositoryRootPath))
+        {
+            var rootSolution = FindTopLevelSolutionFile(repositoryRootPath);
+            if (!string.IsNullOrWhiteSpace(rootSolution) && File.Exists(rootSolution))
+                return rootSolution;
+        }
+
+        return null;
     }
 
     private bool HasValidPullRequestInput()
