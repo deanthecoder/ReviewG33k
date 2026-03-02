@@ -161,7 +161,8 @@ public partial class ReviewResultsWindow : Window
 
             if (!string.IsNullOrWhiteSpace(row.Finding?.FilePath) && m_resampleFileFindingsAction != null)
             {
-                await RefreshFindingsForFileAsync(row.Finding.FilePath, row.Finding.LineNumber);
+                var previousRowIndex = m_rows.IndexOf(row);
+                await RefreshFindingsForFileAsync(row.Finding.FilePath, row.Finding.LineNumber, previousRowIndex);
             }
             else
             {
@@ -422,7 +423,7 @@ public partial class ReviewResultsWindow : Window
         }
     }
 
-    private async Task RefreshFindingsForFileAsync(string filePath, int preferredLineNumber)
+    private async Task RefreshFindingsForFileAsync(string filePath, int preferredLineNumber, int preferredRowIndex = -1)
     {
         if (m_resampleFileFindingsAction == null || string.IsNullOrWhiteSpace(filePath))
             return;
@@ -471,11 +472,19 @@ public partial class ReviewResultsWindow : Window
             return;
         }
 
-        var nextRow = m_rows
+        ReviewResultRow nextRow = null;
+        if (preferredRowIndex >= 0)
+        {
+            var boundedIndex = Math.Clamp(preferredRowIndex, 0, m_rows.Count - 1);
+            nextRow = m_rows[boundedIndex];
+        }
+
+        nextRow ??= m_rows
             .Where(row => AreSameRepoPath(row.Finding?.FilePath, filePath))
             .OrderBy(row => Math.Abs((row.Finding?.LineNumber ?? 0) - preferredLineNumber))
             .ThenBy(row => row.Finding?.LineNumber ?? int.MaxValue)
             .FirstOrDefault() ?? m_rows[0];
+
         ResultsListBox.SelectedItem = nextRow;
         if (nextRow.Finding != null)
             UpdatePreviewForFinding(nextRow.Finding);
