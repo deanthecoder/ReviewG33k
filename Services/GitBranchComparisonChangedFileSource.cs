@@ -89,6 +89,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
         var baseDiffPaths = new HashSet<string>(
             baseDiffEntries.Select(entry => NormalizeRepoPath(entry.Path)),
             StringComparer.OrdinalIgnoreCase);
+
         if (allChangedFileEntries.Length == 0)
         {
             info.Add($"Code review scan: No differences between HEAD and {baseRef}.");
@@ -96,7 +97,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
         }
 
         var changedFileEntries = allChangedFileEntries
-            .Where(entry => CodeReviewFileClassification.IsAnalyzableChangedCSharpPath(entry.Path))
+            .Where(entry => CodeReviewFileClassification.IsAnalyzableChangedPath(entry.Path))
             .ToArray();
 
         if (changedFileEntries.Length == 0)

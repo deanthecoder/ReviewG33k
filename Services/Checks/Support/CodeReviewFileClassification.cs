@@ -27,6 +27,13 @@ internal static class CodeReviewFileClassification
          path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase) ||
          path.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase));
 
+    public static bool IsAnalyzableResxPath(string path) =>
+        !string.IsNullOrWhiteSpace(path) &&
+        path.EndsWith(".resx", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsAnalyzableChangedPath(string path) =>
+        IsAnalyzableChangedCSharpPath(path) || IsAnalyzableResxPath(path);
+
     public static bool IsTestFilePath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&
         (path.EndsWith("Tests.cs", StringComparison.OrdinalIgnoreCase) ||

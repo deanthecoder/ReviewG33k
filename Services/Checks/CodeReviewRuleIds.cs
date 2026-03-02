@@ -45,6 +45,9 @@ public static class CodeReviewRuleIds
     public const string MultipleEnumeration = "multiple-enumeration";
     public const string PublicMutableStaticState = "public-mutable-static-state";
     public const string UnusedPrivateMember = "unused-private-member";
+    public const string ResxMissingLocaleKeys = "resx-missing-locale-keys";
+    public const string ResxUnexpectedExtraKeys = "resx-unexpected-extra-keys";
+    public const string ResxEmptyTranslationValues = "resx-empty-translation-values";
     public const string UnusedUsingsRoslyn = "unused-usings-roslyn";
     public const string WarningSuppression = "warning-suppression";
     public const string MissingTypedBindingContext = "missing-typed-binding-context";

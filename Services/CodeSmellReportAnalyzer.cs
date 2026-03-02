@@ -89,14 +89,21 @@ public sealed class CodeSmellReportAnalyzer
 
     private static CodeReviewAnalysisContext BuildContext(IReadOnlyList<CodeReviewChangedFile> changedFiles)
     {
+        var csharpFiles = changedFiles
+            .Where(file => CodeReviewFileClassification.IsAnalyzableChangedCSharpPath(file.Path))
+            .ToArray();
+        var resxFiles = changedFiles
+            .Where(file => CodeReviewFileClassification.IsAnalyzableResxPath(file.Path))
+            .ToArray();
+
         var addedTestFilesByName = new HashSet<string>(
-            changedFiles
+            csharpFiles
                 .Where(file => file.IsAdded)
                 .Where(file => CodeReviewFileClassification.IsTestFilePath(file.Path))
                 .Select(file => Path.GetFileName(file.Path)),
             StringComparer.OrdinalIgnoreCase);
 
-        return new CodeReviewAnalysisContext(changedFiles, addedTestFilesByName);
+        return new CodeReviewAnalysisContext(csharpFiles, addedTestFilesByName, resxFiles);
     }
 
     private static IReadOnlyList<ICodeReviewCheck> CreateChecks() =>
@@ -137,6 +144,9 @@ public sealed class CodeSmellReportAnalyzer
         new MissingReadmeForNewProjectCodeReviewCheck(),
         new MissingTypedBindingContextCodeReviewCheck(),
         new MultipleClassesPerFileCodeReviewCheck(),
+        new ResxMissingLocaleKeysCodeReviewCheck(),
+        new ResxUnexpectedExtraKeysCodeReviewCheck(),
+        new ResxEmptyTranslationValuesCodeReviewCheck(),
         new WarningSuppressionCodeReviewCheck(),
         new UnusedUsingRoslynCodeReviewCheck()
     ];

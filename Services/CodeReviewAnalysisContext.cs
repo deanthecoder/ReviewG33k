@@ -10,20 +10,27 @@
 
 using System;
 using System.Collections.Generic;
+using ReviewG33k.Services.Checks;
 
 namespace ReviewG33k.Services;
 
 public sealed class CodeReviewAnalysisContext
 {
-    public CodeReviewAnalysisContext(IReadOnlyList<CodeReviewChangedFile> files, IReadOnlySet<string> addedTestFilesByName)
+    public CodeReviewAnalysisContext(
+        IReadOnlyList<CodeReviewChangedFile> files,
+        IReadOnlySet<string> addedTestFilesByName,
+        IReadOnlyList<CodeReviewChangedFile> resxFiles = null)
     {
         Files = files ?? throw new ArgumentNullException(nameof(files));
         AddedTestFilesByName = addedTestFilesByName ?? throw new ArgumentNullException(nameof(addedTestFilesByName));
+        ResxFiles = resxFiles ?? [];
     }
 
     public IReadOnlyList<CodeReviewChangedFile> Files { get; }
 
     public IReadOnlySet<string> AddedTestFilesByName { get; }
+
+    public IReadOnlyList<CodeReviewChangedFile> ResxFiles { get; }
 
     public bool HasAnyAddedTestFiles => AddedTestFilesByName.Count > 0;
 }
