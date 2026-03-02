@@ -147,6 +147,7 @@ public partial class MainWindow : Window
 
         LocalRepositoryFolderTextBox.Text = path;
         PersistLocalReviewRepositoryPath(path);
+        await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
     }
 
     private void ReviewModeToggleSwitch_OnChanged(object sender, RoutedEventArgs e)
@@ -269,6 +270,17 @@ public partial class MainWindow : Window
     {
         if (!TryGetLocalCommittedReviewInputs(out var localRepositoryPath, out var baseBranch))
             return;
+
+        baseBranch = await ResolveLocalBaseBranchAsync(localRepositoryPath, baseBranch, logWhenChanged: true);
+        if (string.IsNullOrWhiteSpace(baseBranch))
+        {
+            SetStatus("Enter a base branch (for example: main).");
+            DialogService.Instance.ShowMessage("Base branch required", "Enter the branch to compare against (for example: main or develop).", null);
+            return;
+        }
+
+        if (!string.Equals(LocalBaseBranchTextBox.Text?.Trim(), baseBranch, StringComparison.Ordinal))
+            LocalBaseBranchTextBox.Text = baseBranch;
 
         PersistLocalReviewRepositoryPath(localRepositoryPath);
         PersistLocalReviewBaseBranch(baseBranch);
@@ -1243,6 +1255,7 @@ public partial class MainWindow : Window
         if (!m_isGitAvailable)
             return;
 
+        await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: false);
         await RunStartupCodeReviewCleanupAsync();
         await TryPrefillPullRequestUrlFromClipboardAsync();
     }
@@ -1301,6 +1314,111 @@ public partial class MainWindow : Window
             ? actionText
             : $"{actionText}{Environment.NewLine}{Environment.NewLine}Details: {failureDetails}";
         DialogService.Instance.ShowMessage("Git not found", dialogDetail, null);
+    }
+
+    private async Task TryAutoDetectLocalBaseBranchAsync(bool logWhenUpdated)
+    {
+        if (!m_isGitAvailable)
+            return;
+
+        var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
+        if (!LooksLikeGitRepository(localRepositoryPath))
+            return;
+
+        var currentBaseBranch = LocalBaseBranchTextBox.Text?.Trim();
+        var resolvedBaseBranch = await ResolveLocalBaseBranchAsync(localRepositoryPath, currentBaseBranch, logWhenChanged: logWhenUpdated);
+        if (string.IsNullOrWhiteSpace(resolvedBaseBranch))
+            return;
+        if (string.Equals(currentBaseBranch, resolvedBaseBranch, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        LocalBaseBranchTextBox.Text = resolvedBaseBranch;
+        PersistLocalReviewBaseBranch(resolvedBaseBranch);
+        UpdateActionButtonStates();
+    }
+
+    private async Task<string> ResolveLocalBaseBranchAsync(string localRepositoryPath, string requestedBaseBranch, bool logWhenChanged)
+    {
+        if (!LooksLikeGitRepository(localRepositoryPath))
+            return requestedBaseBranch?.Trim();
+
+        var normalizedRequestedBranch = requestedBaseBranch?.Trim();
+        var detectedDefaultBranch = await TryGetDefaultRemoteBranchAsync(localRepositoryPath);
+        if (string.IsNullOrWhiteSpace(detectedDefaultBranch))
+            return normalizedRequestedBranch;
+
+        if (string.IsNullOrWhiteSpace(normalizedRequestedBranch))
+        {
+            if (logWhenChanged)
+                AppendLog($"Detected default base branch: {detectedDefaultBranch}");
+            return detectedDefaultBranch;
+        }
+
+        if (string.Equals(normalizedRequestedBranch, "main", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(normalizedRequestedBranch, detectedDefaultBranch, StringComparison.OrdinalIgnoreCase))
+        {
+            if (logWhenChanged)
+                AppendLog($"Detected default base branch: {detectedDefaultBranch} (replacing '{normalizedRequestedBranch}')");
+            return detectedDefaultBranch;
+        }
+
+        return normalizedRequestedBranch;
+    }
+
+    private async Task<string> TryGetDefaultRemoteBranchAsync(string localRepositoryPath)
+    {
+        if (!LooksLikeGitRepository(localRepositoryPath))
+            return null;
+
+        var symbolicRefResult = await m_gitCommandRunner.RunAsync(
+            localRepositoryPath,
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "refs/remotes/origin/HEAD");
+        if (symbolicRefResult.IsSuccess)
+        {
+            var branch = ParseRemoteHeadBranch(symbolicRefResult.StandardOutput);
+            if (!string.IsNullOrWhiteSpace(branch))
+                return branch;
+        }
+
+        if (await HasRemoteTrackingBranchAsync(localRepositoryPath, "main"))
+            return "main";
+        if (await HasRemoteTrackingBranchAsync(localRepositoryPath, "master"))
+            return "master";
+
+        return null;
+    }
+
+    private async Task<bool> HasRemoteTrackingBranchAsync(string localRepositoryPath, string branchName)
+    {
+        if (string.IsNullOrWhiteSpace(branchName))
+            return false;
+
+        var result = await m_gitCommandRunner.RunAsync(
+            localRepositoryPath,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            $"refs/remotes/origin/{branchName}");
+        return result.IsSuccess;
+    }
+
+    private static string ParseRemoteHeadBranch(string rawOutput)
+    {
+        var normalized = rawOutput?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+            return null;
+
+        const string longPrefix = "remotes/origin/";
+        if (normalized.StartsWith(longPrefix, StringComparison.OrdinalIgnoreCase))
+            return normalized[longPrefix.Length..];
+
+        const string shortPrefix = "origin/";
+        return normalized.StartsWith(shortPrefix, StringComparison.OrdinalIgnoreCase)
+            ? normalized[shortPrefix.Length..]
+            : normalized;
     }
 
     private async Task RunStartupCodeReviewCleanupAsync()
