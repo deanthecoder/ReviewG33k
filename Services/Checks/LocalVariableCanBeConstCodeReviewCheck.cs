@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
+using System.IO;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -122,9 +123,9 @@ public sealed class LocalVariableCanBeConstCodeReviewCheck : RoslynSemanticCodeR
         finding != null &&
         string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase);
 
-    public bool TryFix(CodeSmellFinding finding, string resolvedFilePath, out string resultMessage)
+    public bool TryFix(CodeSmellFinding finding, FileInfo resolvedFile, out string resultMessage)
     {
-        if (!this.TryPrepareFix(finding, resolvedFilePath, out var sourceText, out var lineIndex, out resultMessage))
+        if (!this.TryPrepareFix(finding, resolvedFile, out var sourceText, out var lineIndex, out resultMessage))
             return false;
 
         var line = sourceText.Lines[lineIndex];
@@ -142,8 +143,8 @@ public sealed class LocalVariableCanBeConstCodeReviewCheck : RoslynSemanticCodeR
         // We need semantic model for accurate type if it's 'var'
         var file = new CodeReviewChangedFile(
             "M",
-            resolvedFilePath,
-            resolvedFilePath,
+            resolvedFile.FullName,
+            resolvedFile.FullName,
             sourceText.ToString(),
             sourceText.Lines.Select(l => l.ToString()).ToArray(),
             null);
@@ -191,7 +192,7 @@ public sealed class LocalVariableCanBeConstCodeReviewCheck : RoslynSemanticCodeR
         var updatedRoot = fixRoot.ReplaceNode(localDeclaration, newLocalDeclaration);
         var updatedText = updatedRoot.ToFullString();
 
-        if (!this.TryWriteUpdatedText(resolvedFilePath, updatedText, out resultMessage))
+        if (!this.TryWriteUpdatedText(resolvedFile, updatedText, out resultMessage))
             return false;
 
         resultMessage = $"Made local variable `{localSymbol.Name}` constant.";

@@ -641,7 +641,7 @@ public sealed class FixableCodeReviewChecksTests
             "Local variable `name` can be made `const`.");
 
         var check = new LocalVariableCanBeConstCodeReviewCheck();
-        var success = check.TryFix(finding, tempFile.FullName, out var message);
+        var success = check.TryFix(finding, new FileInfo(tempFile.FullName), out var message);
 
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
