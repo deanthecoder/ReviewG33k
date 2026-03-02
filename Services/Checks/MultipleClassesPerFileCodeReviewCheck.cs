@@ -36,15 +36,16 @@ public sealed class MultipleClassesPerFileCodeReviewCheck : CodeReviewCheckBase
                 continue;
             }
 
-            var classes = RoslynCodeReviewCheckUtilities.ParseRoot(file)
+            var topLevelClasses = RoslynCodeReviewCheckUtilities.ParseRoot(file)
                 .DescendantNodes()
                 .OfType<ClassDeclarationSyntax>()
+                .Where(IsTopLevelClass)
                 .OrderBy(classDeclaration => classDeclaration.SpanStart)
                 .ToArray();
-            if (classes.Length <= 1)
+            if (topLevelClasses.Length <= 1)
                 continue;
 
-            var triggeringClass = GetTriggeringClass(file, classes);
+            var triggeringClass = GetTriggeringClass(file, topLevelClasses);
             if (triggeringClass == null)
                 continue;
 
@@ -53,7 +54,7 @@ public sealed class MultipleClassesPerFileCodeReviewCheck : CodeReviewCheckBase
                 CodeReviewFindingSeverity.Hint,
                 file.Path,
                 RoslynCodeReviewCheckUtilities.GetStartLine(triggeringClass),
-                $"File defines {classes.Length} classes. Prefer one class per file.");
+                $"File defines {topLevelClasses.Length} classes. Prefer one class per file.");
         }
     }
 
@@ -68,4 +69,7 @@ public sealed class MultipleClassesPerFileCodeReviewCheck : CodeReviewCheckBase
             .Skip(1)
             .FirstOrDefault(classDeclaration => RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, classDeclaration.Span));
     }
+
+    private static bool IsTopLevelClass(ClassDeclarationSyntax classDeclaration) =>
+        classDeclaration?.Ancestors().All(ancestor => ancestor is not TypeDeclarationSyntax) == true;
 }

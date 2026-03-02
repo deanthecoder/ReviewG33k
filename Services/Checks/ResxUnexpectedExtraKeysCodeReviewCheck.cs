@@ -24,6 +24,8 @@ public sealed class ResxUnexpectedExtraKeysCodeReviewCheck : CodeReviewCheckBase
 
     public override string DisplayName => "RESX locale unexpected extra keys";
 
+    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.ChangedFileSet;
+
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
         foreach (var localeFile in context.ResxFiles.Where(file => file.IsAdded))

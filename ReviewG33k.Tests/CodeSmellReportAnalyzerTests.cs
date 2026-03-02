@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using ReviewG33k.Services;
+using ReviewG33k.Services.Checks;
 
 namespace ReviewG33k.Tests;
 
@@ -31,5 +32,33 @@ public sealed class CodeSmellReportAnalyzerTests
         var report = analyzer.AnalyzeFiles([]);
 
         Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void ChecksHaveExpectedScopes()
+    {
+        var analyzer = new CodeSmellReportAnalyzer(new GitCommandRunner());
+
+        var missingXmlDocsCheck = analyzer.Checks.OfType<MissingXmlDocsCodeReviewCheck>().Single();
+        var missingUnitTestsCheck = analyzer.Checks.OfType<MissingUnitTestsCodeReviewCheck>().Single();
+        var missingTestsForPublicMethodsCheck = analyzer.Checks.OfType<MissingTestsForNewPublicMethodsCodeReviewCheck>().Single();
+        var missingReadmeCheck = analyzer.Checks.OfType<MissingReadmeForNewProjectCodeReviewCheck>().Single();
+        var missingTypedBindingContextCheck = analyzer.Checks.OfType<MissingTypedBindingContextCodeReviewCheck>().Single();
+        var missingBlankLineCheck = analyzer.Checks.OfType<MissingBlankLineBetweenMethodsCodeReviewCheck>().Single();
+        var resxMissingLocaleKeysCheck = analyzer.Checks.OfType<ResxMissingLocaleKeysCodeReviewCheck>().Single();
+        var resxUnexpectedExtraKeysCheck = analyzer.Checks.OfType<ResxUnexpectedExtraKeysCodeReviewCheck>().Single();
+        var localVariableCanBeConstCheck = analyzer.Checks.OfType<LocalVariableCanBeConstCodeReviewCheck>().Single();
+        var unusedLocalVariableCheck = analyzer.Checks.OfType<UnusedLocalVariableCodeReviewCheck>().Single();
+
+        Assert.That(missingXmlDocsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(missingUnitTestsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(missingTestsForPublicMethodsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(missingReadmeCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(missingTypedBindingContextCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(missingBlankLineCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(resxMissingLocaleKeysCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
+        Assert.That(resxUnexpectedExtraKeysCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
+        Assert.That(localVariableCanBeConstCheck.Scope, Is.EqualTo(CodeReviewCheckScope.WholeChangedFile));
+        Assert.That(unusedLocalVariableCheck.Scope, Is.EqualTo(CodeReviewCheckScope.WholeChangedFile));
     }
 }

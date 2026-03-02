@@ -24,6 +24,8 @@ public sealed class ResxMissingLocaleKeysCodeReviewCheck : CodeReviewCheckBase
 
     public override string DisplayName => "RESX locale missing base keys";
 
+    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.ChangedFileSet;
+
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
         foreach (var localeFile in context.ResxFiles.Where(file => file.IsAdded))

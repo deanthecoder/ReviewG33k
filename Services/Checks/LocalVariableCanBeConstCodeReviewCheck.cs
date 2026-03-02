@@ -25,6 +25,8 @@ public sealed class LocalVariableCanBeConstCodeReviewCheck : RoslynSemanticCodeR
 
     public override string DisplayName => "Local variable can be const";
 
+    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.WholeChangedFile;
+
     protected override void AnalyzeFile(
         CodeReviewAnalysisContext context,
         CodeReviewChangedFile file,
@@ -126,7 +128,6 @@ public sealed class LocalVariableCanBeConstCodeReviewCheck : RoslynSemanticCodeR
             return false;
 
         var line = sourceText.Lines[lineIndex];
-        var lineText = line.ToString();
         var syntaxTree = CSharpSyntaxTree.ParseText(sourceText);
         var root = syntaxTree.GetCompilationUnitRoot();
 
@@ -149,8 +150,8 @@ public sealed class LocalVariableCanBeConstCodeReviewCheck : RoslynSemanticCodeR
                 file,
                 out var fixRoot,
                 out var semanticModel,
-                out var _,
-                out var _))
+                out _,
+                out _))
         {
             resultMessage = "Could not perform semantic analysis for fix.";
             return false;

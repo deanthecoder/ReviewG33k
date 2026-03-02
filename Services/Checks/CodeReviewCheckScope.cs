@@ -10,13 +10,8 @@
 
 namespace ReviewG33k.Services.Checks;
 
-public interface ICodeReviewCheck
+public enum CodeReviewCheckScope
 {
-    string RuleId { get; }
-
-    string DisplayName { get; }
-
-    CodeReviewCheckScope Scope { get; }
-
-    void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report);
-}
+    AddedLinesOnly ,
+    WholeChangedFile ,
+    ChangedFileSet }

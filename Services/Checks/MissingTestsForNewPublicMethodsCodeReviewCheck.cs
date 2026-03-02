@@ -23,6 +23,8 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
 
     public override string DisplayName => "new public methods have test changes";
 
+    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
+
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
         var changedTestFiles = context.Files

@@ -18,6 +18,8 @@ public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
 
     public override string DisplayName => "XML docs on new public types";
 
+    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
+
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
         foreach (var file in context.Files.Where(file => file.IsAdded))

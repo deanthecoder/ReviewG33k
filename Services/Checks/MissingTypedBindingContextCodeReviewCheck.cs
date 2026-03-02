@@ -25,6 +25,8 @@ public sealed class MissingTypedBindingContextCodeReviewCheck : CodeReviewCheckB
 
     public override string DisplayName => "UI bindings have typed/design data context";
 
+    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
+
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
         ArgumentNullException.ThrowIfNull(context);

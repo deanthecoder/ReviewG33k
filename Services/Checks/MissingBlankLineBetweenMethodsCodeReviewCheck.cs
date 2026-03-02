@@ -23,6 +23,8 @@ public sealed class MissingBlankLineBetweenMethodsCodeReviewCheck : CodeReviewCh
 
     public override string DisplayName => "Blank line between methods";
 
+    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
+
     public bool CanFix(CodeSmellFinding finding) =>
         finding != null &&
         string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase) &&

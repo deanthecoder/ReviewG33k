@@ -53,4 +53,6 @@ public static class CodeReviewRuleIds
     public const string MissingTypedBindingContext = "missing-typed-binding-context";
     public const string MultipleClassesPerFile = "multiple-classes-per-file";
     public const string MissingReadmeForNewProject = "missing-readme-for-new-project";
+    public const string UnusedLocalVariable = "unused-local-variable";
+    public const string UnnecessaryEnumMemberValue = "unnecessary-enum-member-value";
 }

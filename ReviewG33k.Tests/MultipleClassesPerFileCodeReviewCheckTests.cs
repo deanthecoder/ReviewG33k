@@ -52,6 +52,23 @@ public sealed class MultipleClassesPerFileCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenAddedFileHasNestedPrivateClassDoesNotReport()
+    {
+        const string source = """
+            public sealed class OuterClass
+            {
+                private sealed class InnerClass
+                {
+                }
+            }
+            """;
+
+        var report = Analyze("A", "Services/Sample.cs", source, Enumerable.Range(1, 7));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AnalyzeWhenModifiedFileHasMultipleClassesWithoutAddedClassLineDoesNotReport()
     {
         const string source = """

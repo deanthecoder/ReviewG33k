@@ -48,7 +48,7 @@ public sealed class FixableCodeReviewChecksTests
     public void ThrowExCheckTryFixReplacesWithThrow()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             using System;
 
             public sealed class Sample
@@ -92,7 +92,7 @@ public sealed class FixableCodeReviewChecksTests
     public void IfElseBraceConsistencyCheckTryFixRemovesUnnecessaryBraceWhenSafe()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public int Run(bool flag)
@@ -135,7 +135,7 @@ public sealed class FixableCodeReviewChecksTests
     public void IfElseBraceConsistencyCheckTryFixAddsMissingBracesWhenRemovalIsUnsafe()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public int Run(bool flag)
@@ -182,7 +182,7 @@ public sealed class FixableCodeReviewChecksTests
     public void IfElseUnnecessaryBracesCheckTryFixRemovesBracesFromBothBranches()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public int Run(bool flag)
@@ -227,7 +227,7 @@ public sealed class FixableCodeReviewChecksTests
     public void IfElseUnnecessaryBracesCheckTryFixWhenStatementSpansMultipleLinesReturnsFalse()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public string Run(bool flag)
@@ -267,7 +267,7 @@ public sealed class FixableCodeReviewChecksTests
     public void IfElseUnnecessaryBracesCheckTryFixForElseIfChainRemovesOnlyUnnecessaryIfBracesAndKeepsIndentation()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public async Task RunAsync(bool first, bool second, string path)
@@ -311,7 +311,7 @@ public sealed class FixableCodeReviewChecksTests
     public void WarningSuppressionCheckTryFixWhenPragmaRemovesTheLine()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             using System;
 
             #pragma warning disable CS0168
@@ -345,7 +345,7 @@ public sealed class FixableCodeReviewChecksTests
     public void WarningSuppressionCheckTryFixWhenSuppressMessageRemovesTheAttribute()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             using System;
             using System.Diagnostics.CodeAnalysis;
 
@@ -379,7 +379,7 @@ public sealed class FixableCodeReviewChecksTests
     public void MissingBlankLineBetweenMethodsCheckTryFixInsertsBlankLineBeforeSecondMethod()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 private int Foo()
@@ -431,7 +431,7 @@ public sealed class FixableCodeReviewChecksTests
     public void MethodCanBeStaticCheckTryFixAddsStaticModifier()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public int Add(int a, int b)
@@ -468,7 +468,7 @@ public sealed class FixableCodeReviewChecksTests
     public void RedundantSelfLookupCheckTryFixReplacesLookupCallWithThis()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public class Owner
             {
                 public static Owner GetOwner(Owner value) => value;
@@ -507,7 +507,7 @@ public sealed class FixableCodeReviewChecksTests
     public void UnusedPrivateMemberCheckTryFixRemovesPrivateMethod()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public int Run()
@@ -550,7 +550,7 @@ public sealed class FixableCodeReviewChecksTests
     public void UnnecessaryVerbatimStringPrefixCheckTryFixRemovesPrefixFromLiteral()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public string Run()
@@ -585,7 +585,7 @@ public sealed class FixableCodeReviewChecksTests
     public void UnnecessaryVerbatimStringPrefixCheckTryFixRemovesPrefixFromInterpolatedLiteral()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public string Run(string name)
@@ -711,7 +711,7 @@ public sealed class FixableCodeReviewChecksTests
     public void LocalVariableCanBeConstCheckDetectsInChangedFileWhenLineIsNotInAddedSet()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public void Run()
@@ -734,5 +734,41 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(report.Findings, Has.Count.EqualTo(1));
         Assert.That(report.Findings[0].RuleId, Is.EqualTo("local-variable-can-be-const"));
         Assert.That(report.Findings[0].LineNumber, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void UnnecessaryEnumMemberValueCheckTryFixRemovesExplicitValueAssignment()
+    {
+        using var tempFile = new TempFile(".cs");
+        const string source = """
+            public enum CodeReviewCheckScope
+            {
+                AddedLinesOnly = 0,
+                WholeChangedFile = 1,
+                ChangedFileSet = 2
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.UnnecessaryEnumMemberValue,
+            "Sample.cs",
+            3,
+            "Enum member has explicit default value.");
+
+        var check = new UnnecessaryEnumMemberValueCodeReviewCheck();
+        Assert.That(check.CanFix(finding), Is.True);
+
+        var success = check.TryFix(finding, tempFile, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Does.Contain("AddedLinesOnly"));
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Contain("AddedLinesOnly,"));
+        Assert.That(updated, Does.Not.Contain("AddedLinesOnly = 0"));
+        Assert.That(updated, Does.Contain("WholeChangedFile = 1"));
     }
 }

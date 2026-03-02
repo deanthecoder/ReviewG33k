@@ -24,6 +24,8 @@ public sealed class MissingReadmeForNewProjectCodeReviewCheck : CodeReviewCheckB
 
     public override string DisplayName => "new project has README";
 
+    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
+
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
         ArgumentNullException.ThrowIfNull(context);

@@ -16,6 +16,8 @@ public abstract class CodeReviewCheckBase : ICodeReviewCheck
 
     public abstract string DisplayName { get; }
 
+    public virtual CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
+
     public abstract void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report);
 
     protected void AddFinding(CodeSmellReport report, CodeReviewFindingSeverity severity, string filePath, int lineNumber, string message) =>

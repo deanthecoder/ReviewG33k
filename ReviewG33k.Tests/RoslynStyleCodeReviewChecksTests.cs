@@ -1086,6 +1086,59 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void UnnecessaryEnumMemberValueCheckWhenValuesAreDefaultSequenceReportsHint()
+    {
+        const string source = """
+            public enum CodeReviewCheckScope
+            {
+                AddedLinesOnly = 0,
+                WholeChangedFile = 1,
+                ChangedFileSet = 2
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryEnumMemberValueCodeReviewCheck(), "A", source, Enumerable.Range(1, 8));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(3));
+        Assert.That(report.Findings.All(finding => finding.Severity == CodeReviewFindingSeverity.Hint), Is.True);
+        Assert.That(report.Findings.All(finding => finding.RuleId == CodeReviewRuleIds.UnnecessaryEnumMemberValue), Is.True);
+        Assert.That(report.Findings[0].Message, Does.Contain("`AddedLinesOnly`"));
+    }
+
+    [Test]
+    public void UnnecessaryEnumMemberValueCheckWhenNonSequentialValuesAreUsedDoesNotReport()
+    {
+        const string source = """
+            public enum Mode
+            {
+                Unknown = -1,
+                Primary = 10,
+                Secondary = 20
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryEnumMemberValueCodeReviewCheck(), "A", source, Enumerable.Range(1, 8));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnnecessaryEnumMemberValueCheckWhenExplicitMemberOutsideAddedLinesDoesNotReport()
+    {
+        const string source = """
+            public enum Scope
+            {
+                First = 0,
+                Second = 1
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryEnumMemberValueCodeReviewCheck(), "M", source, [1, 2]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void UnnecessaryVerbatimStringPrefixCheckWhenSimpleVerbatimLiteralReportsHint()
     {
         const string source = """
@@ -1563,6 +1616,87 @@ public sealed class RoslynStyleCodeReviewChecksTests
             """;
 
         var report = AnalyzeSource(new UnusedPrivateMemberCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnusedLocalVariableCheckWhenVariableIsNeverReadReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Run()
+                {
+                    var unused = 123;
+                    return 7;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedLocalVariableCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings[0].RuleId, Is.EqualTo(CodeReviewRuleIds.UnusedLocalVariable));
+        Assert.That(report.Findings[0].Message, Does.Contain("`unused`"));
+    }
+
+    [Test]
+    public void UnusedLocalVariableCheckWhenVariableIsReadDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Run()
+                {
+                    var used = 123;
+                    return used;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedLocalVariableCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnusedLocalVariableCheckWhenVariableIsOnlyWrittenStillReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Run()
+                {
+                    var value = 1;
+                    value = 2;
+                    return 3;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedLocalVariableCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("`value`"));
+    }
+
+    [Test]
+    public void UnusedLocalVariableCheckWhenVariableNameIsUnderscoreDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Run()
+                {
+                    var _ = 1;
+                    return 2;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedLocalVariableCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
 
         Assert.That(report.Findings, Is.Empty);
     }

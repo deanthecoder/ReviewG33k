@@ -18,6 +18,8 @@ public sealed class MissingUnitTestsCodeReviewCheck : CodeReviewCheckBase
 
     public override string DisplayName => "new non-UI type has new test file";
 
+    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
+
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
         foreach (var file in context.Files.Where(file => file.IsAdded))

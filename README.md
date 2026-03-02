@@ -65,6 +65,7 @@ dotnet run --project ReviewG33k.csproj
 | Private field can be readonly | Private fields written only during construction. |
 | Method can be static | Instance methods that do not use instance state. |
 | Local variable can be const | Local values that never change and can safely be `const`. |
+| Unused local variables | Local variables that are declared/assigned but never read. |
 | Multiple classes per file | Files that define more than one class (prefer one class per file). |
 | Redundant self lookup | Needlessly resolving an object from itself (or equivalent redundant lookup). |
 | Public mutable static state | Exposed mutable static fields/properties. |
@@ -82,6 +83,7 @@ dotnet run --project ReviewG33k.csproj
 | Large constructors | Constructors doing too much inline setup work. |
 | Boolean literal comparison | Comparisons like `== true` / `== false` that can be simplified. |
 | Unnecessary casts | Casts that do not change type or behavior. |
+| Unnecessary enum member values | Explicit enum values that simply match the default sequential numbering. |
 | Unnecessary verbatim string prefix | `@` string prefix where no escaping benefit is used. |
 
 ### Test and documentation coverage
