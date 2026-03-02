@@ -496,6 +496,65 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void IfElseUnnecessaryBracesCheckWhenElseIfBranchHasSingleStatementBracesReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Run(bool a, bool b)
+                {
+                    if (a)
+                        return 1;
+                    else if (b)
+                    {
+                        return 2;
+                    }
+
+                    return 3;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new IfElseUnnecessaryBracesCodeReviewCheck(), "A", source, Enumerable.Range(1, 16));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+    }
+
+    [Test]
+    public void IfElseUnnecessaryBracesCheckWhenOwningIfBranchCannotUnwrapDoesNotReportElseIfBranch()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Run(string line)
+                {
+                    var openParenthesisBalance = 0;
+                    var hasSeenOpenParenthesis = false;
+                    foreach (var character in line)
+                    {
+                        if (character == '(')
+                        {
+                            openParenthesisBalance++;
+                            hasSeenOpenParenthesis = true;
+                        }
+                        else if (character == ')')
+                        {
+                            openParenthesisBalance--;
+                        }
+                    }
+
+                    return openParenthesisBalance;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new IfElseUnnecessaryBracesCodeReviewCheck(), "A", source, Enumerable.Range(1, 24));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void ConstructorTooLongCheckWhenConstructorHasFifteenCodeLinesReportsSuggestion()
     {
         const string source = """

@@ -108,8 +108,23 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
 
     private static bool HasUnnecessaryBraces(IfStatementSyntax ifStatement)
     {
-        if (ifStatement?.Else == null)
+        if (ifStatement == null)
             return false;
+
+        if (ifStatement.Else == null)
+        {
+            // Allow else-if nodes (which are themselves IfStatementSyntax) to be checked
+            // even when they do not have a trailing else branch.
+            if (ifStatement.Parent is ElseClauseSyntax { Parent: IfStatementSyntax owningIf } &&
+                ifStatement.Statement is BlockSyntax elseIfBlock)
+            {
+                var owningIfIsUnbraced = owningIf.Statement is not BlockSyntax;
+                var owningIfCanUnwrap = owningIf.Statement is BlockSyntax owningIfBlock && CanUnwrapBlock(owningIfBlock);
+                return (owningIfIsUnbraced || owningIfCanUnwrap) && CanUnwrapBlock(elseIfBlock);
+            }
+
+            return false;
+        }
         if (ifStatement.Statement is not BlockSyntax ifBlock)
             return false;
 
