@@ -177,10 +177,19 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
 
     private static bool SymbolMatches(SymbolInfo symbolInfo, ISymbol symbol)
     {
-        if (SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol, symbol))
+        if (SymbolsAreEquivalent(symbolInfo.Symbol, symbol))
             return true;
 
-        return symbolInfo.CandidateSymbols.Any(candidateSymbol => SymbolEqualityComparer.Default.Equals(candidateSymbol, symbol));
+        return symbolInfo.CandidateSymbols.Any(candidateSymbol => SymbolsAreEquivalent(candidateSymbol, symbol));
+    }
+
+    private static bool SymbolsAreEquivalent(ISymbol left, ISymbol right)
+    {
+        if (left == null || right == null)
+            return false;
+
+        return SymbolEqualityComparer.Default.Equals(left, right) ||
+               SymbolEqualityComparer.Default.Equals(left.OriginalDefinition, right.OriginalDefinition);
     }
 
     private static bool IsInPartialType(SyntaxNode node)

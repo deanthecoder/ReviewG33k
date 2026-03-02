@@ -1621,6 +1621,28 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void UnusedPrivateMemberCheckWhenGenericPrivateMethodIsUsedDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    Execute<int>();
+                }
+
+                private void Execute<T>()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedPrivateMemberCodeReviewCheck(), "A", source, Enumerable.Range(1, 12));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void UnusedLocalVariableCheckWhenVariableIsNeverReadReportsHint()
     {
         const string source = """
