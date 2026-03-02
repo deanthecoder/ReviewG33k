@@ -168,7 +168,7 @@ public partial class MainWindow : Window
         UpdateActionButtonStates();
     }
 
-    private void PullRequestUrlTextBox_OnDragOver(object sender, DragEventArgs e)
+    private static void PullRequestUrlTextBox_OnDragOver(object sender, DragEventArgs e)
     {
         e.DragEffects = TryExtractPullRequestUrl(e.Data, out _) ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;

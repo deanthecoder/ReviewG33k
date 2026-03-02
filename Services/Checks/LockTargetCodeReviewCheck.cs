@@ -43,13 +43,9 @@ public sealed class LockTargetCodeReviewCheck : CodeReviewCheckBase
 
                     var target = lockMatch.Groups["target"].Value;
                     if (target.Equals("this", StringComparison.OrdinalIgnoreCase))
-                    {
                         AddFinding(report, CodeReviewFindingSeverity.Important, file.Path, lineNumber, "lock(this) detected.");
-                    }
                     else if (CodeReviewCheckUtilities.LooksLikePublicLockObject(file.Lines, target))
-                    {
                         AddFinding(report, CodeReviewFindingSeverity.Important, file.Path, lineNumber, $"Possible lock on public object '{target}'.");
-                    }
                 }
             }
         }
