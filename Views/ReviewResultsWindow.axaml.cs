@@ -16,6 +16,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using DTC.Core.Extensions;
 using ReviewG33k.Services;
@@ -41,7 +42,9 @@ public partial class ReviewResultsWindow : Window
     private readonly bool m_canCommentInBitbucket;
     private readonly bool m_canFixLocally;
     private readonly bool m_hasPathResolver;
+    private Cursor m_previousCursor;
     private bool m_isBulkCommenting;
+    private bool m_isApplyingFix;
 
     public ReviewResultsWindow()
         : this(Array.Empty<CodeSmellFinding>(), false, false, false, null, null, null, null, null)
@@ -125,7 +128,7 @@ public partial class ReviewResultsWindow : Window
 
     private async void FixFindingButton_OnClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { DataContext: ReviewResultRow row } || !row.CanFixActive)
+        if (m_isApplyingFix || sender is not Button { DataContext: ReviewResultRow row } || !row.CanFixActive)
             return;
 
         if (row.Finding == null)
@@ -137,6 +140,8 @@ public partial class ReviewResultsWindow : Window
             return;
         }
 
+        m_isApplyingFix = true;
+        SetFixUiBusy(true);
         row.IsFixing = true;
         try
         {
@@ -177,7 +182,26 @@ public partial class ReviewResultsWindow : Window
         finally
         {
             row.IsFixing = false;
+            m_isApplyingFix = false;
+            SetFixUiBusy(false);
         }
+    }
+
+    private void SetFixUiBusy(bool isBusy)
+    {
+        if (isBusy)
+        {
+            m_previousCursor = Cursor;
+            Cursor = new Cursor(StandardCursorType.Wait);
+        }
+        else
+        {
+            Cursor = m_previousCursor;
+            m_previousCursor = null;
+        }
+
+        if (WindowContentGrid != null)
+            WindowContentGrid.IsEnabled = !isBusy;
     }
 
     private async void CreateCodexPromptButton_OnClick(object sender, RoutedEventArgs e)

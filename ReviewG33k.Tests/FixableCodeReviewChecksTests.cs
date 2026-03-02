@@ -13,7 +13,7 @@ public sealed class FixableCodeReviewChecksTests
     public void UnusedUsingCheckTryFixRemovesTheLineAndDoesNotLeaveTripleBlankLines()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             using System;
             using System.Text;
 
@@ -620,7 +620,7 @@ public sealed class FixableCodeReviewChecksTests
     public void LocalVariableCanBeConstCheckTryFixAddsConstKeyword()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public void Run()
@@ -654,7 +654,7 @@ public sealed class FixableCodeReviewChecksTests
     public void LocalVariableCanBeConstCheckDoesNotDetectIfModified()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public void Run()
@@ -682,7 +682,7 @@ public sealed class FixableCodeReviewChecksTests
     public void LocalVariableCanBeConstCheckDetectsIfNeverModified()
     {
         using var tempFile = new TempFile(".cs");
-        var source = """
+        const string source = """
             public sealed class Sample
             {
                 public void Run()
@@ -697,6 +697,35 @@ public sealed class FixableCodeReviewChecksTests
 
         var context = new CodeReviewAnalysisContext(
             new[] { new CodeReviewChangedFile("M", "Sample.cs", tempFile.FullName, source, source.Split('\n'), new HashSet<int> { 5 }) },
+            new HashSet<string>());
+        var report = new CodeSmellReport();
+        var check = new LocalVariableCanBeConstCodeReviewCheck();
+        check.Analyze(context, report);
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].RuleId, Is.EqualTo("local-variable-can-be-const"));
+        Assert.That(report.Findings[0].LineNumber, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void LocalVariableCanBeConstCheckDetectsInChangedFileWhenLineIsNotInAddedSet()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = """
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    var title = "ReviewG33k";
+                    System.Console.WriteLine(title);
+                }
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var context = new CodeReviewAnalysisContext(
+            new[] { new CodeReviewChangedFile("M", "Sample.cs", tempFile.FullName, source, source.Split('\n'), new HashSet<int> { 2 }) },
             new HashSet<string>());
         var report = new CodeSmellReport();
         var check = new LocalVariableCanBeConstCodeReviewCheck();

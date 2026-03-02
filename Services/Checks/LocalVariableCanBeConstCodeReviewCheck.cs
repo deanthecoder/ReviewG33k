@@ -39,9 +39,6 @@ public sealed class LocalVariableCanBeConstCodeReviewCheck : RoslynSemanticCodeR
 
             foreach (var variable in localDeclaration.Declaration.Variables)
             {
-                if (!RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, variable.Span))
-                    continue;
-
                 if (semanticModel.GetDeclaredSymbol(variable) is not ILocalSymbol localSymbol)
                     continue;
 
