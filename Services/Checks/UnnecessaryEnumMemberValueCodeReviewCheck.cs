@@ -11,6 +11,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -61,6 +62,8 @@ public sealed class UnnecessaryEnumMemberValueCodeReviewCheck : RoslynSemanticCo
         var memberName = member.Identifier.ValueText;
         var updatedRoot = root.ReplaceNode(member, member.WithEqualsValue(null));
         var updatedText = updatedRoot.ToFullString();
+        if (!string.IsNullOrWhiteSpace(memberName))
+            updatedText = Regex.Replace(updatedText, $@"\b{Regex.Escape(memberName)}\s+,", $"{memberName},");
         if (!this.TryWriteUpdatedText(resolvedFile, updatedText, out resultMessage))
             return false;
 

@@ -96,11 +96,16 @@ internal static class RoslynCodeReviewCheckUtilities
         // These checks often run against a single changed file rather than the full project compilation.
         // A green CI build can still produce local Roslyn errors here (missing project-local symbols/types).
         // Treat only parse/syntax errors as blocking so we don't skip useful checks on otherwise-valid PRs.
-        if (diagnostics is IReadOnlyCollection<Diagnostic> collection)
-            return collection.Count > 0;
-
         if (diagnostics != null)
-            return diagnostics.Any();
+        {
+            foreach (var diagnostic in diagnostics)
+            {
+                if (diagnostic?.Severity == DiagnosticSeverity.Error)
+                    return true;
+            }
+
+            return false;
+        }
 
         if (syntaxTree == null)
             return true;

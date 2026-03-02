@@ -15,7 +15,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DTC.Core.Extensions;
 using ReviewG33k.Services.Checks;
-using ReviewG33k.Services.Checks.Support;
+using Support = ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services;
 
@@ -115,7 +115,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
         }
 
         var changedFileEntries = allChangedFileEntries
-            .Where(entry => CodeReviewFileClassification.IsAnalyzableChangedPath(entry.Path))
+            .Where(entry => Support.CodeReviewFileClassification.IsAnalyzableChangedPath(entry.Path))
             .ToArray();
 
         if (changedFileEntries.Length == 0)

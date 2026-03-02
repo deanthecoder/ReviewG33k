@@ -14,7 +14,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using ReviewG33k.Services.Checks;
-using ReviewG33k.Services.Checks.Support;
+using Support = ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services;
 
@@ -164,16 +164,16 @@ public sealed class CodeSmellReportAnalyzer
             : changedFiles.ToArray();
 
         var csharpFiles = sourceFiles
-            .Where(file => CodeReviewFileClassification.IsAnalyzableChangedCSharpPath(file.Path))
+            .Where(file => Support.CodeReviewFileClassification.IsAnalyzableChangedCSharpPath(file.Path))
             .ToArray();
         var resxFiles = sourceFiles
-            .Where(file => CodeReviewFileClassification.IsAnalyzableResxPath(file.Path))
+            .Where(file => Support.CodeReviewFileClassification.IsAnalyzableResxPath(file.Path))
             .ToArray();
 
         var addedTestFilesByName = new HashSet<string>(
             csharpFiles
                 .Where(file => file.IsAdded)
-                .Where(CodeReviewFileClassification.IsLikelyTestCodeFile)
+                .Where(Support.CodeReviewFileClassification.IsLikelyTestCodeFile)
                 .Select(file => Path.GetFileName(file.Path)),
             StringComparer.OrdinalIgnoreCase);
 

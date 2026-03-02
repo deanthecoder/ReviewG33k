@@ -9,9 +9,9 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System.Collections.Generic;
-using System.Reflection;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
+using Support = ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Tests;
 
@@ -121,53 +121,21 @@ public sealed class CodeReviewFileClassificationTests
 
     private static bool InvokeIsAnalyzableChangedCSharpPath(string path)
     {
-        var method = ResolveClassificationMethod(
-            "IsAnalyzableChangedCSharpPath",
-            BindingFlags.Public | BindingFlags.Static);
-
-        Assert.That(method, Is.Not.Null, "Could not find IsAnalyzableChangedCSharpPath via reflection.");
-
-        return (bool)method.Invoke(null, [path]);
+        return Support.CodeReviewFileClassification.IsAnalyzableChangedCSharpPath(path);
     }
 
     private static bool InvokeIsCodeBehindFilePath(string path)
     {
-        var method = ResolveClassificationMethod(
-            "IsCodeBehindFilePath",
-            BindingFlags.Public | BindingFlags.Static);
-
-        Assert.That(method, Is.Not.Null, "Could not find IsCodeBehindFilePath via reflection.");
-
-        return (bool)method.Invoke(null, [path]);
+        return Support.CodeReviewFileClassification.IsCodeBehindFilePath(path);
     }
 
     private static bool InvokeIsMarkupFilePath(string path)
     {
-        var method = ResolveClassificationMethod(
-            "IsMarkupFilePath",
-            BindingFlags.Public | BindingFlags.Static);
-
-        Assert.That(method, Is.Not.Null, "Could not find IsMarkupFilePath via reflection.");
-
-        return (bool)method.Invoke(null, [path]);
+        return Support.CodeReviewFileClassification.IsMarkupFilePath(path);
     }
 
     private static bool InvokeIsLikelyTestCodeFile(CodeReviewChangedFile file)
     {
-        var method = ResolveClassificationMethod(
-            "IsLikelyTestCodeFile",
-            BindingFlags.Public | BindingFlags.Static);
-
-        Assert.That(method, Is.Not.Null, "Could not find IsLikelyTestCodeFile via reflection.");
-
-        return (bool)method.Invoke(null, [file]);
-    }
-
-    private static MethodInfo ResolveClassificationMethod(string methodName, BindingFlags bindingFlags)
-    {
-        var classificationType = typeof(MissingUnitTestsCodeReviewCheck).Assembly.GetType(
-            "ReviewG33k.Services.Checks.CodeReviewFileClassification",
-            throwOnError: true);
-        return classificationType.GetMethod(methodName, bindingFlags);
+        return Support.CodeReviewFileClassification.IsLikelyTestCodeFile(file);
     }
 }
