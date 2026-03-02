@@ -54,7 +54,9 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
-        var baseRef = $"origin/{m_targetBranch}";
+        var remoteBaseRef = $"origin/{m_targetBranch}";
+        var remoteBaseRefName = $"refs/remotes/{remoteBaseRef}";
+        var localBaseRefName = $"refs/heads/{m_targetBranch}";
         if (m_fetchTargetBranch)
         {
             var fetchTargetResult = await m_gitCommandRunner.RunAsync(
@@ -62,13 +64,28 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
                 "fetch",
                 "--prune",
                 "origin",
-                $"+refs/heads/{m_targetBranch}:{baseRef}");
+                $"+refs/heads/{m_targetBranch}:{remoteBaseRef}");
             if (!fetchTargetResult.IsSuccess)
             {
-                info.Add($"Code review scan skipped: Unable to fetch target branch '{m_targetBranch}'.");
-                return new CodeReviewChangedFileSourceResult([], info);
+                info.Add($"Code review scan: Unable to fetch target branch '{m_targetBranch}' from origin. Trying local branch.");
             }
         }
+
+        var hasRemoteBaseRef = await RefExistsAsync(remoteBaseRefName);
+        var hasLocalBaseRef = await RefExistsAsync(localBaseRefName);
+        var baseRef = hasRemoteBaseRef
+            ? remoteBaseRef
+            : hasLocalBaseRef
+                ? m_targetBranch
+                : null;
+        if (baseRef == null)
+        {
+            info.Add($"Code review scan skipped: Target branch '{m_targetBranch}' was not found on origin or as a local branch.");
+            return new CodeReviewChangedFileSourceResult([], info);
+        }
+
+        if (!hasRemoteBaseRef && hasLocalBaseRef)
+            info.Add($"Code review scan: Using local target branch '{m_targetBranch}' because origin/{m_targetBranch} was not available.");
 
         var diffRange = $"{baseRef}...HEAD";
         var nameStatusResult = await m_gitCommandRunner.RunAsync(
@@ -150,6 +167,20 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             return [];
 
         return ParseAddedLineNumbers(result.StandardOutput);
+    }
+
+    private async Task<bool> RefExistsAsync(string referenceName)
+    {
+        if (string.IsNullOrWhiteSpace(referenceName))
+            return false;
+
+        var result = await m_gitCommandRunner.RunAsync(
+            m_repositoryPath,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            referenceName);
+        return result.IsSuccess;
     }
 
     private static HashSet<int> ParseAddedLineNumbers(string diffText)
