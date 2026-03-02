@@ -153,6 +153,56 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void AnalyzeWhenOptionalParametersAreOnlyUsedWithNullConditionalDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void Run(Action<string> progressLogger = null, Action<int, int, string> progressReporter = null)
+                {
+                    progressLogger?.Invoke("hello");
+                    progressReporter?.Invoke(1, 2, "done");
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenParameterIsOnlyUsedWithNullConditionalAndNullCoalescingDoesNotReport()
+    {
+        const string source = """
+            using System.Linq;
+
+            public sealed class SourceResult
+            {
+                public string[] InfoMessages { get; set; }
+
+                public string[] Files { get; set; }
+            }
+
+            public sealed class Sample
+            {
+                public int Run(SourceResult sourceResult)
+                {
+                    var infoCount = sourceResult?.InfoMessages?.Length ?? 0;
+                    var fileCount = sourceResult?.Files?.Where(file => file != null).Count() ?? 0;
+                    return infoCount + fileCount;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport AnalyzeSource(string source)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');

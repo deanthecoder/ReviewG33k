@@ -245,6 +245,8 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         {
             if (HasParameterModifier(rawParameter, "out"))
                 continue;
+            if (IsOptionalParameter(rawParameter))
+                continue;
 
             if (!TryParseParameter(rawParameter, out var typeName, out var parameterName))
                 continue;
@@ -281,6 +283,24 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
             parameterText,
             $@"^(?:scoped\s+)?{Regex.Escape(modifier)}\b",
             RegexOptions.IgnoreCase);
+    }
+
+    private static bool IsOptionalParameter(string rawParameter)
+    {
+        if (string.IsNullOrWhiteSpace(rawParameter))
+            return false;
+
+        var parameterText = rawParameter;
+        while (true)
+        {
+            var attributeMatch = Regex.Match(parameterText, @"^\s*\[[^\]]+\]\s*");
+            if (!attributeMatch.Success)
+                break;
+
+            parameterText = parameterText[attributeMatch.Length..];
+        }
+
+        return parameterText.IndexOf('=') >= 0;
     }
 
     private static IEnumerable<string> SplitParameters(string parameterListText)
@@ -430,6 +450,39 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         var withoutLineComments = Regex.Replace(withoutBlockComments, "//.*?$", string.Empty, RegexOptions.Multiline);
 
         var usagePattern = $@"\b{Regex.Escape(parameterName)}\b";
-        return Regex.IsMatch(withoutLineComments, usagePattern, RegexOptions.Compiled);
+        foreach (Match match in Regex.Matches(withoutLineComments, usagePattern, RegexOptions.Compiled))
+        {
+            if (!match.Success)
+                continue;
+            if (IsSafelyNullTolerantUsage(withoutLineComments, match, parameterName))
+                continue;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsSafelyNullTolerantUsage(string source, Match parameterMatch, string parameterName)
+    {
+        var trailing = source[parameterMatch.Index..];
+        if (Regex.IsMatch(trailing, $@"^\b{Regex.Escape(parameterName)}\b\s*\?\.", RegexOptions.Compiled))
+            return true;
+        if (Regex.IsMatch(trailing, $@"^\b{Regex.Escape(parameterName)}\b\s*\?\?", RegexOptions.Compiled))
+            return true;
+        if (Regex.IsMatch(trailing, $@"^\b{Regex.Escape(parameterName)}\b\s*(?:==|!=)\s*null\b", RegexOptions.Compiled))
+            return true;
+        if (Regex.IsMatch(trailing, $@"^\b{Regex.Escape(parameterName)}\b\s+is\s+(?:not\s+)?null\b", RegexOptions.Compiled))
+            return true;
+
+        var leading = source[..parameterMatch.Index];
+        if (Regex.IsMatch(leading, @"(?:^|[\s(])nameof\s*\(\s*$", RegexOptions.Compiled))
+            return true;
+        if (Regex.IsMatch(leading, @"ArgumentNullException\.ThrowIfNull\s*\(\s*$", RegexOptions.Compiled))
+            return true;
+        if (Regex.IsMatch(leading, @"Guard\.Against\.Null\s*\(\s*$", RegexOptions.Compiled))
+            return true;
+
+        return false;
     }
 }
