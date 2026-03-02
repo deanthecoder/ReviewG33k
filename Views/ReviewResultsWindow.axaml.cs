@@ -658,8 +658,6 @@ public partial class ReviewResultsWindow : Window
         builder.AppendLine("* Test/build commands run (or why none were run)");
         builder.AppendLine("* Risks or follow-up checks or code improvement suggestions");
         builder.AppendLine("* Any other relevant information");
-        builder.AppendLine();
-        builder.AppendLine("Example:");
 
         promptText = builder.ToString().TrimEnd('\r', '\n');
         return true;

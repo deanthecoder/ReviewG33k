@@ -1654,6 +1654,30 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void MultipleEnumerationCheckWhenOfTypeChainsUseDifferentReceiversDoesNotReport()
+    {
+        const string source = """
+            using System.Linq;
+            using Microsoft.CodeAnalysis;
+            using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+            public sealed class Sample
+            {
+                public void Run(SyntaxNode node, SyntaxNode variable, SyntaxNode fixRoot)
+                {
+                    _ = node.AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+                    _ = fixRoot.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault();
+                    _ = variable.Ancestors().OfType<LocalDeclarationStatementSyntax>().First();
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MultipleEnumerationCodeReviewCheck(), "A", source, Enumerable.Range(1, 16));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void PublicMutableStaticStateCheckWhenPublicStaticFieldIsMutableReportsImportant()
     {
         const string source = """

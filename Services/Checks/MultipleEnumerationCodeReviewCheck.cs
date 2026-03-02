@@ -146,8 +146,9 @@ public sealed class MultipleEnumerationCodeReviewCheck : RoslynSemanticCodeRevie
         if (sequenceExpression == null)
             return false;
 
-        sequenceSymbol = semanticModel.GetSymbolInfo(sequenceExpression).Symbol;
-        var sequenceType = semanticModel.GetTypeInfo(sequenceExpression).Type;
+        if (!TryGetSequenceSymbolAndType(semanticModel, sequenceExpression, out sequenceSymbol, out var sequenceType))
+            return false;
+
         return IsEnumerableCandidate(sequenceSymbol, sequenceType);
     }
 
@@ -177,6 +178,9 @@ public sealed class MultipleEnumerationCodeReviewCheck : RoslynSemanticCodeRevie
         {
             if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
             {
+                if (TryGetSequenceSymbolAndType(semanticModel, memberAccess.Expression, out sequenceSymbol, out sequenceType))
+                    return true;
+
                 sequenceSymbol = semanticModel.GetSymbolInfo(memberAccess.Expression).Symbol;
                 sequenceType = semanticModel.GetTypeInfo(memberAccess.Expression).Type;
                 return sequenceSymbol != null || sequenceType != null;
@@ -185,6 +189,9 @@ public sealed class MultipleEnumerationCodeReviewCheck : RoslynSemanticCodeRevie
             if (invocation.ArgumentList.Arguments.Count > 0)
             {
                 var sourceExpression = invocation.ArgumentList.Arguments[0].Expression;
+                if (TryGetSequenceSymbolAndType(semanticModel, sourceExpression, out sequenceSymbol, out sequenceType))
+                    return true;
+
                 sequenceSymbol = semanticModel.GetSymbolInfo(sourceExpression).Symbol;
                 sequenceType = semanticModel.GetTypeInfo(sourceExpression).Type;
                 return sequenceSymbol != null || sequenceType != null;
@@ -213,6 +220,8 @@ public sealed class MultipleEnumerationCodeReviewCheck : RoslynSemanticCodeRevie
     private static bool IsEnumerableCandidate(ISymbol symbol, ITypeSymbol sequenceType)
     {
         if (symbol == null)
+            return false;
+        if (symbol is IMethodSymbol)
             return false;
 
         var typeSymbol = ResolveSymbolType(symbol) ?? sequenceType;
