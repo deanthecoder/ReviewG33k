@@ -26,7 +26,7 @@ internal static class RoslynCodeReviewCheckUtilities
     private static readonly CSharpParseOptions ParseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest);
     private static readonly CSharpCompilationOptions SemanticCompilationOptions = new(OutputKind.DynamicallyLinkedLibrary);
     private static readonly Lazy<IReadOnlyList<MetadataReference>> MetadataReferences = new(CreateMetadataReferences);
-    private static readonly ConditionalWeakTable<CodeReviewChangedFile, RoslynFileCache> FileCaches = new();
+    private static readonly ConditionalWeakTable<object, RoslynFileCache> FileCaches = new();
 
     public static CompilationUnitSyntax ParseRoot(CodeReviewChangedFile file)
     {
@@ -78,7 +78,7 @@ internal static class RoslynCodeReviewCheckUtilities
         syntaxTree = null;
         diagnostics = null;
 
-        if (file == null || string.IsNullOrWhiteSpace(file.Text))
+        if (!IsRoslynCSharpFile(file) || string.IsNullOrWhiteSpace(file.Text))
             return false;
 
         var fileCache = GetOrCreateFileCache(file);
@@ -96,7 +96,11 @@ internal static class RoslynCodeReviewCheckUtilities
         // These checks often run against a single changed file rather than the full project compilation.
         // A green CI build can still produce local Roslyn errors here (missing project-local symbols/types).
         // Treat only parse/syntax errors as blocking so we don't skip useful checks on otherwise-valid PRs.
-        _ = diagnostics; // kept for call-site compatibility and future diagnostics-based filtering.
+        if (diagnostics is IReadOnlyCollection<Diagnostic> collection)
+            return collection.Count > 0;
+
+        if (diagnostics != null)
+            return diagnostics.Any();
 
         if (syntaxTree == null)
             return true;
@@ -245,20 +249,30 @@ internal static class RoslynCodeReviewCheckUtilities
         return false;
     }
 
-    private static RoslynFileCache GetOrCreateFileCache(CodeReviewChangedFile file) =>
-        FileCaches.GetValue(file, static changedFile => new RoslynFileCache(changedFile));
+    private static RoslynFileCache GetOrCreateFileCache(CodeReviewChangedFile file)
+    {
+        if (file == null)
+            return new RoslynFileCache(null);
+
+        return FileCaches.GetValue(file.RoslynCacheKey, _ => new RoslynFileCache(file));
+    }
 
     private static SemanticAnalysisCache CreateSemanticAnalysis(SyntaxTree syntaxTree)
     {
+        var parseErrors = syntaxTree.GetDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        if (parseErrors.Length > 0)
+            return new SemanticAnalysisCache(syntaxTree, null, parseErrors);
+
         var compilation = CSharpCompilation.Create(
             assemblyName: "ReviewG33k.SharedSemanticAnalysis",
             syntaxTrees: [syntaxTree],
             references: MetadataReferences.Value,
             options: SemanticCompilationOptions);
 
-        var diagnostics = compilation.GetDiagnostics();
         var semanticModel = compilation.GetSemanticModel(syntaxTree);
-        return new SemanticAnalysisCache(syntaxTree, semanticModel, diagnostics);
+        return new SemanticAnalysisCache(syntaxTree, semanticModel, parseErrors);
     }
 
     private static IReadOnlyList<MetadataReference> CreateMetadataReferences()
@@ -281,8 +295,11 @@ internal static class RoslynCodeReviewCheckUtilities
     {
         public RoslynFileCache(CodeReviewChangedFile file)
         {
+            var isCSharp = IsRoslynCSharpFile(file);
+            var sourceText = isCSharp ? file?.Text ?? string.Empty : string.Empty;
+            var sourcePath = isCSharp ? file?.Path : null;
             SyntaxTree = new Lazy<SyntaxTree>(
-                () => CSharpSyntaxTree.ParseText(file?.Text ?? string.Empty, ParseOptions, file?.Path),
+                () => CSharpSyntaxTree.ParseText(sourceText, ParseOptions, sourcePath),
                 isThreadSafe: true);
             Root = new Lazy<CompilationUnitSyntax>(
                 () => ((CSharpSyntaxTree)SyntaxTree.Value).GetCompilationUnitRoot(),
@@ -314,4 +331,9 @@ internal static class RoslynCodeReviewCheckUtilities
 
         public IReadOnlyList<Diagnostic> Diagnostics { get; }
     }
+
+    private static bool IsRoslynCSharpFile(CodeReviewChangedFile file) =>
+        file != null &&
+        !string.IsNullOrWhiteSpace(file.Path) &&
+        file.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
 }

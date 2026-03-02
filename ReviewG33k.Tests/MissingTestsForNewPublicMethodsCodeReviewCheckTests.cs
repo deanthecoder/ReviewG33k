@@ -123,6 +123,24 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void AnalyzeWhenMethodIsInTestFixtureTypeDoesNotReport()
+    {
+        const string source = """
+            [TestFixture]
+            public sealed class SmartRipOpcDocumentation
+            {
+                public void BuildDocumentation()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeWithProductionPath(source, "Services/SmartRipOpcDocumentation.cs");
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport Analyze(string productionSource, params (string Path, string Status, string Source)[] additionalFiles) =>
         AnalyzeWithProductionPath(productionSource, "Services/OrderService.cs", additionalFiles);
 

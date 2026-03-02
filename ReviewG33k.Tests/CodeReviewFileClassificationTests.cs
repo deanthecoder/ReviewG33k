@@ -8,7 +8,9 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System.Collections.Generic;
 using System.Reflection;
+using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
 
 namespace ReviewG33k.Tests;
@@ -38,6 +40,14 @@ public sealed class CodeReviewFileClassificationTests
         var result = InvokeIsAnalyzableChangedCSharpPath("Services/Worker.cs");
 
         Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void IsAnalyzableChangedCSharpPathWhenPathIsDesignerCSharpReturnsFalse()
+    {
+        var result = InvokeIsAnalyzableChangedCSharpPath("Views/MainWindow.Designer.cs");
+
+        Assert.That(result, Is.False);
     }
 
     [Test]
@@ -87,6 +97,28 @@ public sealed class CodeReviewFileClassificationTests
         });
     }
 
+    [Test]
+    public void IsLikelyTestCodeFileWhenFileContainsTextFixtureAttributeReturnsTrue()
+    {
+        const string source = """
+            [TextFixture]
+            public sealed class SmartRipOpcDocumentation
+            {
+            }
+            """;
+        var file = new CodeReviewChangedFile(
+            "A",
+            "Packages/CSharp.Core/SmartRipOpcDocumentation.cs",
+            "Packages/CSharp.Core/SmartRipOpcDocumentation.cs",
+            source,
+            source.Split('\n'),
+            new HashSet<int> { 1, 2, 3, 4 });
+
+        var result = InvokeIsLikelyTestCodeFile(file);
+
+        Assert.That(result, Is.True);
+    }
+
     private static bool InvokeIsAnalyzableChangedCSharpPath(string path)
     {
         var method = ResolveClassificationMethod(
@@ -118,6 +150,17 @@ public sealed class CodeReviewFileClassificationTests
         Assert.That(method, Is.Not.Null, "Could not find IsMarkupFilePath via reflection.");
 
         return (bool)method.Invoke(null, [path]);
+    }
+
+    private static bool InvokeIsLikelyTestCodeFile(CodeReviewChangedFile file)
+    {
+        var method = ResolveClassificationMethod(
+            "IsLikelyTestCodeFile",
+            BindingFlags.Public | BindingFlags.Static);
+
+        Assert.That(method, Is.Not.Null, "Could not find IsLikelyTestCodeFile via reflection.");
+
+        return (bool)method.Invoke(null, [file]);
     }
 
     private static MethodInfo ResolveClassificationMethod(string methodName, BindingFlags bindingFlags)

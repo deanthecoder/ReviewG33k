@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
 
@@ -155,9 +156,44 @@ public sealed class MultipleEnumerationCodeReviewCheck : RoslynSemanticCodeRevie
         ForEachStatementSyntax forEachStatement,
         out ISymbol sequenceSymbol)
     {
-        sequenceSymbol = semanticModel.GetSymbolInfo(forEachStatement.Expression).Symbol;
-        var sequenceType = semanticModel.GetTypeInfo(forEachStatement.Expression).Type;
+        if (!TryGetSequenceSymbolAndType(semanticModel, forEachStatement.Expression, out sequenceSymbol, out var sequenceType))
+            return false;
+
         return IsEnumerableCandidate(sequenceSymbol, sequenceType);
+    }
+
+    private static bool TryGetSequenceSymbolAndType(
+        SemanticModel semanticModel,
+        ExpressionSyntax expression,
+        out ISymbol sequenceSymbol,
+        out ITypeSymbol sequenceType)
+    {
+        sequenceSymbol = null;
+        sequenceType = null;
+        if (semanticModel == null || expression == null)
+            return false;
+
+        if (expression is InvocationExpressionSyntax invocation)
+        {
+            if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
+            {
+                sequenceSymbol = semanticModel.GetSymbolInfo(memberAccess.Expression).Symbol;
+                sequenceType = semanticModel.GetTypeInfo(memberAccess.Expression).Type;
+                return sequenceSymbol != null || sequenceType != null;
+            }
+
+            if (invocation.ArgumentList.Arguments.Count > 0)
+            {
+                var sourceExpression = invocation.ArgumentList.Arguments[0].Expression;
+                sequenceSymbol = semanticModel.GetSymbolInfo(sourceExpression).Symbol;
+                sequenceType = semanticModel.GetTypeInfo(sourceExpression).Type;
+                return sequenceSymbol != null || sequenceType != null;
+            }
+        }
+
+        sequenceSymbol = semanticModel.GetSymbolInfo(expression).Symbol;
+        sequenceType = semanticModel.GetTypeInfo(expression).Type;
+        return sequenceSymbol != null || sequenceType != null;
     }
 
     private static bool IsLinqTerminalMethod(IMethodSymbol methodSymbol)

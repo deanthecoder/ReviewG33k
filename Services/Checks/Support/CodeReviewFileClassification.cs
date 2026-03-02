@@ -12,16 +12,20 @@ using System;
 using System.IO;
 using System.Text.RegularExpressions;
 
-namespace ReviewG33k.Services.Checks;
+namespace ReviewG33k.Services.Checks.Support;
 
 internal static class CodeReviewFileClassification
 {
     private static readonly Regex UiUsingRegex = new(
         @"^\s*using\s+(?<ns>(Avalonia\.(Controls|VisualTree)|System\.Windows(?:\.(Controls|Data|Documents|Forms|Input|Interop|Markup|Media|Navigation|Shapes|Threading))?|Windows\.UI\.Xaml(?:\.(Controls|Data|Documents|Input|Interop|Markup|Media|Navigation|Shapes))?))\s*;",
         RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex TestAttributeRegex = new(
+        @"\[\s*(?:\w+\.)*(?:TestFixture|TextFixture|Test|TestCase|TestCaseSource|Theory|Fact|TestClass|TestMethod|DataTestMethod)\b",
+        RegexOptions.Multiline | RegexOptions.Compiled);
 
     public static bool IsAnalyzableChangedCSharpPath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&
+        !IsGeneratedFilePath(path) &&
         (path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
          path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
          path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase) ||
@@ -77,4 +81,9 @@ internal static class CodeReviewFileClassification
         file != null &&
         !string.IsNullOrWhiteSpace(file.Text) &&
         UiUsingRegex.IsMatch(file.Text);
+
+    public static bool IsLikelyTestCodeFile(CodeReviewChangedFile file) =>
+        file != null &&
+        (IsTestFilePath(file.Path) ||
+         (!string.IsNullOrWhiteSpace(file.Text) && TestAttributeRegex.IsMatch(file.Text)));
 }

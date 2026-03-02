@@ -16,6 +16,18 @@ namespace ReviewG33k.Services;
 public sealed class CodeReviewChangedFile
 {
     public CodeReviewChangedFile(string status, string path, string fullPath, string text, IReadOnlyList<string> lines, IReadOnlySet<int> addedLineNumbers)
+        : this(status, path, fullPath, text, lines, addedLineNumbers, null)
+    {
+    }
+
+    internal CodeReviewChangedFile(
+        string status,
+        string path,
+        string fullPath,
+        string text,
+        IReadOnlyList<string> lines,
+        IReadOnlySet<int> addedLineNumbers,
+        object roslynCacheKey)
     {
         Status = status ?? string.Empty;
         Path = path ?? string.Empty;
@@ -23,6 +35,7 @@ public sealed class CodeReviewChangedFile
         Text = text ?? string.Empty;
         Lines = lines ?? [];
         AddedLineNumbers = addedLineNumbers ?? new HashSet<int>();
+        RoslynCacheKey = roslynCacheKey ?? this;
     }
 
     public string Status { get; }
@@ -38,4 +51,6 @@ public sealed class CodeReviewChangedFile
     public IReadOnlySet<int> AddedLineNumbers { get; }
 
     public bool IsAdded => Status.Equals("A", StringComparison.OrdinalIgnoreCase);
+
+    internal object RoslynCacheKey { get; }
 }

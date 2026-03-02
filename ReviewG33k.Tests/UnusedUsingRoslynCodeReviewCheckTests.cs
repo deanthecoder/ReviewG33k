@@ -101,6 +101,23 @@ public sealed class UnusedUsingRoslynCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void AnalyzeWhenFileContainsUnusedGlobalUsingDoesNotReport()
+    {
+        const string source = """
+            global using System.Text;
+
+            public sealed class Sample
+            {
+                public int Add(int a, int b) => a + b;
+            }
+            """;
+
+        var report = AnalyzeSource("A", source, [1, 2, 3, 4, 5, 6]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport AnalyzeSource(string status, string source, IReadOnlyCollection<int> addedLineNumbers)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');

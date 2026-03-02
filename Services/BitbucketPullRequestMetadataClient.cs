@@ -24,6 +24,21 @@ using ReviewG33k.Models;
 
 namespace ReviewG33k.Services;
 
+/// <summary>
+/// Reads pull request metadata/changed paths and posts inline comments via Bitbucket Server REST APIs.
+/// </summary>
+/// <remarks>
+/// Authentication uses a two-step approach:
+/// <list type="number">
+/// <item>
+/// <description>Requests first run with <see cref="HttpClientHandler.UseDefaultCredentials"/> (Windows/SSO style auth where available).</description>
+/// </item>
+/// <item>
+/// <description>If Bitbucket returns 401/403, the client asks Git Credential Manager via <c>git credential fill</c> for credentials for the PR host/repo, then retries with a Basic auth header.</description>
+/// </item>
+/// </list>
+/// This class does not store credentials; they are only requested on demand when fallback auth is needed.
+/// </remarks>
 public sealed class BitbucketPullRequestMetadataClient : IDisposable
 {
     private readonly HttpClient m_httpClient;

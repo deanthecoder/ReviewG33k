@@ -95,6 +95,7 @@ public sealed class MissingBlankLineBetweenMethodsCodeReviewCheck : CodeReviewCh
             {
                 var methods = type.Members
                     .OfType<MethodDeclarationSyntax>()
+                    .Where(IsMethodDefinition)
                     .OrderBy(method => method.SpanStart)
                     .ToArray();
 
@@ -124,4 +125,9 @@ public sealed class MissingBlankLineBetweenMethodsCodeReviewCheck : CodeReviewCh
             }
         }
     }
+
+    private static bool IsMethodDefinition(MethodDeclarationSyntax method) =>
+        method != null &&
+        (method.Body != null || method.ExpressionBody != null) &&
+        method.ExpressionBody?.Expression is not LambdaExpressionSyntax;
 }

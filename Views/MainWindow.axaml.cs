@@ -65,6 +65,9 @@ public partial class MainWindow : Window
     private bool m_vsCodeDetectionAttempted;
     private bool m_vsCodeUsesCommandShell;
     private bool m_normalizingPullRequestUrl;
+    private Dictionary<string, CodeReviewChangedFile> m_localReviewChangedFilesByPath;
+    private string m_localReviewCacheRepositoryPath;
+    private string m_localReviewCacheBaseBranch;
 
     public MainWindow()
     {
@@ -189,10 +192,10 @@ public partial class MainWindow : Window
         UpdateActionButtonStates();
 
     private void LocalRepositoryFolderTextBox_OnTextChanged(object sender, TextChangedEventArgs e) =>
-        UpdateActionButtonStates();
+        InvalidateLocalReviewChangedFilesCache();
 
     private void LocalBaseBranchTextBox_OnTextChanged(object sender, TextChangedEventArgs e) =>
-        UpdateActionButtonStates();
+        InvalidateLocalReviewChangedFilesCache();
 
     private async void PrepareReviewButton_OnClick(object sender, RoutedEventArgs e)
     {
@@ -271,6 +274,7 @@ public partial class MainWindow : Window
         if (!TryGetLocalCommittedReviewInputs(out var localRepositoryPath, out var baseBranch))
             return;
 
+        InvalidateLocalReviewChangedFilesCache();
         baseBranch = await ResolveLocalBaseBranchAsync(localRepositoryPath, baseBranch, logWhenChanged: true);
         if (string.IsNullOrWhiteSpace(baseBranch))
         {
@@ -311,7 +315,9 @@ public partial class MainWindow : Window
                     baseBranch,
                     fetchTargetBranch: true);
 
-                report = await RunCodeSmellScanAsync(changedFileSource);
+                var sourceResult = await changedFileSource.LoadAsync();
+                SetLocalReviewChangedFilesCache(localRepositoryPath, baseBranch, sourceResult?.Files);
+                report = await RunCodeSmellScanAsync(sourceResult);
                 SetStatus("Local review complete.");
             });
 
@@ -332,6 +338,14 @@ public partial class MainWindow : Window
         AppendLog("Code review scan starting...");
         SetBusyProgressIndeterminate();
         var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(changedFileSource, AppendLog, UpdateBusyProgress);
+        return ProcessCodeSmellReport(report);
+    }
+
+    private async Task<CodeSmellReport> RunCodeSmellScanAsync(CodeReviewChangedFileSourceResult sourceResult)
+    {
+        AppendLog("Code review scan starting...");
+        SetBusyProgressIndeterminate();
+        var report = await m_codeSmellReportAnalyzer.AnalyzeLoadedFilesAsync(sourceResult, AppendLog, UpdateBusyProgress);
         return ProcessCodeSmellReport(report);
     }
 
@@ -438,19 +452,20 @@ public partial class MainWindow : Window
             return [];
         }
 
-        var changedFileSource = new GitBranchComparisonChangedFileSource(
-            m_gitCommandRunner,
-            localRepositoryPath,
-            baseBranch,
-            fetchTargetBranch: false);
-        var sourceResult = await changedFileSource.LoadAsync();
-        var changedFiles = sourceResult?.Files ?? [];
-        var targetFile = changedFiles
-            .FirstOrDefault(file => AreSameRepoPath(file?.Path, filePath));
-        if (targetFile == null)
+        var changedFilesByPath = await GetOrCreateLocalReviewChangedFilesCacheAsync(localRepositoryPath, baseBranch);
+        if (changedFilesByPath == null || changedFilesByPath.Count == 0)
             return [];
 
-        var report = m_codeSmellReportAnalyzer.AnalyzeFiles([targetFile]);
+        if (!changedFilesByPath.TryGetValue(NormalizeRepoPath(filePath), out var targetFile) || targetFile == null)
+            return [];
+
+        var refreshedTargetFile = await RefreshChangedFileFromDiskAsync(targetFile);
+        if (refreshedTargetFile == null)
+            return [];
+
+        changedFilesByPath[NormalizeRepoPath(refreshedTargetFile.Path)] = refreshedTargetFile;
+
+        var report = m_codeSmellReportAnalyzer.AnalyzeFiles([refreshedTargetFile]);
         return report.Findings
             .Where(finding => finding != null)
             .Where(finding => AreSameRepoPath(finding.FilePath, filePath))
@@ -468,6 +483,74 @@ public partial class MainWindow : Window
 
     private static string NormalizeRepoPath(string path) =>
         (path ?? string.Empty).Replace('\\', '/').Trim();
+
+    private async Task<Dictionary<string, CodeReviewChangedFile>> GetOrCreateLocalReviewChangedFilesCacheAsync(
+        string localRepositoryPath,
+        string baseBranch)
+    {
+        if (!IsLocalReviewCacheValid(localRepositoryPath, baseBranch))
+        {
+            var changedFileSource = new GitBranchComparisonChangedFileSource(
+                m_gitCommandRunner,
+                localRepositoryPath,
+                baseBranch,
+                fetchTargetBranch: false);
+            var sourceResult = await changedFileSource.LoadAsync();
+            SetLocalReviewChangedFilesCache(localRepositoryPath, baseBranch, sourceResult?.Files);
+        }
+
+        return m_localReviewChangedFilesByPath;
+    }
+
+    private bool IsLocalReviewCacheValid(string localRepositoryPath, string baseBranch)
+    {
+        if (m_localReviewChangedFilesByPath == null)
+            return false;
+
+        return string.Equals(m_localReviewCacheRepositoryPath, localRepositoryPath?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(m_localReviewCacheBaseBranch, baseBranch?.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void SetLocalReviewChangedFilesCache(
+        string localRepositoryPath,
+        string baseBranch,
+        IReadOnlyList<CodeReviewChangedFile> changedFiles)
+    {
+        m_localReviewChangedFilesByPath = (changedFiles ?? [])
+            .Where(file => file != null && !string.IsNullOrWhiteSpace(file.Path))
+            .GroupBy(file => NormalizeRepoPath(file.Path), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        m_localReviewCacheRepositoryPath = localRepositoryPath?.Trim();
+        m_localReviewCacheBaseBranch = baseBranch?.Trim();
+    }
+
+    private void InvalidateLocalReviewChangedFilesCache()
+    {
+        m_localReviewChangedFilesByPath = null;
+        m_localReviewCacheRepositoryPath = null;
+        m_localReviewCacheBaseBranch = null;
+        UpdateActionButtonStates();
+    }
+
+    private static async Task<CodeReviewChangedFile> RefreshChangedFileFromDiskAsync(CodeReviewChangedFile sourceFile)
+    {
+        if (sourceFile == null || string.IsNullOrWhiteSpace(sourceFile.FullPath))
+            return null;
+
+        var fullPath = sourceFile.FullPath.ToFile();
+        if (!fullPath.Exists())
+            return null;
+
+        var text = await File.ReadAllTextAsync(fullPath.FullName);
+        var lines = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        return new CodeReviewChangedFile(
+            sourceFile.Status,
+            sourceFile.Path,
+            sourceFile.FullPath,
+            text,
+            lines,
+            sourceFile.AddedLineNumbers);
+    }
 
     private async Task<bool> CommentOnReviewFindingAsync(CodeSmellFinding finding)
     {

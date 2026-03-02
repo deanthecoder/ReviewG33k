@@ -1,28 +1,30 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>disable</Nullable>
-    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+                    <FileVersion>1.0.0.0</FileVersion>
+<AssemblyVersion>1.0.0.0</AssemblyVersion>
+<Nullable>disable</Nullable>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <AssemblyName>ReviewG33k</AssemblyName>
     <RootNamespace>ReviewG33k</RootNamespace>
     <DefaultItemExcludes>$(DefaultItemExcludes);DTC.Core\**;Installer\**;ReviewG33k.Tests\**</DefaultItemExcludes>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <Version>1.0.0.0</Version>
-    <Authors>Dean Edis</Authors>
-    <Company>Dean Edis (DeanTheCoder)</Company>
-    <Copyright>Copyright (c) 2026 Dean Edis</Copyright>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
-  </PropertyGroup>
-
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Version>1.0</Version>
+    <Authors>Dean Edis</Authors>
+    <Company>Dean Edis (DeanTheCoder)</Company>
+    <Copyright>Copyright (c) 2026 Dean Edis</Copyright>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.1.3" />
     <PackageReference Include="Avalonia.Desktop" Version="11.1.3" />
@@ -35,7 +37,7 @@
   <ItemGroup>
     <ProjectReference Include="DTC.Core\DTC.Core\DTC.Core.csproj" />
   </ItemGroup>
-
+
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
@@ -43,11 +45,11 @@
   <ItemGroup>
     <Compile Remove="DTC.Core\**\*.cs" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Compile Update="Views\App.axaml.cs">
-      <DependentUpon>%(Filename)</DependentUpon>
-    </Compile>
+
+  <ItemGroup>
+    <Compile Update="Views\App.axaml.cs">
+      <DependentUpon>%(Filename)</DependentUpon>
+    </Compile>
     <Compile Update="Views\MainWindow.axaml.cs">
       <DependentUpon>%(Filename)</DependentUpon>
     </Compile>

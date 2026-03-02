@@ -13,7 +13,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace ReviewG33k.Services.Checks;
+namespace ReviewG33k.Services.Checks.Support;
 
 internal static class CodeReviewCheckUtilities
 {

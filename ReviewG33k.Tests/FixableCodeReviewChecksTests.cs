@@ -45,6 +45,36 @@ public sealed class FixableCodeReviewChecksTests
     }
 
     [Test]
+    public void UnusedUsingCheckTryFixWhenLineIsGlobalUsingReturnsFalse()
+    {
+        using var tempFile = new TempFile(".cs");
+        const string source = """
+            global using System.Text;
+
+            public sealed class Sample
+            {
+                public int Add(int a, int b) => a + b;
+            }
+            """;
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            "unused-usings-roslyn",
+            "Sample.cs",
+            1,
+            "Unused global using");
+
+        var check = new UnusedUsingRoslynCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile, out var message);
+
+        Assert.That(success, Is.False);
+        Assert.That(message, Is.EqualTo("Global using directives are excluded from this check."));
+        Assert.That(File.ReadAllText(tempFile.FullName), Is.EqualTo(source.Replace("\r\n", "\n")));
+    }
+
+    [Test]
     public void ThrowExCheckTryFixReplacesWithThrow()
     {
         using var tempFile = new TempFile(".cs");

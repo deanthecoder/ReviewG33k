@@ -256,6 +256,40 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void MissingBlankLineBetweenMethodsCheckWhenMethodsAreInterfaceDeclarationsDoesNotReport()
+    {
+        const string source = """
+            public interface IPrinterProfile
+            {
+                string InstallMediaWithName(byte[] smdFileBytes, string mediaName);
+                string InspectMedia(byte[] smdFileBytes);
+            }
+            """;
+
+        var report = AnalyzeSource(new MissingBlankLineBetweenMethodsCodeReviewCheck(), "A", source, Enumerable.Range(1, 6));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void MissingBlankLineBetweenMethodsCheckWhenMethodsReturnLambdaDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                private Func<int, int> Foo() => x => x + 1;
+                private Func<int, int> Bar() => y => y + 2;
+            }
+            """;
+
+        var report = AnalyzeSource(new MissingBlankLineBetweenMethodsCodeReviewCheck(), "A", source, Enumerable.Range(1, 8));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void MethodParameterCountCheckWhenMethodHasSixParametersReportsHint()
     {
         const string source = """
@@ -735,6 +769,51 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void AsyncMethodNameSuffixCheckWhenAsyncMethodMissingSuffixReportsHint()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public async Task LoadData()
+                {
+                    await Task.Delay(1);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new AsyncMethodNameSuffixCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings[0].Message, Does.Contain("LoadData"));
+    }
+
+    [Test]
+    public void AsyncMethodNameSuffixCheckWhenAsyncTestMethodMissingSuffixDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using NUnit.Framework;
+
+            [TestFixture]
+            public sealed class SampleTests
+            {
+                [Test]
+                public async Task LoadData()
+                {
+                    await Task.Delay(1);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new AsyncMethodNameSuffixCodeReviewCheck(), "A", source, Enumerable.Range(1, 14), "Tests/SampleTests.cs");
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void TaskRunAsyncCheckWhenTaskRunUsesAsyncLambdaReportsSuggestion()
     {
         const string source = """
@@ -903,6 +982,26 @@ public sealed class RoslynStyleCodeReviewChecksTests
             source,
             Enumerable.Range(1, 7),
             "Views/ReviewResultsWindow.axaml.cs");
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void MethodCanBeStaticCheckWhenMethodImplementsInterfaceDoesNotReport()
+    {
+        const string source = """
+            public interface IPrinterProfile
+            {
+                int GetMediaWidthMm(string mediaName);
+            }
+
+            public sealed class PrinterProfile : IPrinterProfile
+            {
+                public int GetMediaWidthMm(string mediaName) => 0;
+            }
+            """;
+
+        var report = AnalyzeSource(new MethodCanBeStaticCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
 
         Assert.That(report.Findings, Is.Empty);
     }
@@ -1495,6 +1594,63 @@ public sealed class RoslynStyleCodeReviewChecksTests
         var report = AnalyzeSource(new MultipleEnumerationCodeReviewCheck(), "A", source, Enumerable.Range(1, 14));
 
         Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void MultipleEnumerationCheckWhenDifferentFilteredSequencesAreEnumeratedDoesNotReport()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public sealed class Sample
+            {
+                private readonly IEnumerable<int> previousValues = new[] { 1, 2, 3 };
+                private readonly IEnumerable<int> values = new[] { 4, 5, 6 };
+
+                public int Run()
+                {
+                    var total = 0;
+                    foreach (var value in previousValues.Where(v => v > 1))
+                        total += value;
+                    foreach (var value in values.Where(v => v > 4))
+                        total += value;
+                    return total;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MultipleEnumerationCodeReviewCheck(), "A", source, Enumerable.Range(1, 20));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void MultipleEnumerationCheckWhenSameSequenceFilteredTwiceInForeachReportsSuggestion()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            public sealed class Sample
+            {
+                public int Run(IEnumerable<int> values)
+                {
+                    var total = 0;
+                    foreach (var value in values.Where(v => v > 1))
+                        total += value;
+                    foreach (var value in values.Where(v => v > 2))
+                        total += value;
+                    return total;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MultipleEnumerationCodeReviewCheck(), "A", source, Enumerable.Range(1, 18));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("`values`"));
     }
 
     [Test]

@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
 
@@ -426,7 +427,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
 
         var bodyText = string.Join('\n', methodBodyLines);
         var withoutBlockComments = Regex.Replace(bodyText, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
-        var withoutLineComments = Regex.Replace(withoutBlockComments, @"//.*?$", string.Empty, RegexOptions.Multiline);
+        var withoutLineComments = Regex.Replace(withoutBlockComments, "//.*?$", string.Empty, RegexOptions.Multiline);
 
         var usagePattern = $@"\b{Regex.Escape(parameterName)}\b";
         return Regex.IsMatch(withoutLineComments, usagePattern, RegexOptions.Compiled);

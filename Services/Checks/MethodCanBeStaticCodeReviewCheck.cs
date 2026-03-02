@@ -123,11 +123,40 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
             return false;
         if (methodSymbol.ExplicitInterfaceImplementations.Length > 0)
             return false;
+        if (ImplementsInterfaceMember(methodSymbol))
+            return false;
         if (method.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PartialKeyword)))
             return false;
 
         return true;
     }
+
+    private static bool ImplementsInterfaceMember(IMethodSymbol methodSymbol)
+    {
+        var containingType = methodSymbol?.ContainingType;
+        if (methodSymbol == null || containingType == null)
+            return false;
+
+        foreach (var interfaceType in containingType.AllInterfaces)
+        {
+            foreach (var interfaceMethod in interfaceType.GetMembers().OfType<IMethodSymbol>())
+            {
+                if (containingType.FindImplementationForInterfaceMember(interfaceMethod) is not IMethodSymbol implementation)
+                    continue;
+
+                if (SymbolsAreEquivalent(methodSymbol, implementation))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool SymbolsAreEquivalent(IMethodSymbol left, IMethodSymbol right) =>
+        left != null &&
+        right != null &&
+        (SymbolEqualityComparer.Default.Equals(left, right) ||
+         SymbolEqualityComparer.Default.Equals(left.OriginalDefinition, right.OriginalDefinition));
 
     private static bool UsesInstanceState(SemanticModel semanticModel, MethodDeclarationSyntax method, INamedTypeSymbol containingType)
     {

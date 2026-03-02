@@ -52,6 +52,13 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase, IFix
         var line = sourceText.Lines[lineIndex];
         var lineText = line.ToString();
         var trimmed = lineText.TrimStart();
+        if (trimmed.StartsWith("global using ", StringComparison.Ordinal) ||
+            trimmed.StartsWith("global using\t", StringComparison.Ordinal))
+        {
+            resultMessage = "Global using directives are excluded from this check.";
+            return false;
+        }
+
         if (!trimmed.StartsWith("using ", StringComparison.Ordinal) &&
             !trimmed.StartsWith("using\t", StringComparison.Ordinal) &&
             !trimmed.StartsWith("global using ", StringComparison.Ordinal) &&
@@ -104,6 +111,9 @@ public sealed class UnusedUsingRoslynCodeReviewCheck : CodeReviewCheckBase, IFix
                     continue;
 
                 var usingDirective = root.FindNode(diagnostic.Location.SourceSpan).FirstAncestorOrSelf<UsingDirectiveSyntax>();
+                if (usingDirective?.GlobalKeyword.IsKind(SyntaxKind.GlobalKeyword) == true)
+                    continue;
+
                 var usingText = BuildUsingText(usingDirective);
                 var message = string.IsNullOrWhiteSpace(usingText)
                     ? "Unused using directive detected."

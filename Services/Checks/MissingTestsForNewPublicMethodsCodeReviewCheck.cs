@@ -12,13 +12,19 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
 
 public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewCheckBase
 {
+    private static readonly Regex TestFixtureAttributeNameRegex = new(
+        @"(?:^|\.)(?:TestFixture|TextFixture)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     public override string RuleId => "missing-tests-public-methods";
 
     public override string DisplayName => "new public methods have test changes";
@@ -28,7 +34,7 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
         var changedTestFiles = context.Files
-            .Where(file => CodeReviewFileClassification.IsTestFilePath(file.Path))
+            .Where(CodeReviewFileClassification.IsLikelyTestCodeFile)
             .ToArray();
         var changedTestFileNames = new HashSet<string>(
             changedTestFiles.Select(file => Path.GetFileName(file.Path)),
@@ -53,6 +59,8 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
 
                 var containingType = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
                 if (containingType == null || containingType is InterfaceDeclarationSyntax)
+                    continue;
+                if (IsLikelyTestFixtureType(containingType))
                     continue;
 
                 var typeName = containingType.Identifier.ValueText;
@@ -120,6 +128,27 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
             !string.IsNullOrWhiteSpace(fileName) &&
             fileName.Contains(typeName, StringComparison.OrdinalIgnoreCase) &&
             fileName.Contains("Test", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsLikelyTestFixtureType(TypeDeclarationSyntax typeDeclaration)
+    {
+        if (typeDeclaration == null)
+            return false;
+
+        foreach (var attributeList in typeDeclaration.AttributeLists)
+        {
+            foreach (var attribute in attributeList.Attributes)
+            {
+                var attributeName = attribute?.Name?.ToString()?.Trim();
+                if (string.IsNullOrWhiteSpace(attributeName))
+                    continue;
+
+                if (TestFixtureAttributeNameRegex.IsMatch(attributeName))
+                    return true;
+            }
+        }
+
+        return false;
     }
 
 }

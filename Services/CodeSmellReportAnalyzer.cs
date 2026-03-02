@@ -14,6 +14,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using ReviewG33k.Services.Checks;
+using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services;
 
@@ -50,14 +51,23 @@ public sealed class CodeSmellReportAnalyzer
         Action<string> progressLogger = null,
         Action<int, int, string> progressReporter = null)
     {
-        var report = new CodeSmellReport();
         if (changedFileSource == null)
         {
+            var report = new CodeSmellReport();
             report.AddInfo("Code review scan skipped: Changed file source unavailable.");
             return report;
         }
 
         var sourceResult = await changedFileSource.LoadAsync();
+        return await AnalyzeLoadedFilesAsync(sourceResult, progressLogger, progressReporter);
+    }
+
+    public async Task<CodeSmellReport> AnalyzeLoadedFilesAsync(
+        CodeReviewChangedFileSourceResult sourceResult,
+        Action<string> progressLogger = null,
+        Action<int, int, string> progressReporter = null)
+    {
+        var report = new CodeSmellReport();
         foreach (var infoMessage in sourceResult?.InfoMessages ?? [])
             report.AddInfo(infoMessage);
 
@@ -163,7 +173,7 @@ public sealed class CodeSmellReportAnalyzer
         var addedTestFilesByName = new HashSet<string>(
             csharpFiles
                 .Where(file => file.IsAdded)
-                .Where(file => CodeReviewFileClassification.IsTestFilePath(file.Path))
+                .Where(CodeReviewFileClassification.IsLikelyTestCodeFile)
                 .Select(file => Path.GetFileName(file.Path)),
             StringComparer.OrdinalIgnoreCase);
 
@@ -176,7 +186,7 @@ public sealed class CodeSmellReportAnalyzer
             return null;
 
         var allLines = new HashSet<int>(Enumerable.Range(1, file.Lines.Count));
-        return new CodeReviewChangedFile(file.Status, file.Path, file.FullPath, file.Text, file.Lines, allLines);
+        return new CodeReviewChangedFile(file.Status, file.Path, file.FullPath, file.Text, file.Lines, allLines, file.RoslynCacheKey);
     }
 
     private sealed class CodeReviewCheckContextSet

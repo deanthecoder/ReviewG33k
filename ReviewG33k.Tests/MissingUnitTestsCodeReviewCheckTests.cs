@@ -75,6 +75,24 @@ public sealed class MissingUnitTestsCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void AnalyzeWhenFileHasTextFixtureAttributeDoesNotReportMissingUnitTests()
+    {
+        const string source = """
+            [TextFixture]
+            public class SmartRipOpcDocumentation
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile(
+            path: "Packages/CSharp.Core/SmartRipOpcDocumentation.cs",
+            source: source,
+            hasAnyAddedTestFiles: false);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport AnalyzeAddedFile(string path, string source, bool hasAnyAddedTestFiles)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
