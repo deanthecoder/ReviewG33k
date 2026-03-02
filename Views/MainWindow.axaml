@@ -50,7 +50,7 @@
                             Width="40"
                             Padding="8"
                             Click="BrowseRepositoryRootButton_OnClick"
-                            ToolTip.Tip="Browse folder">
+                            ToolTip.Tip="Browse folder&#10;Used as the parent location for local clones/worktrees.">
                         <materialIcons:MaterialIcon Width="18"
                                                     Height="18"
                                                     Kind="FolderSearchOutline" />

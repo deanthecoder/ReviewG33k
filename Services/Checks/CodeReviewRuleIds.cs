@@ -53,6 +53,10 @@ public static class CodeReviewRuleIds
     public const string UnusedUsingsRoslyn = "unused-usings-roslyn";
     public const string WarningSuppression = "warning-suppression";
     public const string MissingTypedBindingContext = "missing-typed-binding-context";
+    public const string FixedSizeLayoutContainer = "fixed-size-layout-container";
+    public const string SingleChildWrapperContainer = "single-child-wrapper-container";
+    public const string NestedSamePanelWrapper = "nested-same-panel-wrapper";
+    public const string EmptyContainer = "empty-container";
     public const string MultipleClassesPerFile = "multiple-classes-per-file";
     public const string MissingReadmeForNewProject = "missing-readme-for-new-project";
     public const string UnusedLocalVariable = "unused-local-variable";
