@@ -53,6 +53,7 @@ dotnet run --project ReviewG33k.csproj
 | `throw ex;` in catch blocks | Re-throw patterns that lose original stack trace context. |
 | `IDisposable` not disposed | Disposable objects created without clear disposal. |
 | Dispose method without `IDisposable` | Types that define `Dispose()` but do not implement `IDisposable`. |
+| Constructor event subscription lifecycle | Constructors that subscribe to events without clear unsubscribe/disposal lifecycle. |
 | Multiple enumeration | Re-enumerating deferred `IEnumerable` values unexpectedly. |
 | Public method argument guards | Missing null guards in newly added public methods. |
 
@@ -85,6 +86,7 @@ dotnet run --project ReviewG33k.csproj
 | Unnecessary casts | Casts that do not change type or behavior. |
 | Unnecessary enum member values | Explicit enum values that simply match the default sequential numbering. |
 | Unnecessary verbatim string prefix | `@` string prefix where no escaping benefit is used. |
+| Repeated string concatenation to same target | 4+ concatenations to the same string target in one block (consider `StringBuilder`). |
 
 ### Test and documentation coverage
 | Check | What it flags |

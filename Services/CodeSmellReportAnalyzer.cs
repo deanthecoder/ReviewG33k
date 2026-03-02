@@ -223,6 +223,8 @@ public sealed class CodeSmellReportAnalyzer
         new IfElseBraceConsistencyCodeReviewCheck(),
         new IfElseUnnecessaryBracesCodeReviewCheck(),
         new ConstructorTooLongCodeReviewCheck(),
+        new StringConcatenationToSameTargetCodeReviewCheck(),
+        new ConstructorEventSubscriptionLifecycleCodeReviewCheck(),
         new ThreadSleepCodeReviewCheck(),
         new ThrowExCodeReviewCheck(),
         new MethodCanBeStaticCodeReviewCheck(),
