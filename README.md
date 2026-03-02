@@ -52,6 +52,7 @@ dotnet run --project ReviewG33k.csproj
 | Swallowing catch blocks | `catch` blocks that silently consume exceptions. |
 | `throw ex;` in catch blocks | Re-throw patterns that lose original stack trace context. |
 | `IDisposable` not disposed | Disposable objects created without clear disposal. |
+| Dispose method without `IDisposable` | Types that define `Dispose()` but do not implement `IDisposable`. |
 | Multiple enumeration | Re-enumerating deferred `IEnumerable` values unexpectedly. |
 | Public method argument guards | Missing null guards in newly added public methods. |
 
@@ -63,6 +64,7 @@ dotnet run --project ReviewG33k.csproj
 | Private property should be field | Simple private properties that are effectively field wrappers. |
 | Private field can be readonly | Private fields written only during construction. |
 | Method can be static | Instance methods that do not use instance state. |
+| Local variable can be const | Local values that never change and can safely be `const`. |
 | Multiple classes per file | Files that define more than one class (prefer one class per file). |
 | Redundant self lookup | Needlessly resolving an object from itself (or equivalent redundant lookup). |
 | Public mutable static state | Exposed mutable static fields/properties. |
@@ -88,6 +90,14 @@ dotnet run --project ReviewG33k.csproj
 | Missing XML docs | New public types without XML documentation. |
 | Missing unit test updates | New production changes with no corresponding test changes. |
 | Missing tests for new public methods | Added public methods without test coverage changes. |
+| Missing README for new project | New project additions without an accompanying README. |
+
+### Localization (RESX)
+| Check | What it flags |
+| --- | --- |
+| Missing locale keys | Localized `.resx` files missing keys present in base resources. |
+| Unexpected extra locale keys | Localized `.resx` files containing keys not present in base resources. |
+| Empty translation values | Localized `.resx` entries with empty/blank translation text. |
 
 ### Framework and suppressions
 | Check | What it flags |
