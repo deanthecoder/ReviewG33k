@@ -19,6 +19,9 @@ internal static class CodeReviewCheckUtilities
 {
     private static readonly Regex CatchOpenRegex = new(@"\bcatch\b\s*(?:\([^)]*\))?\s*\{", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex CommentRegex = new(@"//|/\*", RegexOptions.Compiled);
+    private static readonly Regex LoggingCallRegex = new(
+        @"(?<!\w)(?:Log|Logger|AppendLog|Trace|Debug|Warn|Warning|Error|Fatal|Console\.Write(?:Line)?)\w*(?:<[^>]+>)?\s*\(",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex PublicTypeDeclarationRegex = new(
         @"^\s*public\s+(?:sealed\s+|abstract\s+|partial\s+|static\s+)*\b(class|interface|record|struct)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
         RegexOptions.Multiline | RegexOptions.Compiled);
@@ -110,7 +113,8 @@ internal static class CodeReviewCheckUtilities
         Regex.IsMatch(catchBody, @"\bthrow\s+[A-Za-z_]", RegexOptions.Compiled);
 
     public static bool ContainsLoggingCall(string catchBody) =>
-        Regex.IsMatch(catchBody, @"\b(Log|Logger|AppendLog|Trace|Debug|Warn|Error|Exception|Console\.Write)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        !string.IsNullOrWhiteSpace(catchBody) &&
+        LoggingCallRegex.IsMatch(catchBody);
 
     private static int[] BuildLineStartOffsets(string text)
     {

@@ -106,6 +106,254 @@ public sealed class CatchCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void EmptyCatchCheckWhenCatchHasNoExceptionTypeReportsImportant()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                private static void ThrowSomething() => throw new Exception();
+            }
+            """;
+
+        var report = Analyze(source, new EmptyCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Important));
+    }
+
+    [Test]
+    public void SwallowingCatchCheckWhenCatchLogsOnlyReportsSuggestion()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Failed.");
+                    }
+                }
+
+                private static void ThrowSomething() => throw new Exception();
+            }
+            """;
+
+        var report = Analyze(source, new SwallowingCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("logs"));
+    }
+
+    [Test]
+    public void SwallowingCatchCheckWhenCatchReturnsSuccessReportsImportant()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public bool Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                        return true;
+                    }
+                    catch (Exception)
+                    {
+                        return true;
+                    }
+                }
+
+                private static void ThrowSomething() => throw new Exception();
+            }
+            """;
+
+        var report = Analyze(source, new SwallowingCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Important));
+        Assert.That(report.Findings[0].Message, Does.Contain("returns success"));
+    }
+
+    [Test]
+    public void SwallowingCatchCheckWhenCatchReturnsFailureReportsHint()
+    {
+        const string source = """
+            using System;
+            using System.IO;
+
+            public sealed class Sample
+            {
+                public bool TryRead()
+                {
+                    try
+                    {
+                        throw new FileNotFoundException();
+                    }
+                    catch (FileNotFoundException ex)
+                    {
+                        return false;
+                    }
+                }
+            }
+            """;
+
+        var report = Analyze(source, new SwallowingCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings[0].Message, Does.Contain("return value"));
+    }
+
+    [Test]
+    public void SwallowingCatchCheckWhenCatchSetsErrorFlagReportsSuggestion()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                private bool m_hasError;
+
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch (Exception ex)
+                    {
+                        m_hasError = true;
+                    }
+                }
+
+                private static void ThrowSomething() => throw new Exception();
+            }
+            """;
+
+        var report = Analyze(source, new SwallowingCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("error flag"));
+    }
+
+    [Test]
+    public void SwallowingCatchCheckWhenCatchOnlyPerformsCleanupReportsSuggestion()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch (Exception ex)
+                    {
+                        Cleanup();
+                    }
+                }
+
+                private static void Cleanup()
+                {
+                }
+
+                private static void ThrowSomething() => throw new Exception();
+            }
+            """;
+
+        var report = Analyze(source, new SwallowingCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("cleanup"));
+    }
+
+    [Test]
+    public void SwallowingCatchCheckWhenCatchRethrowsDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch (Exception ex)
+                    {
+                        throw;
+                    }
+                }
+
+                private static void ThrowSomething() => throw new Exception();
+            }
+            """;
+
+        var report = Analyze(source, new SwallowingCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void SwallowingCatchCheckWhenCatchWrapsAndThrowsDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException("Wrapped", ex);
+                    }
+                }
+
+                private static void ThrowSomething() => throw new Exception();
+            }
+            """;
+
+        var report = Analyze(source, new SwallowingCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport Analyze(string source, ICodeReviewCheck check)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
