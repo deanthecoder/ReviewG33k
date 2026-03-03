@@ -290,6 +290,24 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void MissingBlankLineBetweenMethodsCheckWhenMethodsAreExpressionBodiedDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public bool Connect() => false;
+                public bool IsConnected() => false;
+                public T1 Read<T1>(string nodePath) => default;
+                public bool Write(string nodePath, object value) => false;
+            }
+            """;
+
+        var report = AnalyzeSource(new MissingBlankLineBetweenMethodsCodeReviewCheck(), "A", source, Enumerable.Range(1, 9));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void MethodParameterCountCheckWhenMethodHasSixParametersReportsHint()
     {
         const string source = """
@@ -470,7 +488,7 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
-    public void IfElseUnnecessaryBracesCheckWhenIfBranchHasBracesAndElseIfChainHasNoBracesReportsHint()
+    public void IfElseUnnecessaryBracesCheckWhenIfBranchHasBracesAndElseIfChainHasNoBracesDoesNotReport()
     {
         const string source = """
             public sealed class Sample
@@ -491,12 +509,11 @@ public sealed class RoslynStyleCodeReviewChecksTests
 
         var report = AnalyzeSource(new IfElseUnnecessaryBracesCodeReviewCheck(), "A", source, Enumerable.Range(1, 15));
 
-        Assert.That(report.Findings, Has.Count.EqualTo(1));
-        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings, Is.Empty);
     }
 
     [Test]
-    public void IfElseUnnecessaryBracesCheckWhenElseIfBranchHasSingleStatementBracesReportsHint()
+    public void IfElseUnnecessaryBracesCheckWhenElseIfBranchHasSingleStatementBracesDoesNotReport()
     {
         const string source = """
             public sealed class Sample
@@ -517,8 +534,7 @@ public sealed class RoslynStyleCodeReviewChecksTests
 
         var report = AnalyzeSource(new IfElseUnnecessaryBracesCodeReviewCheck(), "A", source, Enumerable.Range(1, 16));
 
-        Assert.That(report.Findings, Has.Count.EqualTo(1));
-        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings, Is.Empty);
     }
 
     [Test]
@@ -1061,6 +1077,21 @@ public sealed class RoslynStyleCodeReviewChecksTests
             """;
 
         var report = AnalyzeSource(new MethodCanBeStaticCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void MethodCanBeStaticCheckWhenInterfaceBaseCannotBeResolvedDoesNotReport()
+    {
+        const string source = """
+            public sealed class PrinterProfile : IRemotePrinterProfile
+            {
+                public string GetActiveMedia() => null;
+            }
+            """;
+
+        var report = AnalyzeSource(new MethodCanBeStaticCodeReviewCheck(), "A", source, Enumerable.Range(1, 6));
 
         Assert.That(report.Findings, Is.Empty);
     }

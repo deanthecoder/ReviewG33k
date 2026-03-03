@@ -128,6 +128,5 @@ public sealed class MissingBlankLineBetweenMethodsCodeReviewCheck : CodeReviewCh
 
     private static bool IsMethodDefinition(MethodDeclarationSyntax method) =>
         method != null &&
-        (method.Body != null || method.ExpressionBody != null) &&
-        method.ExpressionBody?.Expression is not LambdaExpressionSyntax;
+        method.Body != null;
 }

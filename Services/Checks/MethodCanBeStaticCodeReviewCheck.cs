@@ -125,6 +125,10 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
             return false;
         if (ImplementsInterfaceMember(methodSymbol))
             return false;
+        if (IsInPartialType(method))
+            return false;
+        if (CouldBeImplicitInterfaceImplementationWithoutResolution(semanticModel, method, methodSymbol.ContainingType))
+            return false;
         if (method.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PartialKeyword)))
             return false;
 
@@ -157,6 +161,59 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
         right != null &&
         (SymbolEqualityComparer.Default.Equals(left, right) ||
          SymbolEqualityComparer.Default.Equals(left.OriginalDefinition, right.OriginalDefinition));
+
+    private static bool IsInPartialType(MethodDeclarationSyntax method)
+    {
+        var containingType = method?.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        return containingType?.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PartialKeyword)) == true;
+    }
+
+    private static bool CouldBeImplicitInterfaceImplementationWithoutResolution(
+        SemanticModel semanticModel,
+        MethodDeclarationSyntax method,
+        INamedTypeSymbol containingType)
+    {
+        if (semanticModel == null || method == null || containingType == null)
+            return false;
+        if (!method.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PublicKeyword)))
+            return false;
+
+        var containingTypeDeclaration = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        if (containingTypeDeclaration?.BaseList == null)
+            return false;
+
+        foreach (var baseType in containingTypeDeclaration.BaseList.Types)
+        {
+            var baseTypeSymbol = semanticModel.GetSymbolInfo(baseType.Type).Symbol as INamedTypeSymbol;
+            if (baseTypeSymbol?.TypeKind == TypeKind.Interface)
+                continue;
+
+            if (baseTypeSymbol == null && LooksLikeInterfaceName(baseType.Type))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool LooksLikeInterfaceName(TypeSyntax typeSyntax)
+    {
+        if (typeSyntax == null)
+            return false;
+
+        var name = typeSyntax switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            GenericNameSyntax genericName => genericName.Identifier.ValueText,
+            QualifiedNameSyntax qualifiedName => qualifiedName.Right.Identifier.ValueText,
+            AliasQualifiedNameSyntax aliasQualifiedName => aliasQualifiedName.Name.Identifier.ValueText,
+            _ => typeSyntax.ToString().Split('.').LastOrDefault()
+        };
+
+        return !string.IsNullOrWhiteSpace(name) &&
+               name.Length >= 2 &&
+               name[0] == 'I' &&
+               char.IsUpper(name[1]);
+    }
 
     private static bool UsesInstanceState(SemanticModel semanticModel, MethodDeclarationSyntax method, INamedTypeSymbol containingType)
     {

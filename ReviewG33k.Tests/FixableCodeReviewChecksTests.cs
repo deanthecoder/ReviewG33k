@@ -294,7 +294,7 @@ public sealed class FixableCodeReviewChecksTests
     }
 
     [Test]
-    public void IfElseUnnecessaryBracesCheckTryFixForElseIfChainRemovesOnlyUnnecessaryIfBracesAndKeepsIndentation()
+    public void IfElseUnnecessaryBracesCheckTryFixForElseIfChainReturnsFalse()
     {
         using var tempFile = new TempFile(".cs");
         const string source = """
@@ -327,14 +327,9 @@ public sealed class FixableCodeReviewChecksTests
         var check = new IfElseUnnecessaryBracesCodeReviewCheck();
         var success = check.TryFix(finding, tempFile, out var message);
 
-        Assert.That(success, Is.True);
-        Assert.That(message, Is.Not.Empty);
-
-        var updated = File.ReadAllText(tempFile.FullName).Replace("\r\n", "\n");
-        Assert.That(updated, Does.Not.Contain("{\n                        addedLineNumbers = await GetAddedLineNumbersAsync(\"base\", path);\n                    }"));
-        Assert.That(updated, Does.Match(@"if\s*\(first\)\n\s+addedLineNumbers = await GetAddedLineNumbersAsync\(""base"", path\);"));
-        Assert.That(updated, Does.Match(@"else if\s*\(second\)\n\s+addedLineNumbers = new HashSet<int>\(Enumerable.Range\(1, 2\)\);"));
-        Assert.That(updated, Does.Not.Contain("\n                            addedLineNumbers ="));
+        Assert.That(success, Is.False);
+        Assert.That(message, Is.EqualTo("Target line does not contain an if/else with unnecessary braces."));
+        Assert.That(File.ReadAllText(tempFile.FullName), Is.EqualTo(source.Replace("\r\n", "\n")));
     }
 
     [Test]
