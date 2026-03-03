@@ -95,8 +95,8 @@ public partial class MainWindow : Window
         LocalBaseBranchTextBox.Text = string.IsNullOrWhiteSpace(m_settings.LocalReviewBaseBranch)
             ? "main"
             : m_settings.LocalReviewBaseBranch;
-        ReviewModeToggleSwitch.IsChecked = m_settings.UseLocalCommittedReview;
-        FullFileScopeToggleSwitch.IsChecked = m_settings.IncludeFullModifiedFilesForAddedLineChecks;
+        ReviewModeComboBox.SelectedIndex = m_settings.UseLocalCommittedReview ? 1 : 0;
+        ScanScopeComboBox.SelectedIndex = m_settings.IncludeFullModifiedFilesForAddedLineChecks ? 1 : 0;
         LogListBox.ItemsSource = m_logLines;
 
         ApplyReviewModeUi();
@@ -154,9 +154,9 @@ public partial class MainWindow : Window
         await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
     }
 
-    private void ReviewModeToggleSwitch_OnChanged(object sender, RoutedEventArgs e)
+    private void ReviewModeComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var isLocalMode = ReviewModeToggleSwitch.IsChecked == true;
+        var isLocalMode = IsLocalCommittedReviewMode();
         if (isLocalMode)
         {
             m_latestPullRequest = null;
@@ -169,7 +169,7 @@ public partial class MainWindow : Window
         UpdateActionButtonStates();
     }
 
-    private void FullFileScopeToggleSwitch_OnChanged(object sender, RoutedEventArgs e)
+    private void ScanScopeComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         PersistIncludeFullModifiedFilesForAddedLineChecks(ShouldIncludeFullModifiedFilesForAddedLineChecks());
     }
@@ -889,9 +889,9 @@ public partial class MainWindow : Window
         BusyIndicatorSpinner.Value = Math.Clamp(completed, 0, total);
     }
 
-    private bool IsLocalCommittedReviewMode() => ReviewModeToggleSwitch.IsChecked == true;
+    private bool IsLocalCommittedReviewMode() => ReviewModeComboBox?.SelectedIndex == 1;
 
-    private bool ShouldIncludeFullModifiedFilesForAddedLineChecks() => FullFileScopeToggleSwitch.IsChecked == true;
+    private bool ShouldIncludeFullModifiedFilesForAddedLineChecks() => ScanScopeComboBox?.SelectedIndex == 1;
 
     private void ApplyReviewModeUi()
     {

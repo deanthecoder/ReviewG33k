@@ -32,7 +32,13 @@
                     Classes="zone neonFrame"
                     Background="{DynamicResource ZoneSecondaryBrush}">
                 <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
-                      ColumnDefinitions="Auto,*,Auto">
+                      Grid.IsSharedSizeScope="True">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"
+                                          SharedSizeGroup="FormLabelColumn" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0"
                                Grid.Column="0"
                                Margin="0,0,12,0"
@@ -60,44 +66,40 @@
                                Margin="0,0,12,0"
                                Text="Scan Scope:" />
 
-                    <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
-                                Orientation="Horizontal" Spacing="8">
-                        <TextBlock VerticalAlignment="Center" Text="Changed lines" />
-                        <ToggleSwitch x:Name="FullFileScopeToggleSwitch"
-                                      VerticalAlignment="Center"
-                                      IsCheckedChanged="FullFileScopeToggleSwitch_OnChanged"
-                                      OnContent="" OffContent=""
-                                      ToolTip.Tip="Changed lines is faster. Full modified files is more thorough." />
-                        <TextBlock VerticalAlignment="Center"
-                                   Margin="-8,0,0,0"
-                                   Text="Full modified files" />
-                    </StackPanel>
+                    <ComboBox x:Name="ScanScopeComboBox"
+                              Grid.Row="1"
+                              Grid.Column="1"
+                              Grid.ColumnSpan="2"
+                              Margin="0,8,0,4"
+                              MinWidth="260"
+                              SelectionChanged="ScanScopeComboBox_OnSelectionChanged">
+                        <ComboBoxItem Content="Changed lines (faster)" />
+                        <ComboBoxItem Content="Full modified files (more thorough)" />
+                    </ComboBox>
 
                     <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"
                                HorizontalAlignment="Right"
                                Margin="0,0,12,0"
                                Text="Review Mode:" />
 
-                    <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
-                                Orientation="Horizontal" Spacing="8">
-                        <TextBlock VerticalAlignment="Center" Text="PR" />
-                        <ToggleSwitch x:Name="ReviewModeToggleSwitch"
-                                      VerticalAlignment="Center"
-                                      IsCheckedChanged="ReviewModeToggleSwitch_OnChanged"
-                                      OnContent="" OffContent=""/>
-                        <TextBlock VerticalAlignment="Center"
-                                   Margin="-8,0,0,0"
-                                   Text="Local" />
-                    </StackPanel>
+                    <ComboBox x:Name="ReviewModeComboBox"
+                              Grid.Row="2"
+                              Grid.Column="1"
+                              Grid.ColumnSpan="2"
+                              Margin="0,4"
+                              MinWidth="260"
+                              SelectionChanged="ReviewModeComboBox_OnSelectionChanged">
+                        <ComboBoxItem Content="Pull Request" />
+                        <ComboBoxItem Content="Local repository" />
+                    </ComboBox>
 
                     <TextBlock x:Name="PullRequestUrlLabelTextBlock"
                                Grid.Row="3"
                                Grid.Column="0"
                                Margin="0,10,12,0"
-                               HorizontalAlignment="Stretch"
-                               TextAlignment="Right"
+                               HorizontalAlignment="Right"
                                VerticalAlignment="Center"
-                               Text="Pull Request URL:" />
+                               Text="Pull Request:" />
                     <TextBox x:Name="PullRequestUrlTextBox"
                              Grid.Row="3"
                              Grid.Column="1"
@@ -139,14 +141,22 @@
                           Grid.Column="0"
                           Grid.ColumnSpan="3"
                           Margin="0,12,0,0"
-                          ColumnDefinitions="Auto,*,Auto,Auto,Auto"
                           IsVisible="False">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"
+                                              SharedSizeGroup="FormLabelColumn" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
+                                   Margin="0,0,12,0"
                                    HorizontalAlignment="Right"
                                    VerticalAlignment="Center"
-                                   Text="Local Repo Folder:" />
+                                   Text="Local Repo:" />
                         <TextBox x:Name="LocalRepositoryFolderTextBox"
-                                 Grid.Column="1" Margin="10,0,0,0"
+                                 Grid.Column="1"
                                  MinWidth="360"
                                  Watermark="Example: C:\source\MyRepo" />
                         <Button Grid.Column="2"
