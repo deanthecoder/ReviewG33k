@@ -37,6 +37,7 @@ namespace ReviewG33k.Views;
 
 public partial class MainWindow : Window
 {
+    private const string CheckErrorInfoPrefix = "CHECK ERROR:";
     private static readonly Regex LogLocationRegex = new(@"\[(?<path>.+?\.[^:\]]+):(?<line>\d+)\]", RegexOptions.Compiled);
     private static readonly IBrush TimestampedLogBrush = Brushes.Gainsboro;
     private static readonly IBrush DetailLogBrush = Brushes.Gray;
@@ -304,7 +305,7 @@ public partial class MainWindow : Window
             async () =>
             {
                 m_latestReviewWorktreePath = localRepositoryPath;
-                m_latestSolutionPath = FindTopLevelSolutionFile(localRepositoryPath);
+                m_latestSolutionPath = RepositoryUtilities.FindTopLevelSolutionFile(localRepositoryPath);
                 UpdateActionButtonStates();
 
                 AppendLog($"Local review repository: {localRepositoryPath}");
@@ -383,12 +384,40 @@ public partial class MainWindow : Window
 
     private void LogCodeSmellCheckStatuses(CodeSmellReport report)
     {
+        var failedRuleIds = GetFailedCheckRuleIds(report);
         foreach (var check in m_codeSmellReportAnalyzer.Checks)
         {
+            if (failedRuleIds.Contains(check.RuleId))
+                continue;
+
             var count = report.Findings.Count(finding => finding.RuleId.Equals(check.RuleId, StringComparison.OrdinalIgnoreCase));
             if (count == 0)
                 AppendLog($"CHECK PASS: {check.DisplayName}");
         }
+    }
+
+    private static ISet<string> GetFailedCheckRuleIds(CodeSmellReport report)
+    {
+        var failedRuleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var info in report?.Info ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(info) ||
+                !info.StartsWith(CheckErrorInfoPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var openBracketIndex = info.IndexOf('[');
+            var closeBracketIndex = info.IndexOf(']', openBracketIndex + 1);
+            if (openBracketIndex < 0 || closeBracketIndex <= openBracketIndex + 1)
+                continue;
+
+            var ruleId = info[(openBracketIndex + 1)..closeBracketIndex].Trim();
+            if (!string.IsNullOrWhiteSpace(ruleId))
+                failedRuleIds.Add(ruleId);
+        }
+
+        return failedRuleIds;
     }
 
     private static bool DidAnalyzeChangedFiles(CodeSmellReport report) =>
@@ -463,35 +492,24 @@ public partial class MainWindow : Window
         if (changedFilesByPath == null || changedFilesByPath.Count == 0)
             return [];
 
-        if (!changedFilesByPath.TryGetValue(NormalizeRepoPath(filePath), out var targetFile) || targetFile == null)
+        if (!changedFilesByPath.TryGetValue(RepositoryUtilities.NormalizeRepoPath(filePath), out var targetFile) || targetFile == null)
             return [];
 
         var refreshedTargetFile = await RefreshChangedFileFromDiskAsync(targetFile);
         if (refreshedTargetFile == null)
             return [];
 
-        changedFilesByPath[NormalizeRepoPath(refreshedTargetFile.Path)] = refreshedTargetFile;
+        changedFilesByPath[RepositoryUtilities.NormalizeRepoPath(refreshedTargetFile.Path)] = refreshedTargetFile;
 
         var report = m_codeSmellReportAnalyzer.AnalyzeFiles(
             [refreshedTargetFile],
             ShouldIncludeFullModifiedFilesForAddedLineChecks());
         return report.Findings
             .Where(finding => finding != null)
-            .Where(finding => AreSameRepoPath(finding.FilePath, filePath))
+            .Where(finding => RepositoryUtilities.AreSameRepoPath(finding.FilePath, filePath))
             .OrderBy(finding => finding.LineNumber)
             .ToArray();
     }
-
-    private static bool AreSameRepoPath(string leftPath, string rightPath)
-    {
-        if (string.IsNullOrWhiteSpace(leftPath) || string.IsNullOrWhiteSpace(rightPath))
-            return false;
-
-        return string.Equals(NormalizeRepoPath(leftPath), NormalizeRepoPath(rightPath), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string NormalizeRepoPath(string path) =>
-        (path ?? string.Empty).Replace('\\', '/').Trim();
 
     private async Task<Dictionary<string, CodeReviewChangedFile>> GetOrCreateLocalReviewChangedFilesCacheAsync(
         string localRepositoryPath,
@@ -527,7 +545,7 @@ public partial class MainWindow : Window
     {
         m_localReviewChangedFilesByPath = (changedFiles ?? [])
             .Where(file => file != null && !string.IsNullOrWhiteSpace(file.Path))
-            .GroupBy(file => NormalizeRepoPath(file.Path), StringComparer.OrdinalIgnoreCase)
+            .GroupBy(file => RepositoryUtilities.NormalizeRepoPath(file.Path), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
         m_localReviewCacheRepositoryPath = localRepositoryPath?.Trim();
         m_localReviewCacheBaseBranch = baseBranch?.Trim();
@@ -676,7 +694,7 @@ public partial class MainWindow : Window
             return false;
         }
 
-        if (!LooksLikeGitRepository(localRepositoryPath))
+        if (!RepositoryUtilities.IsGitRepository(localRepositoryPath))
         {
             SetStatus("Selected folder is not a Git repository.");
             DialogService.Instance.ShowMessage("Invalid repository folder", "The selected folder does not appear to contain a Git repository.", null);
@@ -922,7 +940,7 @@ public partial class MainWindow : Window
 
         if (!string.IsNullOrWhiteSpace(m_latestReviewWorktreePath) && m_latestReviewWorktreePath.ToDir().Exists())
         {
-            var worktreeSolution = FindTopLevelSolutionFile(m_latestReviewWorktreePath);
+            var worktreeSolution = RepositoryUtilities.FindTopLevelSolutionFile(m_latestReviewWorktreePath);
             if (!string.IsNullOrWhiteSpace(worktreeSolution) && worktreeSolution.ToFile().Exists())
                 return worktreeSolution;
         }
@@ -930,7 +948,7 @@ public partial class MainWindow : Window
         var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
         if (!string.IsNullOrWhiteSpace(localRepositoryPath) && localRepositoryPath.ToDir().Exists())
         {
-            var localSolution = FindTopLevelSolutionFile(localRepositoryPath);
+            var localSolution = RepositoryUtilities.FindTopLevelSolutionFile(localRepositoryPath);
             if (!string.IsNullOrWhiteSpace(localSolution) && localSolution.ToFile().Exists())
                 return localSolution;
         }
@@ -938,7 +956,7 @@ public partial class MainWindow : Window
         var repositoryRootPath = RepositoryRootTextBox.Text?.Trim();
         if (!string.IsNullOrWhiteSpace(repositoryRootPath) && repositoryRootPath.ToDir().Exists())
         {
-            var rootSolution = FindTopLevelSolutionFile(repositoryRootPath);
+            var rootSolution = RepositoryUtilities.FindTopLevelSolutionFile(repositoryRootPath);
             if (!string.IsNullOrWhiteSpace(rootSolution) && rootSolution.ToFile().Exists())
                 return rootSolution;
         }
@@ -972,7 +990,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(localRepositoryPath) || !localRepositoryPath.ToDir().Exists())
             return false;
 
-        if (!LooksLikeGitRepository(localRepositoryPath))
+        if (!RepositoryUtilities.IsGitRepository(localRepositoryPath))
             return false;
 
         var baseBranch = LocalBaseBranchTextBox.Text?.Trim();
@@ -1417,7 +1435,7 @@ public partial class MainWindow : Window
             return;
 
         var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
-        if (!LooksLikeGitRepository(localRepositoryPath))
+        if (!RepositoryUtilities.IsGitRepository(localRepositoryPath))
             return;
 
         var currentBaseBranch = LocalBaseBranchTextBox.Text?.Trim();
@@ -1434,7 +1452,7 @@ public partial class MainWindow : Window
 
     private async Task<string> ResolveLocalBaseBranchAsync(string localRepositoryPath, string requestedBaseBranch, bool logWhenChanged)
     {
-        if (!LooksLikeGitRepository(localRepositoryPath))
+        if (!RepositoryUtilities.IsGitRepository(localRepositoryPath))
             return requestedBaseBranch?.Trim();
 
         var normalizedRequestedBranch = requestedBaseBranch?.Trim();
@@ -1462,7 +1480,7 @@ public partial class MainWindow : Window
 
     private async Task<string> TryGetDefaultRemoteBranchAsync(string localRepositoryPath)
     {
-        if (!LooksLikeGitRepository(localRepositoryPath))
+        if (!RepositoryUtilities.IsGitRepository(localRepositoryPath))
             return null;
 
         var symbolicRefResult = await m_gitCommandRunner.RunAsync(
@@ -1625,29 +1643,6 @@ public partial class MainWindow : Window
         {
             AppendLog($"Warning: could not save app settings. {exception.Message}");
         }
-    }
-
-    private static bool LooksLikeGitRepository(string folderPath) =>
-        !string.IsNullOrWhiteSpace(folderPath) &&
-        (folderPath.ToDir().GetDir(".git").Exists() || folderPath.ToDir().GetFile(".git").Exists());
-
-    private static string FindTopLevelSolutionFile(string rootFolder)
-    {
-        if (string.IsNullOrWhiteSpace(rootFolder) || !rootFolder.ToDir().Exists())
-            return null;
-
-        var rootDepth = rootFolder.Count(ch => ch == Path.DirectorySeparatorChar || ch == Path.AltDirectorySeparatorChar);
-        return Directory
-            .EnumerateFiles(rootFolder, "*.sln", SearchOption.AllDirectories)
-            .Select(path => new
-            {
-                Path = path,
-                Depth = path.Count(ch => ch == Path.DirectorySeparatorChar || ch == Path.AltDirectorySeparatorChar) - rootDepth
-            })
-            .OrderBy(candidate => candidate.Depth)
-            .ThenBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
-            .Select(candidate => candidate.Path)
-            .FirstOrDefault();
     }
 
     private void OpenPullRequestButton_OnClick(object sender, RoutedEventArgs e)

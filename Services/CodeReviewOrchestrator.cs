@@ -296,16 +296,12 @@ public sealed class CodeReviewOrchestrator
             if (directory.Name.Equals(CodeReviewFolderName, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            if (!IsGitRepository(directory.FullName))
+            if (!RepositoryUtilities.IsGitRepository(directory.FullName))
                 continue;
 
             yield return directory.FullName;
         }
     }
-
-    private static bool IsGitRepository(string directory) =>
-        !string.IsNullOrWhiteSpace(directory) &&
-        (directory.ToDir().GetDir(".git").Exists() || directory.ToDir().GetFile(".git").Exists());
 
     private static string GetAvailableRepositoryPath(string preferredPath)
     {
@@ -324,22 +320,6 @@ public sealed class CodeReviewOrchestrator
         }
 
         throw new InvalidOperationException("Could not find an available folder name for clone target.");
-    }
-
-    private static string FindTopLevelSolutionFile(string rootFolder)
-    {
-        var solutions = Directory
-            .EnumerateFiles(rootFolder, "*.sln", SearchOption.AllDirectories)
-            .Select(path => new
-            {
-                Path = path,
-                Depth = GetDepth(Path.GetRelativePath(rootFolder, path))
-            })
-            .OrderBy(o => o.Depth)
-            .ThenBy(o => o.Path, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        return solutions.FirstOrDefault()?.Path;
     }
 
     private static string FindBestSolutionFile(string rootFolder, IReadOnlyCollection<string> changedPaths)
@@ -369,7 +349,7 @@ public sealed class CodeReviewOrchestrator
             }
         }
 
-        return FindTopLevelSolutionFile(rootFolder);
+        return RepositoryUtilities.FindTopLevelSolutionFile(rootFolder);
     }
 
     private static string FindClosestSolutionForPath(string rootFolder, string changedPath)

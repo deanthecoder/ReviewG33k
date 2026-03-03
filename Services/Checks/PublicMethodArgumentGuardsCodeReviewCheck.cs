@@ -265,16 +265,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         if (string.IsNullOrWhiteSpace(rawParameter) || string.IsNullOrWhiteSpace(modifier))
             return false;
 
-        var parameterText = rawParameter;
-        while (true)
-        {
-            var attributeMatch = Regex.Match(parameterText, @"^\s*\[[^\]]+\]\s*");
-            if (!attributeMatch.Success)
-                break;
-
-            parameterText = parameterText[attributeMatch.Length..];
-        }
-
+        var parameterText = StripLeadingParameterAttributes(rawParameter);
         parameterText = parameterText.TrimStart();
         if (parameterText.Length == 0)
             return false;
@@ -290,16 +281,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         if (string.IsNullOrWhiteSpace(rawParameter))
             return false;
 
-        var parameterText = rawParameter;
-        while (true)
-        {
-            var attributeMatch = Regex.Match(parameterText, @"^\s*\[[^\]]+\]\s*");
-            if (!attributeMatch.Success)
-                break;
-
-            parameterText = parameterText[attributeMatch.Length..];
-        }
-
+        var parameterText = StripLeadingParameterAttributes(rawParameter);
         return parameterText.IndexOf('=') >= 0;
     }
 
@@ -353,16 +335,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         if (string.IsNullOrWhiteSpace(rawParameter))
             return false;
 
-        var parameterText = rawParameter;
-        while (true)
-        {
-            var attributeMatch = Regex.Match(parameterText, @"^\s*\[[^\]]+\]\s*");
-            if (!attributeMatch.Success)
-                break;
-
-            parameterText = parameterText[attributeMatch.Length..];
-        }
-
+        var parameterText = StripLeadingParameterAttributes(rawParameter);
         parameterText = parameterText.Trim();
         if (parameterText.Length == 0)
             return false;
@@ -387,6 +360,21 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         parameterName = tokens[^1].TrimStart('@');
         typeName = string.Join(' ', tokens.Take(tokens.Length - 1));
         return parameterName.Length > 0 && typeName.Length > 0;
+    }
+
+    private static string StripLeadingParameterAttributes(string rawParameter)
+    {
+        var parameterText = rawParameter ?? string.Empty;
+        while (true)
+        {
+            var attributeMatch = Regex.Match(parameterText, @"^\s*\[[^\]]+\]\s*");
+            if (!attributeMatch.Success)
+                break;
+
+            parameterText = parameterText[attributeMatch.Length..];
+        }
+
+        return parameterText;
     }
 
     private static bool RequiresNullGuard(string typeName)

@@ -464,7 +464,7 @@ public partial class ReviewResultsWindow : Window
         }
 
         var rowsToRemove = m_rows
-            .Where(row => AreSameRepoPath(row.Finding?.FilePath, filePath))
+            .Where(row => RepositoryUtilities.AreSameRepoPath(row.Finding?.FilePath, filePath))
             .ToArray();
         foreach (var row in rowsToRemove)
         {
@@ -475,7 +475,7 @@ public partial class ReviewResultsWindow : Window
         var refreshedRows = refreshedFindings
             .Where(finding => finding != null)
             .Where(finding => finding.Severity != CodeReviewFindingSeverity.Ok)
-            .Where(finding => AreSameRepoPath(finding.FilePath, filePath))
+            .Where(finding => RepositoryUtilities.AreSameRepoPath(finding.FilePath, filePath))
             .Select(MapToRow)
             .ToArray();
         foreach (var row in refreshedRows)
@@ -504,7 +504,7 @@ public partial class ReviewResultsWindow : Window
         }
 
         nextRow ??= m_rows
-            .Where(row => AreSameRepoPath(row.Finding?.FilePath, filePath))
+            .Where(row => RepositoryUtilities.AreSameRepoPath(row.Finding?.FilePath, filePath))
             .OrderBy(row => Math.Abs((row.Finding?.LineNumber ?? 0) - preferredLineNumber))
             .ThenBy(row => row.Finding?.LineNumber ?? int.MaxValue)
             .FirstOrDefault() ?? m_rows[0];
@@ -784,7 +784,7 @@ public partial class ReviewResultsWindow : Window
     private static string GetPromptRelativePath(string repositoryPath, string resolvedPath, string fallbackPath)
     {
         if (string.IsNullOrWhiteSpace(repositoryPath) || string.IsNullOrWhiteSpace(resolvedPath))
-            return NormalizeRepoPath(fallbackPath);
+            return RepositoryUtilities.NormalizeRepoPath(fallbackPath);
 
         try
         {
@@ -792,7 +792,7 @@ public partial class ReviewResultsWindow : Window
             if (!string.IsNullOrWhiteSpace(relativePath) &&
                 !relativePath.StartsWith("..", StringComparison.Ordinal))
             {
-                return NormalizeRepoPath(relativePath);
+                return RepositoryUtilities.NormalizeRepoPath(relativePath);
             }
         }
         catch
@@ -800,7 +800,7 @@ public partial class ReviewResultsWindow : Window
             // Fall back to the finding path below.
         }
 
-        return NormalizeRepoPath(fallbackPath);
+        return RepositoryUtilities.NormalizeRepoPath(fallbackPath);
     }
 
     private static int GetSeveritySortOrder(CodeReviewFindingSeverity severity) =>
@@ -840,14 +840,4 @@ public partial class ReviewResultsWindow : Window
         return (leftFinding?.LineNumber ?? int.MaxValue).CompareTo(rightFinding?.LineNumber ?? int.MaxValue);
     }
 
-    private static bool AreSameRepoPath(string leftPath, string rightPath)
-    {
-        if (string.IsNullOrWhiteSpace(leftPath) || string.IsNullOrWhiteSpace(rightPath))
-            return false;
-
-        return string.Equals(NormalizeRepoPath(leftPath), NormalizeRepoPath(rightPath), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string NormalizeRepoPath(string path) =>
-        (path ?? string.Empty).Replace('\\', '/').Trim();
 }

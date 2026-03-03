@@ -69,9 +69,10 @@ public sealed class IfElseBraceConsistencyCodeReviewCheck : CodeReviewCheckBase,
         if (!hasIfBraces && hasElseBraces)
         {
             var elseBlock = ifStatement.Else.Statement as BlockSyntax;
-            if (CanUseWithoutBraces(ifStatement.Statement) && CanSafelyRemoveBlockBraces(elseBlock))
+            if (IfElseBraceUtilities.CanUseWithoutBraces(ifStatement.Statement) &&
+                IfElseBraceUtilities.CanSafelyRemoveBlockBraces(elseBlock, requireSingleLineStatement: false))
             {
-                var unwrappedElseStatement = UnwrapBlock(elseBlock);
+                var unwrappedElseStatement = IfElseBraceUtilities.UnwrapSingleStatementBlock(elseBlock);
                 updatedIfStatement = ifStatement.WithElse(ifStatement.Else.WithStatement(unwrappedElseStatement));
                 resultMessage = "Removed unnecessary braces to make if/else branches consistent.";
             }
@@ -85,9 +86,10 @@ public sealed class IfElseBraceConsistencyCodeReviewCheck : CodeReviewCheckBase,
         else if (hasIfBraces && !hasElseBraces)
         {
             var ifBlock = ifStatement.Statement as BlockSyntax;
-            if (CanSafelyRemoveBlockBraces(ifBlock) && CanUseWithoutBraces(ifStatement.Else.Statement))
+            if (IfElseBraceUtilities.CanSafelyRemoveBlockBraces(ifBlock, requireSingleLineStatement: false) &&
+                IfElseBraceUtilities.CanUseWithoutBraces(ifStatement.Else.Statement))
             {
-                var unwrappedIfStatement = UnwrapBlock(ifBlock);
+                var unwrappedIfStatement = IfElseBraceUtilities.UnwrapSingleStatementBlock(ifBlock);
                 updatedIfStatement = ifStatement.WithStatement(unwrappedIfStatement);
                 resultMessage = "Removed unnecessary braces to make if/else branches consistent.";
             }
@@ -173,35 +175,6 @@ public sealed class IfElseBraceConsistencyCodeReviewCheck : CodeReviewCheckBase,
             .WithLeadingTrivia(ReindentLeadingTriviaForBlock(leading))
             .WithTrailingTrivia(trailing);
     }
-
-    private static StatementSyntax UnwrapBlock(BlockSyntax block)
-    {
-        var statement = block.Statements.Single();
-        return statement;
-    }
-
-    private static bool CanUseWithoutBraces(StatementSyntax statement) =>
-        statement is not LocalDeclarationStatementSyntax and not IfStatementSyntax;
-
-    private static bool CanSafelyRemoveBlockBraces(BlockSyntax block)
-    {
-        if (block == null || block.Statements.Count != 1)
-            return false;
-        if (!CanUseWithoutBraces(block.Statements[0]))
-            return false;
-        if (!HasOnlyWhitespaceTrivia(block.OpenBraceToken.LeadingTrivia) ||
-            !HasOnlyWhitespaceTrivia(block.OpenBraceToken.TrailingTrivia) ||
-            !HasOnlyWhitespaceTrivia(block.CloseBraceToken.LeadingTrivia) ||
-            !HasOnlyWhitespaceTrivia(block.CloseBraceToken.TrailingTrivia))
-        {
-            return false;
-        }
-
-        return true;
-    }
-
-    private static bool HasOnlyWhitespaceTrivia(SyntaxTriviaList trivia) =>
-        trivia.All(item => item.IsKind(SyntaxKind.WhitespaceTrivia) || item.IsKind(SyntaxKind.EndOfLineTrivia));
 
     private static string DetectEndOfLine(SyntaxTriviaList leading, SyntaxTriviaList trailing)
     {

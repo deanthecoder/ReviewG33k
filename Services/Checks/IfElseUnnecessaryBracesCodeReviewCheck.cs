@@ -58,15 +58,20 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
             .DescendantNodes()
             .OfType<IfStatementSyntax>()
             .FirstOrDefault(node => node.Span.IntersectsWith(lineSpan) && HasUnnecessaryBraces(node));
-        if (ifStatement?.Statement is not BlockSyntax ifBlock || !CanUnwrapBlock(ifBlock))
+        if (ifStatement?.Statement is not BlockSyntax ifBlock ||
+            !IfElseBraceUtilities.CanSafelyRemoveBlockBraces(ifBlock, requireSingleLineStatement: true))
         {
             resultMessage = "Target line does not contain an if/else with unnecessary braces.";
             return false;
         }
 
-        var updatedIfStatement = ifStatement.WithStatement(UnwrapBlock(ifBlock));
-        if (ifStatement.Else?.Statement is BlockSyntax elseBlock && CanUnwrapBlock(elseBlock))
-            updatedIfStatement = updatedIfStatement.WithElse(ifStatement.Else.WithStatement(UnwrapBlock(elseBlock)));
+        var updatedIfStatement = ifStatement.WithStatement(IfElseBraceUtilities.UnwrapSingleStatementBlock(ifBlock));
+        if (ifStatement.Else?.Statement is BlockSyntax elseBlock &&
+            IfElseBraceUtilities.CanSafelyRemoveBlockBraces(elseBlock, requireSingleLineStatement: true))
+        {
+            updatedIfStatement = updatedIfStatement.WithElse(
+                ifStatement.Else.WithStatement(IfElseBraceUtilities.UnwrapSingleStatementBlock(elseBlock)));
+        }
 
         var updatedRoot = root.ReplaceNode(ifStatement, updatedIfStatement);
         var updatedText = updatedRoot.ToFullString();
@@ -117,58 +122,9 @@ public sealed class IfElseUnnecessaryBracesCodeReviewCheck : CodeReviewCheckBase
             return false;
 
         if (ifStatement.Else.Statement is BlockSyntax elseBlock)
-            return CanUnwrapBlock(ifBlock) && CanUnwrapBlock(elseBlock);
+            return IfElseBraceUtilities.CanSafelyRemoveBlockBraces(ifBlock, requireSingleLineStatement: true) &&
+                   IfElseBraceUtilities.CanSafelyRemoveBlockBraces(elseBlock, requireSingleLineStatement: true);
 
         return false;
-    }
-
-    private static bool HasOnlyWhitespaceTrivia(SyntaxTriviaList trivia) =>
-        trivia.All(item => item.IsKind(SyntaxKind.WhitespaceTrivia) || item.IsKind(SyntaxKind.EndOfLineTrivia));
-
-    private static bool HasSafeBraceTrivia(BlockSyntax block)
-    {
-        if (!HasOnlyWhitespaceTrivia(block.OpenBraceToken.LeadingTrivia) ||
-            !HasOnlyWhitespaceTrivia(block.OpenBraceToken.TrailingTrivia) ||
-            !HasOnlyWhitespaceTrivia(block.CloseBraceToken.LeadingTrivia) ||
-            !HasOnlyWhitespaceTrivia(block.CloseBraceToken.TrailingTrivia))
-        {
-            return false;
-        }
-
-        return true;
-    }
-
-    private static bool CanUseWithoutBraces(StatementSyntax statement) =>
-        statement is not LocalDeclarationStatementSyntax and not IfStatementSyntax;
-
-    private static bool CanUnwrapBlock(BlockSyntax block)
-    {
-        if (block == null || block.Statements.Count != 1)
-            return false;
-        if (!HasSafeBraceTrivia(block))
-            return false;
-
-        var statement = block.Statements[0];
-        if (!CanUseWithoutBraces(statement))
-            return false;
-        if (!StatementSpansSingleLine(statement))
-            return false;
-
-        return true;
-    }
-
-    private static StatementSyntax UnwrapBlock(BlockSyntax block)
-    {
-        var statement = block.Statements.Single();
-        return statement;
-    }
-
-    private static bool StatementSpansSingleLine(StatementSyntax statement)
-    {
-        if (statement == null)
-            return false;
-
-        var lineSpan = statement.GetLocation().GetLineSpan();
-        return lineSpan.StartLinePosition.Line == lineSpan.EndLinePosition.Line;
     }
 }

@@ -20,13 +20,21 @@ namespace ReviewG33k.Services;
 
 public sealed class CodeSmellReportAnalyzer
 {
+    private const string CheckErrorInfoPrefix = "CHECK ERROR:";
     private readonly GitCommandRunner m_gitCommandRunner;
     private readonly IReadOnlyList<ICodeReviewCheck> m_checks;
 
     public CodeSmellReportAnalyzer(GitCommandRunner gitCommandRunner)
+        : this(gitCommandRunner, CreateChecks())
+    {
+    }
+
+    internal CodeSmellReportAnalyzer(GitCommandRunner gitCommandRunner, IReadOnlyList<ICodeReviewCheck> checks)
     {
         m_gitCommandRunner = gitCommandRunner ?? throw new ArgumentNullException(nameof(gitCommandRunner));
-        m_checks = CreateChecks();
+        m_checks = (checks ?? throw new ArgumentNullException(nameof(checks)))
+            .Where(check => check != null)
+            .ToArray();
     }
 
     public IReadOnlyList<ICodeReviewCheck> Checks => m_checks;
@@ -83,13 +91,10 @@ public sealed class CodeSmellReportAnalyzer
         progressReporter?.Invoke(0, totalChecks, null);
 
         var checkTasks = m_checks
-            .Select(check => Task.Run(() =>
-            {
-                var checkReport = new CodeSmellReport();
-                var scopedContext = GetContextForScope(scopedContexts, check.Scope, includeFullModifiedFilesForAddedLineChecks);
-                check.Analyze(scopedContext, checkReport);
-                return (Check: check, Report: checkReport);
-            }))
+            .Select(check => Task.Run(() => AnalyzeCheck(
+                check,
+                scopedContexts,
+                includeFullModifiedFilesForAddedLineChecks)))
             .ToArray();
 
         for (var index = 0; index < totalChecks; index++)
@@ -117,13 +122,10 @@ public sealed class CodeSmellReportAnalyzer
         var scopedContexts = BuildScopedContexts(files);
         var checkReports = m_checks
             .AsParallel()
-            .Select(check =>
-            {
-                var checkReport = new CodeSmellReport();
-                var scopedContext = GetContextForScope(scopedContexts, check.Scope, includeFullModifiedFilesForAddedLineChecks);
-                check.Analyze(scopedContext, checkReport);
-                return checkReport;
-            })
+            .Select(check => AnalyzeCheck(
+                check,
+                scopedContexts,
+                includeFullModifiedFilesForAddedLineChecks).Report)
             .ToArray();
 
         foreach (var checkReport in checkReports)
@@ -142,6 +144,26 @@ public sealed class CodeSmellReportAnalyzer
 
         foreach (var finding in source.Findings)
             destination.AddFinding(finding.Severity, finding.RuleId, finding.FilePath, finding.LineNumber, finding.Message);
+    }
+
+    private static (ICodeReviewCheck Check, CodeSmellReport Report) AnalyzeCheck(
+        ICodeReviewCheck check,
+        CodeReviewCheckContextSet scopedContexts,
+        bool includeFullModifiedFilesForAddedLineChecks)
+    {
+        var checkReport = new CodeSmellReport();
+        try
+        {
+            var scopedContext = GetContextForScope(scopedContexts, check.Scope, includeFullModifiedFilesForAddedLineChecks);
+            check.Analyze(scopedContext, checkReport);
+        }
+        catch (Exception exception)
+        {
+            checkReport.AddInfo(
+                $"{CheckErrorInfoPrefix} [{check.RuleId}] {check.DisplayName} failed. {exception.GetType().Name}: {exception.Message}");
+        }
+
+        return (check, checkReport);
     }
 
     private static CodeReviewCheckContextSet BuildScopedContexts(IReadOnlyList<CodeReviewChangedFile> changedFiles)

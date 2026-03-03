@@ -92,6 +92,41 @@ public sealed class CodeSmellReportAnalyzerTests
             Is.True);
     }
 
+    [Test]
+    public void AnalyzeFilesWhenOneCheckThrowsContinuesRunningRemainingChecks()
+    {
+        var analyzer = new CodeSmellReportAnalyzer(
+            new GitCommandRunner(),
+            [new ThrowingTestCheck(), new FindingTestCheck()]);
+        var changedFile = CreateChangedFile("public sealed class Sample { }", [1]);
+
+        var report = analyzer.AnalyzeFiles([changedFile]);
+
+        Assert.That(
+            report.Info.Any(info => info.Contains("CHECK ERROR:", StringComparison.OrdinalIgnoreCase) &&
+                                    info.Contains("[throwing-test-check]", StringComparison.OrdinalIgnoreCase)),
+            Is.True);
+        Assert.That(report.Findings.Any(finding => finding.RuleId == "finding-test-check"), Is.True);
+    }
+
+    [Test]
+    public async Task AnalyzeLoadedFilesAsyncWhenOneCheckThrowsContinuesRunningRemainingChecks()
+    {
+        var analyzer = new CodeSmellReportAnalyzer(
+            new GitCommandRunner(),
+            [new ThrowingTestCheck(), new FindingTestCheck()]);
+        var changedFile = CreateChangedFile("public sealed class Sample { }", [1]);
+        var sourceResult = new CodeReviewChangedFileSourceResult([changedFile], []);
+
+        var report = await analyzer.AnalyzeLoadedFilesAsync(sourceResult);
+
+        Assert.That(
+            report.Info.Any(info => info.Contains("CHECK ERROR:", StringComparison.OrdinalIgnoreCase) &&
+                                    info.Contains("[throwing-test-check]", StringComparison.OrdinalIgnoreCase)),
+            Is.True);
+        Assert.That(report.Findings.Any(finding => finding.RuleId == "finding-test-check"), Is.True);
+    }
+
     private static CodeReviewChangedFile CreateChangedFile(string source, IEnumerable<int> addedLines)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
@@ -119,4 +154,34 @@ public sealed class CodeSmellReportAnalyzerTests
             }
         }
         """;
+
+    private sealed class ThrowingTestCheck : CodeReviewCheckBase
+    {
+        public override string RuleId => "throwing-test-check";
+
+        public override string DisplayName => "throwing test check";
+
+        public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report) =>
+            throw new InvalidOperationException("Test failure.");
+    }
+
+    private sealed class FindingTestCheck : CodeReviewCheckBase
+    {
+        public override string RuleId => "finding-test-check";
+
+        public override string DisplayName => "finding test check";
+
+        public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
+        {
+            if (context.Files.Count == 0)
+                return;
+
+            AddFinding(
+                report,
+                CodeReviewFindingSeverity.Hint,
+                context.Files[0].Path,
+                1,
+                "Found by test check.");
+        }
+    }
 }
