@@ -42,20 +42,19 @@ namespace ReviewG33k.Services;
 public sealed class BitbucketPullRequestMetadataClient : IDisposable
 {
     private readonly HttpClient m_httpClient;
+    private readonly bool m_ownsHttpClient;
     private readonly ConcurrentDictionary<string, BitbucketPullRequestMetadata> m_metadataCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, string[]> m_changedPathsCache = new(StringComparer.OrdinalIgnoreCase);
 
     public BitbucketPullRequestMetadataClient()
+        : this(CreateDefaultHttpClient(), ownsHttpClient: true)
     {
-        var handler = new HttpClientHandler
-        {
-            UseDefaultCredentials = true
-        };
+    }
 
-        m_httpClient = new HttpClient(handler)
-        {
-            Timeout = TimeSpan.FromSeconds(8)
-        };
+    internal BitbucketPullRequestMetadataClient(HttpClient httpClient, bool ownsHttpClient = false)
+    {
+        m_httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        m_ownsHttpClient = ownsHttpClient;
     }
 
     public async Task<BitbucketPullRequestMetadata> TryGetMetadataAsync(BitbucketPullRequestReference pullRequest, CancellationToken cancellationToken = default)
@@ -131,19 +130,64 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
             return (false, "Comment text is required.");
 
         var apiUrl = BuildCommentsApiUrl(pullRequest);
-        var payloadJson = JsonSerializer.Serialize(
+        var normalizedPath = NormalizePath(path);
+        var trimmedText = text.Trim();
+        var inlinePayloadJson = JsonSerializer.Serialize(
             new
             {
-                text = text.Trim(),
+                text = trimmedText,
                 anchor = new
                 {
                     line,
                     lineType = "ADDED",
                     fileType = "TO",
-                    path = NormalizePath(path)
+                    path = normalizedPath
                 }
             });
 
+        var inlineResult = await TryPostCommentAsync(pullRequest, apiUrl, inlinePayloadJson, cancellationToken);
+        if (inlineResult.Success)
+            return (true, null);
+
+        if (!ShouldFallbackToGeneralComment(inlineResult.StatusCode, inlineResult.ErrorMessage))
+            return (false, inlineResult.ErrorMessage);
+
+        var fallbackPayloadJson = JsonSerializer.Serialize(new
+        {
+            text = BuildFallbackCommentText(normalizedPath, line, trimmedText)
+        });
+        var fallbackResult = await TryPostCommentAsync(pullRequest, apiUrl, fallbackPayloadJson, cancellationToken);
+        if (fallbackResult.Success)
+            return (true, null);
+
+        return (false, CombineCommentErrors(inlineResult.ErrorMessage, fallbackResult.ErrorMessage));
+    }
+
+    public void Dispose()
+    {
+        if (m_ownsHttpClient)
+            m_httpClient.Dispose();
+    }
+
+    private static HttpClient CreateDefaultHttpClient()
+    {
+        var handler = new HttpClientHandler
+        {
+            UseDefaultCredentials = true
+        };
+
+        return new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(8)
+        };
+    }
+
+    private async Task<(bool Success, HttpStatusCode StatusCode, string ErrorMessage)> TryPostCommentAsync(
+        BitbucketPullRequestReference pullRequest,
+        string apiUrl,
+        string payloadJson,
+        CancellationToken cancellationToken)
+    {
         HttpResponseMessage response;
         try
         {
@@ -151,10 +195,10 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
         }
         catch (Exception exception)
         {
-            return (false, exception.Message);
+            return (false, default, exception.Message);
         }
 
-        if ((response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden) &&
+        if (IsAuthFailure(response.StatusCode) &&
             await TryGetGitCredentialsAsync(pullRequest, cancellationToken) is { } gitCredentials)
         {
             response.Dispose();
@@ -169,22 +213,57 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
             }
             catch (Exception exception)
             {
-                return (false, exception.Message);
+                return (false, default, exception.Message);
             }
         }
 
+        var statusCode = response.StatusCode;
         if (response.IsSuccessStatusCode)
         {
             response.Dispose();
-            return (true, null);
+            return (true, statusCode, null);
         }
 
         var error = await TryReadErrorAsync(response, cancellationToken);
         response.Dispose();
-        return (false, string.IsNullOrWhiteSpace(error) ? $"Bitbucket returned {(int)response.StatusCode}." : error);
+        return (false, statusCode, string.IsNullOrWhiteSpace(error) ? $"Bitbucket returned {(int)statusCode}." : error);
     }
 
-    public void Dispose() => m_httpClient.Dispose();
+    private static bool IsAuthFailure(HttpStatusCode statusCode) =>
+        statusCode == HttpStatusCode.Unauthorized || statusCode == HttpStatusCode.Forbidden;
+
+    private static bool ShouldFallbackToGeneralComment(HttpStatusCode statusCode, string errorMessage)
+    {
+        if (statusCode == HttpStatusCode.Conflict || (int)statusCode == 422)
+            return true;
+        if (statusCode != HttpStatusCode.BadRequest || string.IsNullOrWhiteSpace(errorMessage))
+            return false;
+
+        return errorMessage.Contains("anchor", StringComparison.OrdinalIgnoreCase) ||
+               errorMessage.Contains("line", StringComparison.OrdinalIgnoreCase) &&
+               (errorMessage.Contains("added", StringComparison.OrdinalIgnoreCase) ||
+                errorMessage.Contains("diff", StringComparison.OrdinalIgnoreCase) ||
+                errorMessage.Contains("hunk", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string BuildFallbackCommentText(string normalizedPath, int line, string text)
+    {
+        var prefix = $"[{normalizedPath}:{line}]";
+        if (text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return text;
+
+        return $"{prefix} {text}";
+    }
+
+    private static string CombineCommentErrors(string inlineError, string fallbackError)
+    {
+        if (string.IsNullOrWhiteSpace(inlineError))
+            return fallbackError ?? "Failed to post comment.";
+        if (string.IsNullOrWhiteSpace(fallbackError))
+            return inlineError;
+
+        return $"{inlineError} Fallback comment attempt also failed: {fallbackError}";
+    }
 
     private async Task<HttpResponseMessage> SendCommentRequestAsync(
         string apiUrl,
