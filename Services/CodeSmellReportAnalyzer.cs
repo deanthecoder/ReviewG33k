@@ -240,6 +240,7 @@ public sealed class CodeSmellReportAnalyzer
         new PublicMutableStaticStateCodeReviewCheck(),
         new UnusedPrivateMemberCodeReviewCheck(),
         new MissingXmlDocsCodeReviewCheck(),
+        new EmptyXmlDocContentCodeReviewCheck(),
         new MissingUnitTestsCodeReviewCheck(),
         new MissingTestsForNewPublicMethodsCodeReviewCheck(),
         new MissingReadmeForNewProjectCodeReviewCheck(),

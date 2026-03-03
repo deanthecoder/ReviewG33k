@@ -20,6 +20,7 @@ public static class CodeReviewRuleIds
     public const string LockThisOrPublic = "lock-this-or-public";
     public const string TaskRunAsync = "task-run-async";
     public const string MissingXmlDocs = "missing-xml-docs";
+    public const string EmptyXmlDocContent = "empty-xml-doc-content";
     public const string MissingTests = "missing-tests";
     public const string MissingTestsForPublicMethods = "missing-tests-public-methods";
     public const string PropertyCanBeAutoProperty = "property-can-be-auto-property";
