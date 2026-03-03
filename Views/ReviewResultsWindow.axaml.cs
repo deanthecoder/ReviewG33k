@@ -18,6 +18,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using DTC.Core.Extensions;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
@@ -28,7 +29,7 @@ namespace ReviewG33k.Views;
 public partial class ReviewResultsWindow : Window
 {
     private const int PreviewLinesBefore = 4;
-    private const int PreviewLinesAfter = 8;
+    private const int PreviewLinesAfter = 24;
     private const int CodexPromptLinesBefore = 8;
     private const int CodexPromptLinesAfter = 14;
 
@@ -45,6 +46,7 @@ public partial class ReviewResultsWindow : Window
     private Cursor m_previousCursor;
     private bool m_isBulkCommenting;
     private bool m_isApplyingFix;
+    private string m_previewFileName;
 
     public ReviewResultsWindow()
         : this(Array.Empty<CodeSmellFinding>(), false, false, false, null, null, null, null, null)
@@ -77,6 +79,7 @@ public partial class ReviewResultsWindow : Window
         m_resampleFileFindingsAction = resampleFileFindingsAction;
         m_findingFixer = findingFixer;
         InitializeComponent();
+        UpdateCopyPreviewFileNameButtonState();
         ResultsListBox.SelectionChanged += ResultsListBox_OnSelectionChanged;
         CommentSelectedButton.IsVisible = canCommentInBitbucket;
 
@@ -234,6 +237,28 @@ public partial class ReviewResultsWindow : Window
         }
     }
 
+    private async void CopyPreviewFileNameButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(m_previewFileName))
+            return;
+
+        var clipboard = Clipboard;
+        if (clipboard == null)
+        {
+            SetPreviewText("Clipboard is unavailable in this window.", "Preview", m_previewFileName);
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(m_previewFileName);
+        }
+        catch (Exception exception)
+        {
+            SetPreviewText($"Failed to copy file name: {exception.Message}", $"Preview: {m_previewFileName}", m_previewFileName);
+        }
+    }
+
     private void ToggleAllButton_OnClick(object sender, RoutedEventArgs e)
     {
         if (m_rows.Count == 0)
@@ -310,18 +335,17 @@ public partial class ReviewResultsWindow : Window
             return;
         }
 
-        var exportText = BuildExportText(out var exportedCount, out var exportedIncludedOnly);
+        var exportText = BuildExportText(out var exportedCount);
         if (exportedCount == 0)
         {
-            SetPreviewText("No findings available to export.", "Preview");
+            SetPreviewText("No included findings available to export.", "Preview");
             return;
         }
 
         try
         {
             await clipboard.SetTextAsync(exportText);
-            var scope = exportedIncludedOnly ? "included" : "all";
-            SetPreviewText($"Copied {exportedCount} {scope} finding(s) to the clipboard.", "Preview");
+            SetPreviewText($"Copied {exportedCount} included finding(s) to the clipboard.", "Preview");
         }
         catch (Exception exception)
         {
@@ -518,7 +542,7 @@ public partial class ReviewResultsWindow : Window
 
         if (lines.Length == 0)
         {
-            SetPreviewText("(File is empty)", $"Preview: {resolvedFile.Name}");
+            SetPreviewText("(File is empty)", $"Preview: {resolvedFile.Name}", resolvedFile.Name);
             return;
         }
 
@@ -537,20 +561,42 @@ public partial class ReviewResultsWindow : Window
                 .AppendLine(lines[line - 1]);
         }
 
-        SetPreviewText(builder.ToString().TrimEnd('\r', '\n'), $"Preview: {resolvedFile.Name}");
+        SetPreviewText(builder.ToString().TrimEnd('\r', '\n'), $"Preview: {resolvedFile.Name}", resolvedFile.Name);
     }
 
-    private void SetPreviewText(string text, string header)
+    private void SetPreviewText(string text, string header, string previewFileName = null)
     {
+        m_previewFileName = string.IsNullOrWhiteSpace(previewFileName) ? null : previewFileName.Trim();
         PreviewHeaderTextBlock.Text = header ?? "Preview";
         PreviewTextBox.Text = text ?? string.Empty;
         PreviewTextBox.CaretIndex = 0;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!string.IsNullOrEmpty(PreviewTextBox.Text))
+                PreviewTextBox.ScrollToLine(0);
+        });
+        UpdateCopyPreviewFileNameButtonState();
+    }
+
+    private void UpdateCopyPreviewFileNameButtonState()
+    {
+        if (CopyPreviewFileNameButton == null)
+            return;
+
+        var hasPreviewFileName = !string.IsNullOrWhiteSpace(m_previewFileName);
+        CopyPreviewFileNameButton.IsEnabled = hasPreviewFileName;
+        ToolTip.SetTip(
+            CopyPreviewFileNameButton,
+            hasPreviewFileName
+                ? $"Copy '{m_previewFileName}' to clipboard"
+                : "Copy file name to clipboard");
     }
 
     private void UpdateBatchActionButtonStates()
     {
+        var hasIncludedFindings = m_rows.Any(row => row.IsIncluded);
         ToggleAllButton.IsEnabled = m_rows.Count > 0;
-        ExportToClipboardButton.IsEnabled = m_rows.Count > 0;
+        ExportToClipboardButton.IsEnabled = hasIncludedFindings;
         CommentSelectedButton.IsEnabled = !m_isBulkCommenting &&
                                           m_commentFindingAction != null &&
                                           m_rows.Any(row => row.IsIncluded && row.CanCommentActive);
@@ -571,22 +617,16 @@ public partial class ReviewResultsWindow : Window
         OpenSelectedButton.IsEnabled = ResultsListBox.SelectedItem is ReviewResultRow row && row.CanOpenActive;
     }
 
-    private string BuildExportText(out int exportedCount, out bool exportedIncludedOnly)
+    private string BuildExportText(out int exportedCount)
     {
         var rowsToExport = m_rows.Where(row => row.IsIncluded).ToArray();
-        exportedIncludedOnly = rowsToExport.Length > 0;
-        if (!exportedIncludedOnly)
-            rowsToExport = m_rows.ToArray();
-
         exportedCount = rowsToExport.Length;
         if (exportedCount == 0)
             return string.Empty;
 
         var builder = new StringBuilder();
         builder.AppendLine("ReviewG33k Findings");
-        builder.Append("Scope: ")
-            .Append(exportedIncludedOnly ? "Included findings" : "All findings")
-            .AppendLine();
+        builder.AppendLine("Scope: Included findings");
         builder.Append("Count: ")
             .Append(exportedCount)
             .AppendLine();

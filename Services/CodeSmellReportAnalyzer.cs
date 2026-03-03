@@ -35,7 +35,8 @@ public sealed class CodeSmellReportAnalyzer
         string reviewWorktreePath,
         string targetBranch,
         Action<string> progressLogger = null,
-        Action<int, int, string> progressReporter = null)
+        Action<int, int, string> progressReporter = null,
+        bool includeFullModifiedFilesForAddedLineChecks = false)
     {
         var changedFileSource = new GitBranchComparisonChangedFileSource(
             m_gitCommandRunner,
@@ -43,13 +44,14 @@ public sealed class CodeSmellReportAnalyzer
             targetBranch,
             fetchTargetBranch: true);
 
-        return await AnalyzeAsync(changedFileSource, progressLogger, progressReporter);
+        return await AnalyzeAsync(changedFileSource, progressLogger, progressReporter, includeFullModifiedFilesForAddedLineChecks);
     }
 
     public async Task<CodeSmellReport> AnalyzeAsync(
         ICodeReviewChangedFileSource changedFileSource,
         Action<string> progressLogger = null,
-        Action<int, int, string> progressReporter = null)
+        Action<int, int, string> progressReporter = null,
+        bool includeFullModifiedFilesForAddedLineChecks = false)
     {
         if (changedFileSource == null)
         {
@@ -59,13 +61,14 @@ public sealed class CodeSmellReportAnalyzer
         }
 
         var sourceResult = await changedFileSource.LoadAsync();
-        return await AnalyzeLoadedFilesAsync(sourceResult, progressLogger, progressReporter);
+        return await AnalyzeLoadedFilesAsync(sourceResult, progressLogger, progressReporter, includeFullModifiedFilesForAddedLineChecks);
     }
 
     public async Task<CodeSmellReport> AnalyzeLoadedFilesAsync(
         CodeReviewChangedFileSourceResult sourceResult,
         Action<string> progressLogger = null,
-        Action<int, int, string> progressReporter = null)
+        Action<int, int, string> progressReporter = null,
+        bool includeFullModifiedFilesForAddedLineChecks = false)
     {
         var report = new CodeSmellReport();
         foreach (var infoMessage in sourceResult?.InfoMessages ?? [])
@@ -83,7 +86,7 @@ public sealed class CodeSmellReportAnalyzer
             .Select(check => Task.Run(() =>
             {
                 var checkReport = new CodeSmellReport();
-                var scopedContext = GetContextForScope(scopedContexts, check.Scope);
+                var scopedContext = GetContextForScope(scopedContexts, check.Scope, includeFullModifiedFilesForAddedLineChecks);
                 check.Analyze(scopedContext, checkReport);
                 return (Check: check, Report: checkReport);
             }))
@@ -100,7 +103,9 @@ public sealed class CodeSmellReportAnalyzer
         return report;
     }
 
-    public CodeSmellReport AnalyzeFiles(IReadOnlyList<CodeReviewChangedFile> changedFiles)
+    public CodeSmellReport AnalyzeFiles(
+        IReadOnlyList<CodeReviewChangedFile> changedFiles,
+        bool includeFullModifiedFilesForAddedLineChecks = false)
     {
         ArgumentNullException.ThrowIfNull(changedFiles);
 
@@ -115,7 +120,7 @@ public sealed class CodeSmellReportAnalyzer
             .Select(check =>
             {
                 var checkReport = new CodeSmellReport();
-                var scopedContext = GetContextForScope(scopedContexts, check.Scope);
+                var scopedContext = GetContextForScope(scopedContexts, check.Scope, includeFullModifiedFilesForAddedLineChecks);
                 check.Analyze(scopedContext, checkReport);
                 return checkReport;
             })
@@ -147,13 +152,18 @@ public sealed class CodeSmellReportAnalyzer
         return new CodeReviewCheckContextSet(addedLinesContext, wholeChangedFileContext);
     }
 
-    private static CodeReviewAnalysisContext GetContextForScope(CodeReviewCheckContextSet contexts, CodeReviewCheckScope scope)
+    private static CodeReviewAnalysisContext GetContextForScope(
+        CodeReviewCheckContextSet contexts,
+        CodeReviewCheckScope scope,
+        bool includeFullModifiedFilesForAddedLineChecks)
     {
         return scope switch
         {
             CodeReviewCheckScope.WholeChangedFile => contexts.WholeChangedFileContext,
             CodeReviewCheckScope.ChangedFileSet => contexts.ChangedFileSetContext,
-            _ => contexts.AddedLinesOnlyContext
+            _ => includeFullModifiedFilesForAddedLineChecks
+                ? contexts.WholeChangedFileContext
+                : contexts.AddedLinesOnlyContext
         };
     }
 

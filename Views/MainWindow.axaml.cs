@@ -96,6 +96,7 @@ public partial class MainWindow : Window
             ? "main"
             : m_settings.LocalReviewBaseBranch;
         ReviewModeToggleSwitch.IsChecked = m_settings.UseLocalCommittedReview;
+        FullFileScopeToggleSwitch.IsChecked = m_settings.IncludeFullModifiedFilesForAddedLineChecks;
         LogListBox.ItemsSource = m_logLines;
 
         ApplyReviewModeUi();
@@ -166,6 +167,11 @@ public partial class MainWindow : Window
         PersistUseLocalCommittedReview(isLocalMode);
         _ = UpdatePullRequestPreviewAsync();
         UpdateActionButtonStates();
+    }
+
+    private void FullFileScopeToggleSwitch_OnChanged(object sender, RoutedEventArgs e)
+    {
+        PersistIncludeFullModifiedFilesForAddedLineChecks(ShouldIncludeFullModifiedFilesForAddedLineChecks());
     }
 
     private static void PullRequestUrlTextBox_OnDragOver(object sender, DragEventArgs e)
@@ -329,7 +335,12 @@ public partial class MainWindow : Window
     {
         AppendLog("Code review scan starting...");
         SetBusyProgressIndeterminate();
-        var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(reviewWorktreePath, targetBranch, AppendLog, UpdateBusyProgress);
+        var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(
+            reviewWorktreePath,
+            targetBranch,
+            AppendLog,
+            UpdateBusyProgress,
+            ShouldIncludeFullModifiedFilesForAddedLineChecks());
         return ProcessCodeSmellReport(report);
     }
 
@@ -337,7 +348,11 @@ public partial class MainWindow : Window
     {
         AppendLog("Code review scan starting...");
         SetBusyProgressIndeterminate();
-        var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(changedFileSource, AppendLog, UpdateBusyProgress);
+        var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(
+            changedFileSource,
+            AppendLog,
+            UpdateBusyProgress,
+            ShouldIncludeFullModifiedFilesForAddedLineChecks());
         return ProcessCodeSmellReport(report);
     }
 
@@ -345,7 +360,11 @@ public partial class MainWindow : Window
     {
         AppendLog("Code review scan starting...");
         SetBusyProgressIndeterminate();
-        var report = await m_codeSmellReportAnalyzer.AnalyzeLoadedFilesAsync(sourceResult, AppendLog, UpdateBusyProgress);
+        var report = await m_codeSmellReportAnalyzer.AnalyzeLoadedFilesAsync(
+            sourceResult,
+            AppendLog,
+            UpdateBusyProgress,
+            ShouldIncludeFullModifiedFilesForAddedLineChecks());
         return ProcessCodeSmellReport(report);
     }
 
@@ -465,7 +484,9 @@ public partial class MainWindow : Window
 
         changedFilesByPath[NormalizeRepoPath(refreshedTargetFile.Path)] = refreshedTargetFile;
 
-        var report = m_codeSmellReportAnalyzer.AnalyzeFiles([refreshedTargetFile]);
+        var report = m_codeSmellReportAnalyzer.AnalyzeFiles(
+            [refreshedTargetFile],
+            ShouldIncludeFullModifiedFilesForAddedLineChecks());
         return report.Findings
             .Where(finding => finding != null)
             .Where(finding => AreSameRepoPath(finding.FilePath, filePath))
@@ -869,6 +890,8 @@ public partial class MainWindow : Window
     }
 
     private bool IsLocalCommittedReviewMode() => ReviewModeToggleSwitch.IsChecked == true;
+
+    private bool ShouldIncludeFullModifiedFilesForAddedLineChecks() => FullFileScopeToggleSwitch.IsChecked == true;
 
     private void ApplyReviewModeUi()
     {
@@ -1357,6 +1380,7 @@ public partial class MainWindow : Window
         PersistLocalReviewRepositoryPath(LocalRepositoryFolderTextBox.Text);
         PersistLocalReviewBaseBranch(LocalBaseBranchTextBox.Text);
         PersistUseLocalCommittedReview(IsLocalCommittedReviewMode());
+        PersistIncludeFullModifiedFilesForAddedLineChecks(ShouldIncludeFullModifiedFilesForAddedLineChecks());
         m_settings.Dispose();
     }
 
@@ -1591,6 +1615,15 @@ public partial class MainWindow : Window
             return;
 
         m_settings.UseLocalCommittedReview = useLocalCommittedReview;
+        SaveSettingsSafely();
+    }
+
+    private void PersistIncludeFullModifiedFilesForAddedLineChecks(bool includeFullModifiedFilesForAddedLineChecks)
+    {
+        if (m_settings.IncludeFullModifiedFilesForAddedLineChecks == includeFullModifiedFilesForAddedLineChecks)
+            return;
+
+        m_settings.IncludeFullModifiedFilesForAddedLineChecks = includeFullModifiedFilesForAddedLineChecks;
         SaveSettingsSafely();
     }
 

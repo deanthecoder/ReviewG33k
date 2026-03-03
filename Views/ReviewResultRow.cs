@@ -181,8 +181,8 @@ public sealed class ReviewResultRow : INotifyPropertyChanged
 
     public string UntickSameTypeMenuHeader =>
         string.IsNullOrWhiteSpace(RuleId)
-            ? "Untick issues of this type"
-            : $"Untick all `{RuleId}` issues";
+            ? "Ignore issues of this type"
+            : $"Ignore all `{RuleId}` issues";
 
     public IBrush IssueForeground => IsIncluded ? IncludedIssueBrush : ExcludedIssueBrush;
 

@@ -31,11 +31,12 @@
                     Margin="0,0,0,12"
                     Classes="zone neonFrame"
                     Background="{DynamicResource ZoneSecondaryBrush}">
-                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                       ColumnDefinitions="Auto,*,Auto">
                     <TextBlock Grid.Row="0"
                                Grid.Column="0"
                                Margin="0,0,12,0"
+                               HorizontalAlignment="Right"
                                VerticalAlignment="Center"
                                Text="Repo Root Folder:" />
                     <TextBox x:Name="RepositoryRootTextBox"
@@ -47,8 +48,6 @@
                             Grid.Column="2"
                             Margin="10,0,0,0"
                             Classes="neon"
-                            Width="40"
-                            Padding="8"
                             Click="BrowseRepositoryRootButton_OnClick"
                             ToolTip.Tip="Browse folder&#10;Used as the parent location for local clones/worktrees.">
                         <materialIcons:MaterialIcon Width="18"
@@ -56,53 +55,70 @@
                                                     Kind="FolderSearchOutline" />
                     </Button>
 
-                    <TextBlock Grid.Row="1"
-                               Grid.Column="0"
-                               Margin="0,10,12,0"
-                               VerticalAlignment="Center"
-                               Text="Review Mode:" />
-                    <StackPanel Grid.Row="1"
-                                Grid.Column="1"
-                                Grid.ColumnSpan="2"
-                                Margin="0,10,0,0"
-                                Spacing="8"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Center">
+                    <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center"
+                               HorizontalAlignment="Right"
+                               Margin="0,0,12,0"
+                               Text="Scan Scope:" />
+
+                    <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                Orientation="Horizontal" Spacing="8">
+                        <TextBlock VerticalAlignment="Center" Text="Changed lines" />
+                        <ToggleSwitch x:Name="FullFileScopeToggleSwitch"
+                                      VerticalAlignment="Center"
+                                      IsCheckedChanged="FullFileScopeToggleSwitch_OnChanged"
+                                      OnContent="" OffContent=""
+                                      ToolTip.Tip="Changed lines is faster. Full modified files is more thorough." />
                         <TextBlock VerticalAlignment="Center"
-                                   Text="PR" />
+                                   Margin="-8,0,0,0"
+                                   Text="Full modified files" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"
+                               HorizontalAlignment="Right"
+                               Margin="0,0,12,0"
+                               Text="Review Mode:" />
+
+                    <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                                Orientation="Horizontal" Spacing="8">
+                        <TextBlock VerticalAlignment="Center" Text="PR" />
                         <ToggleSwitch x:Name="ReviewModeToggleSwitch"
                                       VerticalAlignment="Center"
-                                      Checked="ReviewModeToggleSwitch_OnChanged"
-                                      Unchecked="ReviewModeToggleSwitch_OnChanged"
-                                      OnContent=""
-                                      OffContent="" />
-                        <TextBlock VerticalAlignment="Center" Margin="-8,0,0,0"
+                                      IsCheckedChanged="ReviewModeToggleSwitch_OnChanged"
+                                      OnContent="" OffContent=""/>
+                        <TextBlock VerticalAlignment="Center"
+                                   Margin="-8,0,0,0"
                                    Text="Local" />
                     </StackPanel>
 
                     <TextBlock x:Name="PullRequestUrlLabelTextBlock"
-                               Grid.Row="2"
+                               Grid.Row="3"
                                Grid.Column="0"
                                Margin="0,10,12,0"
+                               HorizontalAlignment="Stretch"
+                               TextAlignment="Right"
                                VerticalAlignment="Center"
                                Text="Pull Request URL:" />
                     <TextBox x:Name="PullRequestUrlTextBox"
-                             Grid.Row="2"
+                             Grid.Row="3"
                              Grid.Column="1"
                              Margin="0,10,0,0"
                              DragDrop.AllowDrop="True"
                              Watermark="Paste or drop a Bitbucket PR URL" />
                     <Button x:Name="OpenPullRequestButton"
-                            Grid.Row="2"
+                            Grid.Row="3"
                             Grid.Column="2"
                             Margin="10,10,0,0"
                             Classes="neon"
                             Padding="12,8"
                             Click="OpenPullRequestButton_OnClick"
-                            Content="Open PR" />
+                            ToolTip.Tip="Open pull request URL">
+                        <materialIcons:MaterialIcon Width="18"
+                                                    Height="18"
+                                                    Kind="Web" />
+                    </Button>
 
                     <TextBlock x:Name="PullRequestPreviewTextBlock"
-                               Grid.Row="3"
+                               Grid.Row="4"
                                Grid.Column="1"
                                Grid.ColumnSpan="2"
                                Margin="0,8,0,0"
@@ -126,18 +142,16 @@
                           ColumnDefinitions="Auto,*,Auto,Auto,Auto"
                           IsVisible="False">
                         <TextBlock Grid.Column="0"
-                                   Margin="0,0,12,0"
+                                   HorizontalAlignment="Right"
                                    VerticalAlignment="Center"
                                    Text="Local Repo Folder:" />
                         <TextBox x:Name="LocalRepositoryFolderTextBox"
-                                 Grid.Column="1"
+                                 Grid.Column="1" Margin="10,0,0,0"
                                  MinWidth="360"
                                  Watermark="Example: C:\source\MyRepo" />
                         <Button Grid.Column="2"
                                 Margin="10,0,0,0"
                                 Classes="neon"
-                                Width="40"
-                                Padding="8"
                                 Click="BrowseLocalRepositoryButton_OnClick"
                                 ToolTip.Tip="Browse folder">
                             <materialIcons:MaterialIcon Width="18"

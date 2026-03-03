@@ -65,4 +65,58 @@ public sealed class CodeSmellReportAnalyzerTests
         Assert.That(localVariableCanBeConstCheck.Scope, Is.EqualTo(CodeReviewCheckScope.WholeChangedFile));
         Assert.That(unusedLocalVariableCheck.Scope, Is.EqualTo(CodeReviewCheckScope.WholeChangedFile));
     }
+
+    [Test]
+    public void AnalyzeFilesWhenAddedLineCheckTargetIsOutsideAddedLinesDoesNotReportByDefault()
+    {
+        var analyzer = new CodeSmellReportAnalyzer(new GitCommandRunner());
+        var changedFile = CreateChangedFile(CreateStringConcatSource(), [1]);
+
+        var report = analyzer.AnalyzeFiles([changedFile]);
+
+        Assert.That(
+            report.Findings.Any(finding => finding.RuleId == CodeReviewRuleIds.StringConcatSameTarget),
+            Is.False);
+    }
+
+    [Test]
+    public void AnalyzeFilesWhenFullModifiedFileScopeEnabledReportsAddedLineChecksAcrossFile()
+    {
+        var analyzer = new CodeSmellReportAnalyzer(new GitCommandRunner());
+        var changedFile = CreateChangedFile(CreateStringConcatSource(), [1]);
+
+        var report = analyzer.AnalyzeFiles([changedFile], includeFullModifiedFilesForAddedLineChecks: true);
+
+        Assert.That(
+            report.Findings.Any(finding => finding.RuleId == CodeReviewRuleIds.StringConcatSameTarget),
+            Is.True);
+    }
+
+    private static CodeReviewChangedFile CreateChangedFile(string source, IEnumerable<int> addedLines)
+    {
+        var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
+        var lines = normalizedSource.Split('\n');
+        return new CodeReviewChangedFile(
+            "M",
+            "Services/Sample.cs",
+            "Services/Sample.cs",
+            normalizedSource,
+            lines,
+            new HashSet<int>(addedLines ?? []));
+    }
+
+    private static string CreateStringConcatSource() =>
+        """
+        public sealed class Sample
+        {
+            public void Run()
+            {
+                var output = string.Empty;
+                output += "a";
+                output += "b";
+                output += "c";
+                output += "d";
+            }
+        }
+        """;
 }

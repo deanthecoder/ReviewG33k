@@ -23,6 +23,7 @@ public sealed class Settings : UserSettingsBase
         LocalReviewRepositoryPath = string.Empty;
         LocalReviewBaseBranch = "main";
         UseLocalCommittedReview = false;
+        IncludeFullModifiedFilesForAddedLineChecks = false;
     }
 
     public string RepositoryRootPath
@@ -50,6 +51,12 @@ public sealed class Settings : UserSettingsBase
     }
 
     public bool UseLocalCommittedReview
+    {
+        get => Get<bool>();
+        set => Set(value);
+    }
+
+    public bool IncludeFullModifiedFilesForAddedLineChecks
     {
         get => Get<bool>();
         set => Set(value);
