@@ -36,10 +36,30 @@ public sealed class SwallowingCatchCodeReviewCheck : CodeReviewCheckBase
                 if (CodeReviewCheckUtilities.ContainsRethrow(catchBlock.BodyWithoutComments))
                     continue;
 
+                if (UsesExceptionVariable(catchBlock))
+                    continue;
+
                 var (severity, message) = ClassifyCatchBody(catchBlock.BodyWithoutComments);
+                if (severity == CodeReviewFindingSeverity.Ok)
+                    continue;
                 AddFinding(report, severity, file.Path, catchBlock.StartLine, message);
             }
         }
+    }
+
+    private static bool UsesExceptionVariable(CatchBlockInfo catchBlock)
+    {
+        if (catchBlock == null ||
+            string.IsNullOrWhiteSpace(catchBlock.ExceptionVariableName) ||
+            string.IsNullOrWhiteSpace(catchBlock.BodyWithoutComments))
+        {
+            return false;
+        }
+
+        return Regex.IsMatch(
+            catchBlock.BodyWithoutComments,
+            $@"(?<![A-Za-z0-9_]){Regex.Escape(catchBlock.ExceptionVariableName)}(?![A-Za-z0-9_])",
+            RegexOptions.Compiled);
     }
 
     private static (CodeReviewFindingSeverity Severity, string Message) ClassifyCatchBody(string catchBody)

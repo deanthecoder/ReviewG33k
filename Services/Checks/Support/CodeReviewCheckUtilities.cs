@@ -104,7 +104,8 @@ internal static class CodeReviewCheckUtilities
             var body = file.Text.Substring(openBraceIndex + 1, closeBraceIndex - openBraceIndex - 1);
             var bodyWithoutComments = StripComments(body).Trim();
             var hasComments = ContainsComments(body);
-            yield return new CatchBlockInfo(startLine, bodyWithoutComments, hasComments);
+            var exceptionVariableName = TryGetCatchExceptionVariableName(catchMatch.Value);
+            yield return new CatchBlockInfo(startLine, bodyWithoutComments, hasComments, exceptionVariableName);
         }
     }
 
@@ -172,4 +173,37 @@ internal static class CodeReviewCheckUtilities
     private static bool ContainsComments(string text) =>
         !string.IsNullOrWhiteSpace(text) &&
         CommentRegex.IsMatch(text);
+
+    private static string TryGetCatchExceptionVariableName(string catchHeaderText)
+    {
+        if (string.IsNullOrWhiteSpace(catchHeaderText))
+            return null;
+
+        var openParen = catchHeaderText.IndexOf('(');
+        if (openParen < 0)
+            return null;
+
+        var closeParen = catchHeaderText.LastIndexOf(')');
+        if (closeParen <= openParen)
+            return null;
+
+        var declaration = catchHeaderText.Substring(openParen + 1, closeParen - openParen - 1);
+        if (string.IsNullOrWhiteSpace(declaration))
+            return null;
+
+        var identifierMatches = Regex.Matches(declaration, @"@?[A-Za-z_][A-Za-z0-9_]*");
+        if (identifierMatches.Count == 0)
+            return null;
+
+        var candidateMatch = identifierMatches[^1];
+        if (candidateMatch.Index == 0)
+            return null;
+
+        if (!char.IsWhiteSpace(declaration[candidateMatch.Index - 1]))
+            return null;
+
+        return string.IsNullOrWhiteSpace(declaration[..candidateMatch.Index])
+            ? null
+            : candidateMatch.Value;
+    }
 }

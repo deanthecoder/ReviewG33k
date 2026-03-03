@@ -136,7 +136,7 @@ public sealed class CatchCodeReviewCheckTests
     }
 
     [Test]
-    public void SwallowingCatchCheckWhenCatchLogsOnlyReportsSuggestion()
+    public void SwallowingCatchCheckWhenCatchLogsExceptionDetailsDoesNotReport()
     {
         const string source = """
             using System;
@@ -152,6 +152,35 @@ public sealed class CatchCodeReviewCheckTests
                     catch (Exception ex)
                     {
                         Logger.LogError(ex, "Failed.");
+                    }
+                }
+
+                private static void ThrowSomething() => throw new Exception();
+            }
+            """;
+
+        var report = Analyze(source, new SwallowingCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void SwallowingCatchCheckWhenCatchLogsWithoutExceptionDetailsReportsSuggestion()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError("Failed.");
                     }
                 }
 
@@ -294,6 +323,39 @@ public sealed class CatchCodeReviewCheckTests
         Assert.That(report.Findings, Has.Count.EqualTo(1));
         Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
         Assert.That(report.Findings[0].Message, Does.Contain("cleanup"));
+    }
+
+    [Test]
+    public void SwallowingCatchCheckWhenCatchSurfacesFailureToUserDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch (Exception exception)
+                    {
+                        SetPreviewText($"Failed: {exception.Message}", "Preview");
+                    }
+                }
+
+                private static void SetPreviewText(string text, string header)
+                {
+                }
+
+                private static void ThrowSomething() => throw new Exception();
+            }
+            """;
+
+        var report = Analyze(source, new SwallowingCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Is.Empty);
     }
 
     [Test]
