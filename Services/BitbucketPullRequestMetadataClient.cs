@@ -171,7 +171,7 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
 
     private static HttpClient CreateDefaultHttpClient()
     {
-        var handler = new HttpClientHandler
+        using var handler = new HttpClientHandler
         {
             UseDefaultCredentials = true
         };

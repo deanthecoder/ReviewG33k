@@ -91,7 +91,7 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
             if (IsInPartialType(field))
                 continue;
 
-            foreach (var variable in field.Declaration?.Variables ?? [])
+            foreach (var variable in field.Declaration.Variables)
             {
                 if (!RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, variable.Span))
                     continue;

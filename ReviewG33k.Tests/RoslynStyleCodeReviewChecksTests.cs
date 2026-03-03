@@ -360,6 +360,37 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void GenericTypeNameSuffixCheckWhenClassNameEndsWithUtilitiesReportsHint()
+    {
+        const string source = """
+            public static class TextUtilities
+            {
+            }
+            """;
+
+        var report = AnalyzeSource(new GenericTypeNameSuffixCodeReviewCheck(), "A", source, Enumerable.Range(1, 3));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("TextUtilities"));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+    }
+
+    [Test]
+    public void GenericTypeNameSuffixCheckWhenClassNameEndsWithUtilitiesForInternalTypeReportsHint()
+    {
+        const string source = """
+            internal static class CodeReviewCheckUtilities
+            {
+            }
+            """;
+
+        var report = AnalyzeSource(new GenericTypeNameSuffixCodeReviewCheck(), "A", source, Enumerable.Range(1, 3));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("CodeReviewCheckUtilities"));
+    }
+
+    [Test]
     public void IfElseBraceConsistencyCheckWhenOnlyOneBranchUsesBracesReportsSuggestion()
     {
         const string source = """

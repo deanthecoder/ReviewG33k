@@ -9,7 +9,6 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System.Net;
-using System.Net.Http;
 using System.Text;
 using ReviewG33k.Models;
 using ReviewG33k.Services;
@@ -22,12 +21,12 @@ public sealed class BitbucketPullRequestMetadataClientTests
     [Test]
     public async Task TryAddInlineCommentAsyncWhenAddedLineAnchorFailsFallsBackToPullRequestComment()
     {
-        var handler = new StubHttpMessageHandler(
+        using var handler = new StubHttpMessageHandler(
         [
             CreateJsonResponse(HttpStatusCode.BadRequest, "{\"errors\":[{\"message\":\"Anchor line must be an added line.\"}]}"),
             CreateJsonResponse(HttpStatusCode.Created, "{}")
         ]);
-        var httpClient = new HttpClient(handler);
+        using var httpClient = new HttpClient(handler);
         var pullRequest = new BitbucketPullRequestReference(
             "bitbucket.example.com",
             "PROJ",
@@ -49,11 +48,11 @@ public sealed class BitbucketPullRequestMetadataClientTests
     [Test]
     public async Task TryAddInlineCommentAsyncWhenBadRequestIsNotAnchorRelatedDoesNotFallback()
     {
-        var handler = new StubHttpMessageHandler(
+        using var handler = new StubHttpMessageHandler(
         [
             CreateJsonResponse(HttpStatusCode.BadRequest, "{\"errors\":[{\"message\":\"Comment text is too long.\"}]}")
         ]);
-        var httpClient = new HttpClient(handler);
+        using var httpClient = new HttpClient(handler);
         var pullRequest = new BitbucketPullRequestReference(
             "bitbucket.example.com",
             "PROJ",

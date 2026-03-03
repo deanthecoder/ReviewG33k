@@ -17,7 +17,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class GenericTypeNameSuffixCodeReviewCheck : CodeReviewCheckBase
 {
-    private static readonly string[] GenericSuffixes = ["Utils", "Helper", "Manager"];
+    private static readonly string[] GenericSuffixes = ["Utils", "Helper", "Manager", "Utilities"];
 
     public override string RuleId => "generic-type-name-suffix";
 
