@@ -174,7 +174,7 @@ public sealed class PrivateFieldCanBeReadonlyCodeReviewCheck : RoslynSemanticCod
         if (constructor == null)
             return false;
 
-        if (semanticModel.GetDeclaredSymbol(constructor) is not IMethodSymbol constructorSymbol)
+        if (semanticModel.GetDeclaredSymbol(constructor) is not { } constructorSymbol)
             return false;
 
         if (!SymbolEqualityComparer.Default.Equals(constructorSymbol.ContainingType, containingTypeSymbol))

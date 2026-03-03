@@ -115,7 +115,7 @@ public sealed class UnnecessaryEnumMemberValueCodeReviewCheck : RoslynSemanticCo
     private static bool TryGetConstantNumericValue(SemanticModel semanticModel, EnumMemberDeclarationSyntax member, out decimal value)
     {
         value = 0m;
-        if (semanticModel.GetDeclaredSymbol(member) is not IFieldSymbol fieldSymbol)
+        if (semanticModel.GetDeclaredSymbol(member) is not { } fieldSymbol)
             return false;
         if (!fieldSymbol.HasConstantValue)
             return false;

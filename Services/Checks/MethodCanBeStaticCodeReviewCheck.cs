@@ -105,7 +105,7 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
 
     private static bool CanMethodBeStatic(SemanticModel semanticModel, MethodDeclarationSyntax method, out IMethodSymbol methodSymbol)
     {
-        methodSymbol = semanticModel.GetDeclaredSymbol(method) as IMethodSymbol;
+        methodSymbol = semanticModel.GetDeclaredSymbol(method);
         if (methodSymbol == null)
             return false;
 

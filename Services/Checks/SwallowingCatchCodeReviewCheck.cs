@@ -8,8 +8,8 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-using ReviewG33k.Services.Checks.Support;
 using System.Text.RegularExpressions;
+using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
 
@@ -58,7 +58,7 @@ public sealed class SwallowingCatchCodeReviewCheck : CodeReviewCheckBase
 
         return Regex.IsMatch(
             catchBlock.BodyWithoutComments,
-            $@"(?<![A-Za-z0-9_]){Regex.Escape(catchBlock.ExceptionVariableName)}(?![A-Za-z0-9_])",
+            $"(?<![A-Za-z0-9_]){Regex.Escape(catchBlock.ExceptionVariableName)}(?![A-Za-z0-9_])",
             RegexOptions.Compiled);
     }
 

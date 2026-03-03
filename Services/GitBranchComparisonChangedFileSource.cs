@@ -14,7 +14,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using DTC.Core.Extensions;
-using ReviewG33k.Services.Checks;
 using Support = ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services;

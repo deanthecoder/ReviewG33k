@@ -35,7 +35,7 @@ internal static class CodeReviewCheckUtilities
         var fieldPattern = $@"\bpublic\s+(?:static\s+)?(?:readonly\s+)?(?:object|System\.Object)\s+{Regex.Escape(lockTarget)}\b";
         var propertyPattern = $@"\bpublic\s+(?:object|System\.Object)\s+{Regex.Escape(lockTarget)}\s*\{{";
 
-        return fileLines.Any(line => Regex.IsMatch((string)line, fieldPattern, RegexOptions.IgnoreCase)) ||
+        return fileLines.Any(line => Regex.IsMatch(line, fieldPattern, RegexOptions.IgnoreCase)) ||
                fileLines.Any(line => Regex.IsMatch(line, propertyPattern, RegexOptions.IgnoreCase));
     }
 
@@ -166,7 +166,7 @@ internal static class CodeReviewCheckUtilities
     private static string StripComments(string text)
     {
         var withoutBlockComments = Regex.Replace(text, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
-        var withoutLineComments = Regex.Replace(withoutBlockComments, @"//.*?$", string.Empty, RegexOptions.Multiline);
+        var withoutLineComments = Regex.Replace(withoutBlockComments, "//.*?$", string.Empty, RegexOptions.Multiline);
         return withoutLineComments;
     }
 
@@ -191,7 +191,7 @@ internal static class CodeReviewCheckUtilities
         if (string.IsNullOrWhiteSpace(declaration))
             return null;
 
-        var identifierMatches = Regex.Matches(declaration, @"@?[A-Za-z_][A-Za-z0-9_]*");
+        var identifierMatches = Regex.Matches(declaration, "@?[A-Za-z_][A-Za-z0-9_]*");
         if (identifierMatches.Count == 0)
             return null;
 

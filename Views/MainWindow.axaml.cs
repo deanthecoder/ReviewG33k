@@ -9,8 +9,8 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
-using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -338,18 +338,6 @@ public partial class MainWindow : Window
         var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(
             reviewWorktreePath,
             targetBranch,
-            AppendLog,
-            UpdateBusyProgress,
-            ShouldIncludeFullModifiedFilesForAddedLineChecks());
-        return ProcessCodeSmellReport(report);
-    }
-
-    private async Task<CodeSmellReport> RunCodeSmellScanAsync(ICodeReviewChangedFileSource changedFileSource)
-    {
-        AppendLog("Code review scan starting...");
-        SetBusyProgressIndeterminate();
-        var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(
-            changedFileSource,
             AppendLog,
             UpdateBusyProgress,
             ShouldIncludeFullModifiedFilesForAddedLineChecks());

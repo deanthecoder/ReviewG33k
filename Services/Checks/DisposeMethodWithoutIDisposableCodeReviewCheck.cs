@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -72,7 +73,7 @@ public sealed class DisposeMethodWithoutIDisposableCodeReviewCheck : RoslynSeman
             return false;
         if (method.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.StaticKeyword)))
             return false;
-        if (!string.Equals(method.Identifier.ValueText, "Dispose", System.StringComparison.Ordinal))
+        if (!string.Equals(method.Identifier.ValueText, "Dispose", StringComparison.Ordinal))
             return false;
         if (method.ParameterList?.Parameters.Count != 0)
             return false;

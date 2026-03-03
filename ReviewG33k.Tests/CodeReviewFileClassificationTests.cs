@@ -8,9 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-using System.Collections.Generic;
 using ReviewG33k.Services;
-using ReviewG33k.Services.Checks;
 using Support = ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Tests;

@@ -76,7 +76,7 @@ public sealed class AsyncMethodNameSuffixCodeReviewCheck : CodeReviewCheckBase
         {
             foreach (var attribute in attributeList.Attributes)
             {
-                var attributeName = attribute?.Name?.ToString()?.Trim();
+                var attributeName = attribute.Name?.ToString()?.Trim();
                 if (string.IsNullOrWhiteSpace(attributeName))
                     continue;
 
