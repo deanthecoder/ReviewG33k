@@ -48,15 +48,16 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
-        if (string.IsNullOrWhiteSpace(m_targetBranch))
+        var targetBranch = await ResolveTargetBranchAsync(info);
+        if (string.IsNullOrWhiteSpace(targetBranch))
         {
             info.Add("Code review scan skipped: Target branch unavailable from PR metadata.");
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
-        var remoteBaseRef = $"origin/{m_targetBranch}";
+        var remoteBaseRef = $"origin/{targetBranch}";
         var remoteBaseRefName = $"refs/remotes/{remoteBaseRef}";
-        var localBaseRefName = $"refs/heads/{m_targetBranch}";
+        var localBaseRefName = $"refs/heads/{targetBranch}";
         if (m_fetchTargetBranch)
         {
             var fetchTargetResult = await m_gitCommandRunner.RunAsync(
@@ -64,10 +65,10 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
                 "fetch",
                 "--prune",
                 "origin",
-                $"+refs/heads/{m_targetBranch}:{remoteBaseRef}");
+                $"+refs/heads/{targetBranch}:{remoteBaseRef}");
             if (!fetchTargetResult.IsSuccess)
             {
-                info.Add($"Code review scan: Unable to fetch target branch '{m_targetBranch}' from origin. Trying local branch.");
+                info.Add($"Code review scan: Unable to fetch target branch '{targetBranch}' from origin. Trying local branch.");
             }
         }
 
@@ -76,16 +77,16 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
         var baseRef = hasRemoteBaseRef
             ? remoteBaseRef
             : hasLocalBaseRef
-                ? m_targetBranch
+                ? targetBranch
                 : null;
         if (baseRef == null)
         {
-            info.Add($"Code review scan skipped: Target branch '{m_targetBranch}' was not found on origin or as a local branch.");
+            info.Add($"Code review scan skipped: Target branch '{targetBranch}' was not found on origin or as a local branch.");
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
         if (!hasRemoteBaseRef && hasLocalBaseRef)
-            info.Add($"Code review scan: Using local target branch '{m_targetBranch}' because origin/{m_targetBranch} was not available.");
+            info.Add($"Code review scan: Using local target branch '{targetBranch}' because origin/{targetBranch} was not available.");
 
         var diffRange = $"{baseRef}...HEAD";
         var nameStatusResult = await m_gitCommandRunner.RunAsync(
@@ -151,6 +152,73 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
 
         info.Add($"Code review scan: Analyzing {changedFiles.Count} changed analyzable file(s).");
         return new CodeReviewChangedFileSourceResult(changedFiles, info);
+    }
+
+    private async Task<string> ResolveTargetBranchAsync(ICollection<string> info)
+    {
+        if (!string.IsNullOrWhiteSpace(m_targetBranch))
+            return m_targetBranch.Trim();
+
+        var originHeadBranch = await TryGetOriginHeadBranchNameAsync();
+        if (!string.IsNullOrWhiteSpace(originHeadBranch))
+        {
+            info?.Add($"Code review scan: Target branch unavailable from PR metadata. Falling back to origin HEAD '{originHeadBranch}'.");
+            return originHeadBranch;
+        }
+
+        foreach (var fallbackBranch in new[] { "main", "master" })
+        {
+            if (await RefExistsAsync($"refs/remotes/origin/{fallbackBranch}") ||
+                await RefExistsAsync($"refs/heads/{fallbackBranch}"))
+            {
+                info?.Add($"Code review scan: Target branch unavailable from PR metadata. Falling back to '{fallbackBranch}'.");
+                return fallbackBranch;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<string> TryGetOriginHeadBranchNameAsync()
+    {
+        var symbolicRefResult = await m_gitCommandRunner.RunAsync(
+            m_repositoryPath,
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "refs/remotes/origin/HEAD");
+        if (symbolicRefResult.IsSuccess)
+        {
+            var rawRef = (symbolicRefResult.StandardOutput ?? string.Empty).Trim();
+            const string originPrefix = "origin/";
+            if (rawRef.StartsWith(originPrefix, StringComparison.OrdinalIgnoreCase))
+                return rawRef[originPrefix.Length..];
+        }
+
+        var remoteShowResult = await m_gitCommandRunner.RunAsync(
+            m_repositoryPath,
+            "remote",
+            "show",
+            "origin");
+        if (!remoteShowResult.IsSuccess || string.IsNullOrWhiteSpace(remoteShowResult.StandardOutput))
+            return null;
+
+        foreach (var line in remoteShowResult.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            const string marker = "HEAD branch:";
+            var markerIndex = line.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (markerIndex < 0)
+                continue;
+
+            var branchName = line[(markerIndex + marker.Length)..].Trim();
+            if (!string.IsNullOrWhiteSpace(branchName) &&
+                !branchName.Equals("(unknown)", StringComparison.OrdinalIgnoreCase))
+            {
+                return branchName;
+            }
+        }
+
+        return null;
     }
 
     private async Task<HashSet<int>> GetAddedLineNumbersAsync(string diffRange, string relativePath)
