@@ -1964,6 +1964,52 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void DisposableNotDisposedCheckWhenPassedToConstructorDoesNotReport()
+    {
+        const string source = """
+            using System.Net.Http;
+
+            public sealed class Sample
+            {
+                public HttpClient CreateClient()
+                {
+                    var handler = new HttpClientHandler();
+                    return new HttpClient(handler);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new DisposableNotDisposedCodeReviewCheck(), "A", source, Enumerable.Range(1, 12));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void DisposableNotDisposedCheckWhenPassedToMethodDoesNotReport()
+    {
+        const string source = """
+            using System.IO;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    var stream = new MemoryStream();
+                    Consume(stream);
+                }
+
+                private static void Consume(Stream stream)
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new DisposableNotDisposedCodeReviewCheck(), "A", source, Enumerable.Range(1, 16));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void UnusedPrivateMemberCheckWhenPrivateProgramMainExistsDoesNotReport()
     {
         const string source = """

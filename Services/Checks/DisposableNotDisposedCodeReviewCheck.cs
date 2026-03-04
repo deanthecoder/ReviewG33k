@@ -54,7 +54,8 @@ public sealed class DisposableNotDisposedCodeReviewCheck : RoslynSemanticCodeRev
 
                 if (localSymbol != null &&
                     declarationBlock != null &&
-                    IsDisposedLater(semanticModel, declarationBlock, localDeclaration.SpanStart, localSymbol))
+                    (IsDisposedLater(semanticModel, declarationBlock, localDeclaration.SpanStart, localSymbol) ||
+                     IsPassedAsArgumentLater(semanticModel, declarationBlock, localDeclaration.SpanStart, localSymbol)))
                 {
                     continue;
                 }
@@ -94,6 +95,57 @@ public sealed class DisposableNotDisposedCodeReviewCheck : RoslynSemanticCodeRev
 
             var targetSymbol = semanticModel.GetSymbolInfo(memberAccess.Expression).Symbol;
             if (targetSymbol != null && SymbolEqualityComparer.Default.Equals(targetSymbol, localSymbol))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsPassedAsArgumentLater(
+        SemanticModel semanticModel,
+        BlockSyntax declarationBlock,
+        int declarationSpanStart,
+        ILocalSymbol localSymbol)
+    {
+        foreach (var invocation in declarationBlock.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (invocation.SpanStart <= declarationSpanStart)
+                continue;
+            if (ContainsArgumentReferencingLocal(semanticModel, invocation.ArgumentList?.Arguments, localSymbol))
+                return true;
+        }
+
+        foreach (var creation in declarationBlock.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+        {
+            if (creation.SpanStart <= declarationSpanStart)
+                continue;
+            if (ContainsArgumentReferencingLocal(semanticModel, creation.ArgumentList?.Arguments, localSymbol))
+                return true;
+        }
+
+        foreach (var implicitCreation in declarationBlock.DescendantNodes().OfType<ImplicitObjectCreationExpressionSyntax>())
+        {
+            if (implicitCreation.SpanStart <= declarationSpanStart)
+                continue;
+            if (ContainsArgumentReferencingLocal(semanticModel, implicitCreation.ArgumentList?.Arguments, localSymbol))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool ContainsArgumentReferencingLocal(
+        SemanticModel semanticModel,
+        SeparatedSyntaxList<ArgumentSyntax>? arguments,
+        ILocalSymbol localSymbol)
+    {
+        if (arguments == null)
+            return false;
+
+        foreach (var argument in arguments.Value)
+        {
+            var symbol = semanticModel.GetSymbolInfo(argument.Expression).Symbol;
+            if (symbol != null && SymbolEqualityComparer.Default.Equals(symbol, localSymbol))
                 return true;
         }
 
