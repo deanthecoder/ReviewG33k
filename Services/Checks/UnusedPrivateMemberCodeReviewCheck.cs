@@ -126,6 +126,8 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
                 continue;
             if (symbol.IsOverride || symbol.IsAbstract)
                 continue;
+            if (IsProgramMainEntryPoint(symbol))
+                continue;
             if (HasAnyReference(root, semanticModel, symbol))
                 continue;
 
@@ -196,6 +198,21 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
     {
         var typeDeclaration = node.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
         return typeDeclaration?.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PartialKeyword)) == true;
+    }
+
+    private static bool IsProgramMainEntryPoint(IMethodSymbol symbol)
+    {
+        if (symbol == null)
+            return false;
+        if (!string.Equals(symbol.Name, "Main", StringComparison.Ordinal))
+            return false;
+        if (symbol.MethodKind != MethodKind.Ordinary)
+            return false;
+
+        var containingType = symbol.ContainingType;
+        return containingType != null &&
+               containingType.TypeKind == TypeKind.Class &&
+               string.Equals(containingType.Name, "Program", StringComparison.Ordinal);
     }
 
     private static MethodDeclarationSyntax FindPrivateMethodForLine(
