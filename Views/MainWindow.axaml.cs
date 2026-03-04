@@ -37,6 +37,13 @@ namespace ReviewG33k.Views;
 
 public partial class MainWindow : Window
 {
+    private enum ReviewMode
+    {
+        PullRequest = 0,
+        LocalCommittedChanges,
+        LocalUncommittedChanges
+    }
+
     private const string CheckErrorInfoPrefix = "CHECK ERROR:";
     private static readonly Regex LogLocationRegex = new(@"\[(?<path>.+?\.[^:\]]+):(?<line>\d+)\]", RegexOptions.Compiled);
     private static readonly IBrush TimestampedLogBrush = Brushes.Gainsboro;
@@ -69,6 +76,7 @@ public partial class MainWindow : Window
     private Dictionary<string, CodeReviewChangedFile> m_localReviewChangedFilesByPath;
     private string m_localReviewCacheRepositoryPath;
     private string m_localReviewCacheBaseBranch;
+    private ReviewMode? m_localReviewCacheMode;
 
     public MainWindow()
     {
@@ -96,7 +104,10 @@ public partial class MainWindow : Window
         LocalBaseBranchTextBox.Text = string.IsNullOrWhiteSpace(m_settings.LocalReviewBaseBranch)
             ? "main"
             : m_settings.LocalReviewBaseBranch;
-        ReviewModeComboBox.SelectedIndex = m_settings.UseLocalCommittedReview ? 1 : 0;
+        var persistedReviewModeIndex = m_settings.ReviewModeIndex;
+        if (persistedReviewModeIndex < (int)ReviewMode.PullRequest || persistedReviewModeIndex > (int)ReviewMode.LocalUncommittedChanges)
+            persistedReviewModeIndex = m_settings.UseLocalCommittedReview ? (int)ReviewMode.LocalCommittedChanges : (int)ReviewMode.PullRequest;
+        ReviewModeComboBox.SelectedIndex = persistedReviewModeIndex;
         ScanScopeComboBox.SelectedIndex = m_settings.IncludeFullModifiedFilesForAddedLineChecks ? 1 : 0;
         LogListBox.ItemsSource = m_logLines;
 
@@ -157,7 +168,7 @@ public partial class MainWindow : Window
 
     private void ReviewModeComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var isLocalMode = IsLocalCommittedReviewMode();
+        var isLocalMode = IsAnyLocalReviewMode();
         if (isLocalMode)
         {
             m_latestPullRequest = null;
@@ -165,7 +176,7 @@ public partial class MainWindow : Window
         }
 
         ApplyReviewModeUi();
-        PersistUseLocalCommittedReview(isLocalMode);
+        PersistReviewMode(GetSelectedReviewMode());
         _ = UpdatePullRequestPreviewAsync();
         UpdateActionButtonStates();
     }
@@ -209,6 +220,11 @@ public partial class MainWindow : Window
         if (IsLocalCommittedReviewMode())
         {
             await PrepareLocalCommittedReviewAsync();
+            return;
+        }
+        if (IsLocalUncommittedReviewMode())
+        {
+            await PrepareLocalUncommittedReviewAsync();
             return;
         }
 
@@ -323,7 +339,46 @@ public partial class MainWindow : Window
                     fetchTargetBranch: true);
 
                 var sourceResult = await changedFileSource.LoadAsync();
-                SetLocalReviewChangedFilesCache(localRepositoryPath, baseBranch, sourceResult?.Files);
+                SetLocalReviewChangedFilesCache(localRepositoryPath, baseBranch, ReviewMode.LocalCommittedChanges, sourceResult?.Files);
+                report = await RunCodeSmellScanAsync(sourceResult);
+                SetStatus("Local review complete.");
+            });
+
+        if (report?.Findings.Count > 0)
+            await ShowReviewResultsWindowAsync(report);
+    }
+
+    private async Task PrepareLocalUncommittedReviewAsync()
+    {
+        if (!TryGetLocalRepositoryInput(out var localRepositoryPath))
+            return;
+
+        InvalidateLocalReviewChangedFilesCache();
+        PersistLocalReviewRepositoryPath(localRepositoryPath);
+
+        m_latestPullRequest = null;
+        UpdatePullRequestReviewState(null);
+
+        CodeSmellReport report = null;
+        await ExecuteBusyActionAsync(
+            "Reviewing local uncommitted changes...",
+            async () =>
+            {
+                m_latestReviewWorktreePath = localRepositoryPath;
+                m_latestSolutionPath = RepositoryUtilities.FindTopLevelSolutionFile(localRepositoryPath);
+                UpdateActionButtonStates();
+
+                AppendLog($"Local review repository: {localRepositoryPath}");
+                AppendLog("Comparing local uncommitted/untracked changes against: HEAD");
+
+                if (!string.IsNullOrWhiteSpace(m_latestSolutionPath))
+                    AppendLog($"Solution selected: {m_latestSolutionPath}");
+                else
+                    AppendLog("No .sln file found in local repository.");
+
+                var changedFileSource = new GitWorkingTreeChangedFileSource(m_gitCommandRunner, localRepositoryPath);
+                var sourceResult = await changedFileSource.LoadAsync();
+                SetLocalReviewChangedFilesCache(localRepositoryPath, null, ReviewMode.LocalUncommittedChanges, sourceResult?.Files);
                 report = await RunCodeSmellScanAsync(sourceResult);
                 SetStatus("Local review complete.");
             });
@@ -426,8 +481,8 @@ public partial class MainWindow : Window
     private async Task ShowReviewResultsWindowAsync(CodeSmellReport report)
     {
         var canOpenInVsCode = TryDetectVsCode(out _, out _);
-        var canCommentInBitbucket = !IsLocalCommittedReviewMode() && m_latestPullRequest != null;
-        var canFixLocally = m_settings.UseLocalCommittedReview;
+        var canCommentInBitbucket = IsPullRequestReviewMode() && m_latestPullRequest != null;
+        var canFixLocally = IsAnyLocalReviewMode();
         var findingFixer = canFixLocally ? new CodeReviewFixDispatcher(m_codeSmellReportAnalyzer.Checks) : null;
         var resultsWindow = new ReviewResultsWindow(
             report?.Findings ?? [],
@@ -476,19 +531,22 @@ public partial class MainWindow : Window
 
     private async Task<IReadOnlyList<CodeSmellFinding>> ResampleLocalFindingsForFileAsync(string filePath)
     {
-        if (!IsLocalCommittedReviewMode() || string.IsNullOrWhiteSpace(filePath))
+        if (!IsAnyLocalReviewMode() || string.IsNullOrWhiteSpace(filePath))
             return [];
 
+        var reviewMode = GetSelectedReviewMode();
         var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
-        var baseBranch = LocalBaseBranchTextBox.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(localRepositoryPath) ||
-            string.IsNullOrWhiteSpace(baseBranch) ||
-            !localRepositoryPath.ToDir().Exists())
+        var baseBranch = reviewMode == ReviewMode.LocalCommittedChanges
+            ? LocalBaseBranchTextBox.Text?.Trim()
+            : null;
+        if (string.IsNullOrWhiteSpace(localRepositoryPath) || !localRepositoryPath.ToDir().Exists())
         {
             return [];
         }
+        if (reviewMode == ReviewMode.LocalCommittedChanges && string.IsNullOrWhiteSpace(baseBranch))
+            return [];
 
-        var changedFilesByPath = await GetOrCreateLocalReviewChangedFilesCacheAsync(localRepositoryPath, baseBranch);
+        var changedFilesByPath = await GetOrCreateLocalReviewChangedFilesCacheAsync(localRepositoryPath, baseBranch, reviewMode);
         if (changedFilesByPath == null || changedFilesByPath.Count == 0)
             return [];
 
@@ -513,34 +571,47 @@ public partial class MainWindow : Window
 
     private async Task<Dictionary<string, CodeReviewChangedFile>> GetOrCreateLocalReviewChangedFilesCacheAsync(
         string localRepositoryPath,
-        string baseBranch)
+        string baseBranch,
+        ReviewMode reviewMode)
     {
-        if (!IsLocalReviewCacheValid(localRepositoryPath, baseBranch))
+        if (!IsLocalReviewCacheValid(localRepositoryPath, baseBranch, reviewMode))
         {
-            var changedFileSource = new GitBranchComparisonChangedFileSource(
-                m_gitCommandRunner,
-                localRepositoryPath,
-                baseBranch,
-                fetchTargetBranch: false);
+            ICodeReviewChangedFileSource changedFileSource =
+                reviewMode == ReviewMode.LocalCommittedChanges
+                    ? new GitBranchComparisonChangedFileSource(
+                        m_gitCommandRunner,
+                        localRepositoryPath,
+                        baseBranch,
+                        fetchTargetBranch: false)
+                    : reviewMode == ReviewMode.LocalUncommittedChanges
+                        ? new GitWorkingTreeChangedFileSource(
+                            m_gitCommandRunner,
+                            localRepositoryPath)
+                        : null;
+            if (changedFileSource == null)
+                return null;
+
             var sourceResult = await changedFileSource.LoadAsync();
-            SetLocalReviewChangedFilesCache(localRepositoryPath, baseBranch, sourceResult?.Files);
+            SetLocalReviewChangedFilesCache(localRepositoryPath, baseBranch, reviewMode, sourceResult?.Files);
         }
 
         return m_localReviewChangedFilesByPath;
     }
 
-    private bool IsLocalReviewCacheValid(string localRepositoryPath, string baseBranch)
+    private bool IsLocalReviewCacheValid(string localRepositoryPath, string baseBranch, ReviewMode reviewMode)
     {
         if (m_localReviewChangedFilesByPath == null)
             return false;
 
         return string.Equals(m_localReviewCacheRepositoryPath, localRepositoryPath?.Trim(), StringComparison.OrdinalIgnoreCase) &&
-               string.Equals(m_localReviewCacheBaseBranch, baseBranch?.Trim(), StringComparison.OrdinalIgnoreCase);
+               string.Equals(m_localReviewCacheBaseBranch, baseBranch?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+               m_localReviewCacheMode == reviewMode;
     }
 
     private void SetLocalReviewChangedFilesCache(
         string localRepositoryPath,
         string baseBranch,
+        ReviewMode reviewMode,
         IReadOnlyList<CodeReviewChangedFile> changedFiles)
     {
         m_localReviewChangedFilesByPath = (changedFiles ?? [])
@@ -549,6 +620,7 @@ public partial class MainWindow : Window
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
         m_localReviewCacheRepositoryPath = localRepositoryPath?.Trim();
         m_localReviewCacheBaseBranch = baseBranch?.Trim();
+        m_localReviewCacheMode = reviewMode;
     }
 
     private void InvalidateLocalReviewChangedFilesCache()
@@ -556,6 +628,7 @@ public partial class MainWindow : Window
         m_localReviewChangedFilesByPath = null;
         m_localReviewCacheRepositoryPath = null;
         m_localReviewCacheBaseBranch = null;
+        m_localReviewCacheMode = null;
         UpdateActionButtonStates();
     }
 
@@ -677,8 +750,23 @@ public partial class MainWindow : Window
 
     private bool TryGetLocalCommittedReviewInputs(out string localRepositoryPath, out string baseBranch)
     {
-        localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
         baseBranch = LocalBaseBranchTextBox.Text?.Trim();
+        if (!TryGetLocalRepositoryInput(out localRepositoryPath))
+            return false;
+
+        if (string.IsNullOrWhiteSpace(baseBranch))
+        {
+            SetStatus("Enter a base branch (for example: main).");
+            DialogService.Instance.ShowMessage("Base branch required", "Enter the branch to compare against (for example: main or develop).", null);
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool TryGetLocalRepositoryInput(out string localRepositoryPath)
+    {
+        localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
 
         if (string.IsNullOrWhiteSpace(localRepositoryPath))
         {
@@ -701,19 +789,12 @@ public partial class MainWindow : Window
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(baseBranch))
-        {
-            SetStatus("Enter a base branch (for example: main).");
-            DialogService.Instance.ShowMessage("Base branch required", "Enter the branch to compare against (for example: main or develop).", null);
-            return false;
-        }
-
         return true;
     }
 
     private void OnInputTextChanged()
     {
-        if (!IsLocalCommittedReviewMode())
+        if (IsPullRequestReviewMode())
             NormalizePullRequestUrlInTextBoxIfNeeded();
         _ = UpdatePullRequestPreviewAsync();
         UpdateActionButtonStates();
@@ -753,7 +834,7 @@ public partial class MainWindow : Window
         m_previewUpdateCancellation = new CancellationTokenSource();
         var cancellationToken = m_previewUpdateCancellation.Token;
 
-        if (IsLocalCommittedReviewMode())
+        if (IsAnyLocalReviewMode())
         {
             UpdatePullRequestReviewState(null);
             PullRequestMetadataTextBlock.IsVisible = false;
@@ -873,34 +954,59 @@ public partial class MainWindow : Window
         BusyIndicatorSpinner.Value = Math.Clamp(completed, 0, total);
     }
 
-    private bool IsLocalCommittedReviewMode() => ReviewModeComboBox?.SelectedIndex == 1;
+    private ReviewMode GetSelectedReviewMode()
+    {
+        var selectedIndex = ReviewModeComboBox?.SelectedIndex ?? (int)ReviewMode.PullRequest;
+        if (selectedIndex < (int)ReviewMode.PullRequest || selectedIndex > (int)ReviewMode.LocalUncommittedChanges)
+            return ReviewMode.PullRequest;
+
+        return (ReviewMode)selectedIndex;
+    }
+
+    private bool IsPullRequestReviewMode() => GetSelectedReviewMode() == ReviewMode.PullRequest;
+
+    private bool IsLocalCommittedReviewMode() => GetSelectedReviewMode() == ReviewMode.LocalCommittedChanges;
+
+    private bool IsLocalUncommittedReviewMode() => GetSelectedReviewMode() == ReviewMode.LocalUncommittedChanges;
+
+    private bool IsAnyLocalReviewMode() => GetSelectedReviewMode() != ReviewMode.PullRequest;
 
     private bool ShouldIncludeFullModifiedFilesForAddedLineChecks() => ScanScopeComboBox?.SelectedIndex == 1;
 
     private void ApplyReviewModeUi()
     {
-        var isLocalMode = IsLocalCommittedReviewMode();
+        var reviewMode = GetSelectedReviewMode();
+        var isLocalMode = reviewMode != ReviewMode.PullRequest;
+        var showBaseBranch = reviewMode == ReviewMode.LocalCommittedChanges;
 
         PullRequestUrlLabelTextBlock.IsVisible = !isLocalMode;
         PullRequestUrlTextBox.IsVisible = !isLocalMode;
         OpenPullRequestButton.IsVisible = !isLocalMode;
         LocalReviewOptionsGrid.IsVisible = isLocalMode;
-        PullRequestMetadataTextBlock.IsVisible = !isLocalMode;
+        PullRequestMetadataTextBlock.IsVisible = !isLocalMode && !string.IsNullOrWhiteSpace(PullRequestMetadataTextBlock.Text);
+        LocalBaseBranchLabelTextBlock.IsVisible = showBaseBranch;
+        LocalBaseBranchTextBox.IsVisible = showBaseBranch;
 
-        PrepareReviewButton.Content = isLocalMode ? "Review Local" : "Review PR";
+        PrepareReviewButton.Content = reviewMode switch
+        {
+            ReviewMode.LocalCommittedChanges => "Review Local (Committed)",
+            ReviewMode.LocalUncommittedChanges => "Review Local (Uncommitted)",
+            _ => "Review PR"
+        };
     }
 
     private void UpdateActionButtonStates()
     {
         var canReviewCurrentPullRequest = m_previewPullRequestIsOpen != false;
-        var isLocalMode = IsLocalCommittedReviewMode();
+        var reviewMode = GetSelectedReviewMode();
+        var isLocalMode = reviewMode != ReviewMode.PullRequest;
         m_latestSolutionPath = ResolveAvailableSolutionPath();
         PrepareReviewButton.IsEnabled = !m_busy &&
                                         m_isGitAvailable &&
                                         (isLocalMode
-                                            ? HasValidLocalPrepareInputs()
+                                            ? HasValidLocalPrepareInputs(reviewMode)
                                             : canReviewCurrentPullRequest && HasValidPullRequestPrepareInputs());
-        OpenPullRequestButton.IsEnabled = !m_busy && !isLocalMode && HasValidPullRequestInput();
+        OpenPullRequestButton.IsEnabled = !m_busy && reviewMode == ReviewMode.PullRequest && HasValidPullRequestInput();
         OpenSolutionButton.IsEnabled = !m_busy &&
                                       !string.IsNullOrWhiteSpace(m_latestSolutionPath) &&
                                       m_latestSolutionPath.ToFile().Exists();
@@ -957,7 +1063,7 @@ public partial class MainWindow : Window
         return BitbucketPrUrlParser.TryParse(prUrlText, out _, out _);
     }
 
-    private bool HasValidLocalPrepareInputs()
+    private bool HasValidLocalPrepareInputs(ReviewMode reviewMode)
     {
         var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
         if (string.IsNullOrWhiteSpace(localRepositoryPath) || !localRepositoryPath.ToDir().Exists())
@@ -965,6 +1071,9 @@ public partial class MainWindow : Window
 
         if (!RepositoryUtilities.IsGitRepository(localRepositoryPath))
             return false;
+
+        if (reviewMode == ReviewMode.LocalUncommittedChanges)
+            return true;
 
         var baseBranch = LocalBaseBranchTextBox.Text?.Trim();
         return !string.IsNullOrWhiteSpace(baseBranch);
@@ -1358,7 +1467,7 @@ public partial class MainWindow : Window
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
         PersistLocalReviewRepositoryPath(LocalRepositoryFolderTextBox.Text);
         PersistLocalReviewBaseBranch(LocalBaseBranchTextBox.Text);
-        PersistUseLocalCommittedReview(IsLocalCommittedReviewMode());
+        PersistReviewMode(GetSelectedReviewMode());
         PersistIncludeFullModifiedFilesForAddedLineChecks(ShouldIncludeFullModifiedFilesForAddedLineChecks());
         m_settings.Dispose();
     }
@@ -1524,7 +1633,7 @@ public partial class MainWindow : Window
 
     private async Task TryPrefillPullRequestUrlFromClipboardAsync()
     {
-        if (IsLocalCommittedReviewMode())
+        if (!IsPullRequestReviewMode())
             return;
 
         if (!string.IsNullOrWhiteSpace(PullRequestUrlTextBox.Text))
@@ -1588,11 +1697,17 @@ public partial class MainWindow : Window
         SaveSettingsSafely();
     }
 
-    private void PersistUseLocalCommittedReview(bool useLocalCommittedReview)
+    private void PersistReviewMode(ReviewMode reviewMode)
     {
-        if (m_settings.UseLocalCommittedReview == useLocalCommittedReview)
+        var reviewModeIndex = (int)reviewMode;
+        var useLocalCommittedReview = reviewMode == ReviewMode.LocalCommittedChanges;
+        if (m_settings.ReviewModeIndex == reviewModeIndex &&
+            m_settings.UseLocalCommittedReview == useLocalCommittedReview)
+        {
             return;
+        }
 
+        m_settings.ReviewModeIndex = reviewModeIndex;
         m_settings.UseLocalCommittedReview = useLocalCommittedReview;
         SaveSettingsSafely();
     }

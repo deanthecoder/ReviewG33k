@@ -89,7 +89,8 @@
                               MinWidth="260"
                               SelectionChanged="ReviewModeComboBox_OnSelectionChanged">
                         <ComboBoxItem Content="Pull Request" />
-                        <ComboBoxItem Content="Local repository" />
+                        <ComboBoxItem Content="Local committed changes" />
+                        <ComboBoxItem Content="Local uncommitted changes" />
                     </ComboBox>
 
                     <TextBlock x:Name="PullRequestUrlLabelTextBlock"
@@ -158,7 +159,8 @@
                                                         Height="18"
                                                         Kind="FolderSearchOutline" />
                         </Button>
-                        <TextBlock Grid.Column="3"
+                        <TextBlock x:Name="LocalBaseBranchLabelTextBlock"
+                                   Grid.Column="3"
                                    Margin="14,0,8,0"
                                    VerticalAlignment="Center"
                                    Text="Base Branch:" />

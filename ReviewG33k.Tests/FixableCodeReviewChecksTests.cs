@@ -796,4 +796,68 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(updated, Does.Not.Contain("AddedLinesOnly = 0"));
         Assert.That(updated, Does.Contain("WholeChangedFile = 1"));
     }
+
+    [Test]
+    public void UnnecessaryEnumMemberValueCheckTryFixOnLastMemberKeepsBraceOnNextLine()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = string.Join(
+            "\r\n",
+            "private enum ReviewMode",
+            "{",
+            "    PullRequest = 0,",
+            "    LocalCommittedChanges = 1,",
+            "    LocalUncommittedChanges = 2",
+            "}");
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.UnnecessaryEnumMemberValue,
+            "Sample.cs",
+            5,
+            "Enum member has explicit default value.");
+
+        var check = new UnnecessaryEnumMemberValueCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile, out _);
+
+        Assert.That(success, Is.True);
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Contain("LocalUncommittedChanges\r\n}"));
+        Assert.That(updated, Does.Not.Contain("LocalUncommittedChanges = 2"));
+    }
+
+    [Test]
+    public void UnnecessaryEnumMemberValueCheckTryFixOnLastMemberWithMixedAssignmentsKeepsBraceOnNextLine()
+    {
+        using var tempFile = new TempFile(".cs");
+        var source = string.Join(
+            "\r\n",
+            "private enum ReviewMode",
+            "{",
+            "    PullRequest = 0,",
+            "    LocalCommittedChanges,",
+            "    LocalUncommittedChanges = 2",
+            "}");
+
+        File.WriteAllText(tempFile.FullName, source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.UnnecessaryEnumMemberValue,
+            "Sample.cs",
+            5,
+            "Enum member has explicit default value.");
+
+        var check = new UnnecessaryEnumMemberValueCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile, out _);
+
+        Assert.That(success, Is.True);
+
+        var updated = File.ReadAllText(tempFile.FullName);
+        Assert.That(updated, Does.Contain("LocalUncommittedChanges\r\n}"));
+        Assert.That(updated, Does.Not.Contain("LocalUncommittedChanges = 2"));
+    }
 }

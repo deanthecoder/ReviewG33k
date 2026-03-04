@@ -11,7 +11,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -60,10 +59,15 @@ public sealed class UnnecessaryEnumMemberValueCodeReviewCheck : RoslynSemanticCo
         }
 
         var memberName = member.Identifier.ValueText;
-        var updatedRoot = root.ReplaceNode(member, member.WithEqualsValue(null));
+        var memberTrailingTrivia = member.GetTrailingTrivia();
+        var updatedMember = member
+            .WithIdentifier(
+                member.Identifier.WithTrailingTrivia(
+                    TrimTrailingWhitespaceTrivia(member.Identifier.TrailingTrivia)))
+            .WithEqualsValue(null)
+            .WithTrailingTrivia(memberTrailingTrivia);
+        var updatedRoot = root.ReplaceNode(member, updatedMember);
         var updatedText = updatedRoot.ToFullString();
-        if (!string.IsNullOrWhiteSpace(memberName))
-            updatedText = Regex.Replace(updatedText, $@"\b{Regex.Escape(memberName)}\s+,", $"{memberName},");
         if (!this.TryWriteUpdatedText(resolvedFile, updatedText, out resultMessage))
             return false;
 
@@ -150,5 +154,19 @@ public sealed class UnnecessaryEnumMemberValueCodeReviewCheck : RoslynSemanticCo
         {
             return false;
         }
+    }
+
+    private static SyntaxTriviaList TrimTrailingWhitespaceTrivia(SyntaxTriviaList triviaList)
+    {
+        if (triviaList.Count == 0)
+            return triviaList;
+
+        var trimToIndex = triviaList.Count - 1;
+        while (trimToIndex >= 0 && triviaList[trimToIndex].IsKind(SyntaxKind.WhitespaceTrivia))
+            trimToIndex--;
+
+        return trimToIndex == triviaList.Count - 1
+            ? triviaList
+            : SyntaxFactory.TriviaList(triviaList.Take(trimToIndex + 1));
     }
 }

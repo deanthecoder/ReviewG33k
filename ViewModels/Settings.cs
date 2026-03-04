@@ -14,6 +14,8 @@ namespace ReviewG33k.ViewModels;
 
 public sealed class Settings : UserSettingsBase
 {
+    private const int DefaultReviewModeIndex = -1;
+
     public static Settings Instance { get; } = new();
 
     protected override void ApplyDefaults()
@@ -22,6 +24,7 @@ public sealed class Settings : UserSettingsBase
         RepositoryRootPath = string.Empty;
         LocalReviewRepositoryPath = string.Empty;
         LocalReviewBaseBranch = "main";
+        ReviewModeIndex = DefaultReviewModeIndex;
         UseLocalCommittedReview = false;
         IncludeFullModifiedFilesForAddedLineChecks = false;
     }
@@ -48,6 +51,18 @@ public sealed class Settings : UserSettingsBase
     {
         get => Get<string>();
         set => Set(value);
+    }
+
+    public int ReviewModeIndex
+    {
+        get
+        {
+            var rawValue = Get<long>(nameof(ReviewModeIndex));
+            return rawValue is >= int.MinValue and <= int.MaxValue
+                ? (int)rawValue
+                : DefaultReviewModeIndex;
+        }
+        set => Set((long)value, nameof(ReviewModeIndex));
     }
 
     public bool UseLocalCommittedReview

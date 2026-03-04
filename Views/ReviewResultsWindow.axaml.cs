@@ -604,9 +604,19 @@ public partial class ReviewResultsWindow : Window
 
     private void UpdateSummaryText()
     {
-        SummaryTextBlock.Text = m_rows.Count == 0
-            ? "No review findings"
-            : $"{m_rows.Count} finding(s)";
+        if (m_rows.Count == 0)
+        {
+            SummaryTextBlock.Text = "No review findings";
+            return;
+        }
+
+        var fileCount = m_rows
+            .Select(row => row?.Finding?.FilePath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        SummaryTextBlock.Text = $"{m_rows.Count} finding(s) across {fileCount} file(s)";
     }
 
     private void UpdateOpenSelectedButtonState()
