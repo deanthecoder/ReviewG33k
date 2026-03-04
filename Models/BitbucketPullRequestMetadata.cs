@@ -8,31 +8,23 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-using System;
-
 namespace ReviewG33k.Models;
 
 public sealed class BitbucketPullRequestMetadata
 {
-    public BitbucketPullRequestMetadata(string sourceBranch, string targetBranch, string title, string author, DateTimeOffset? updatedAt, string state)
+    public BitbucketPullRequestMetadata(string targetBranch, string title, string author, string state)
     {
-        SourceBranch = sourceBranch;
         TargetBranch = targetBranch;
         Title = title;
         Author = author;
-        UpdatedAt = updatedAt;
         State = state;
     }
-
-    public string SourceBranch { get; }
 
     public string TargetBranch { get; }
 
     public string Title { get; }
 
     public string Author { get; }
-
-    public DateTimeOffset? UpdatedAt { get; }
 
     public string State { get; }
 }

@@ -756,8 +756,6 @@ public partial class MainWindow : Window
         if (IsLocalCommittedReviewMode())
         {
             UpdatePullRequestReviewState(null);
-            PullRequestPreviewTextBlock.IsVisible = false;
-            PullRequestPreviewTextBlock.Text = string.Empty;
             PullRequestMetadataTextBlock.IsVisible = false;
             PullRequestMetadataTextBlock.Text = string.Empty;
             UpdateActionButtonStates();
@@ -769,8 +767,6 @@ public partial class MainWindow : Window
         {
             UpdatePullRequestReviewState(null);
             UpdateActionButtonStates();
-            PullRequestPreviewTextBlock.IsVisible = false;
-            PullRequestPreviewTextBlock.Text = string.Empty;
             PullRequestMetadataTextBlock.IsVisible = false;
             PullRequestMetadataTextBlock.Text = string.Empty;
             return;
@@ -780,15 +776,11 @@ public partial class MainWindow : Window
         {
             UpdatePullRequestReviewState(null);
             UpdateActionButtonStates();
-            PullRequestPreviewTextBlock.Text = "Preview: Invalid Bitbucket PR URL";
-            PullRequestPreviewTextBlock.IsVisible = true;
             PullRequestMetadataTextBlock.IsVisible = false;
             PullRequestMetadataTextBlock.Text = string.Empty;
             return;
         }
 
-        PullRequestPreviewTextBlock.Text = $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId} (loading details...)";
-        PullRequestPreviewTextBlock.IsVisible = true;
         PullRequestMetadataTextBlock.IsVisible = false;
         PullRequestMetadataTextBlock.Text = string.Empty;
 
@@ -799,21 +791,12 @@ public partial class MainWindow : Window
         UpdatePullRequestReviewState(metadata);
         UpdateActionButtonStates();
 
-        var previewPrefix = $"Preview: {pullRequest.ProjectKey}/{pullRequest.RepoSlug} PR #{pullRequest.PullRequestId}";
-
         if (metadata == null)
         {
-            PullRequestPreviewTextBlock.Text = previewPrefix;
-            PullRequestPreviewTextBlock.IsVisible = true;
             PullRequestMetadataTextBlock.IsVisible = false;
             PullRequestMetadataTextBlock.Text = string.Empty;
             return;
         }
-
-        PullRequestPreviewTextBlock.Text = HasBranchInfo(metadata)
-            ? $"{previewPrefix} ({metadata.SourceBranch} -> {metadata.TargetBranch})"
-            : previewPrefix;
-        PullRequestPreviewTextBlock.IsVisible = true;
 
         PullRequestMetadataTextBlock.Text = BuildPullRequestMetadataText(metadata);
         PullRequestMetadataTextBlock.IsVisible = true;
@@ -821,11 +804,6 @@ public partial class MainWindow : Window
         if (m_previewPullRequestIsOpen == false)
             NotifyNonOpenPullRequestIfNeeded(pullRequest);
     }
-
-    private static bool HasBranchInfo(BitbucketPullRequestMetadata metadata) =>
-        metadata != null &&
-        !string.IsNullOrWhiteSpace(metadata.SourceBranch) &&
-        !string.IsNullOrWhiteSpace(metadata.TargetBranch);
 
     private static string BuildPullRequestMetadataText(BitbucketPullRequestMetadata metadata)
     {
@@ -907,12 +885,7 @@ public partial class MainWindow : Window
         PullRequestUrlTextBox.IsVisible = !isLocalMode;
         OpenPullRequestButton.IsVisible = !isLocalMode;
         LocalReviewOptionsGrid.IsVisible = isLocalMode;
-
-        if (isLocalMode)
-        {
-            PullRequestPreviewTextBlock.IsVisible = false;
-            PullRequestMetadataTextBlock.IsVisible = false;
-        }
+        PullRequestMetadataTextBlock.IsVisible = !isLocalMode;
 
         PrepareReviewButton.Content = isLocalMode ? "Review Local" : "Review PR";
     }

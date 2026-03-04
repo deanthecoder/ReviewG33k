@@ -31,8 +31,7 @@
                     Margin="0,0,0,12"
                     Classes="zone neonFrame"
                     Background="{DynamicResource ZoneSecondaryBrush}">
-                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
-                      Grid.IsSharedSizeScope="True">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" Grid.IsSharedSizeScope="True">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"
                                           SharedSizeGroup="FormLabelColumn" />
@@ -119,20 +118,11 @@
                                                     Kind="Web" />
                     </Button>
 
-                    <TextBlock x:Name="PullRequestPreviewTextBlock"
-                               Grid.Row="4"
-                               Grid.Column="1"
-                               Grid.ColumnSpan="2"
-                               Margin="0,8,0,0"
-                               Opacity="0.9"
-                               IsVisible="False" />
-
                     <TextBlock x:Name="PullRequestMetadataTextBlock"
                                Grid.Row="4"
                                Grid.Column="1"
                                Grid.ColumnSpan="2"
                                Margin="0,4,0,0"
-                               Opacity="0.78"
                                IsVisible="False"
                                TextWrapping="Wrap" />
 

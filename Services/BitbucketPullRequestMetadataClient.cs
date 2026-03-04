@@ -388,14 +388,12 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
 
-            var sourceBranch = GetBranchName(root, "fromRef");
             var targetBranch = GetBranchName(root, "toRef");
             var title = GetTitle(root);
             var author = GetAuthor(root);
-            var updatedAt = GetUpdatedAt(root);
             var state = GetState(root);
 
-            metadata = new BitbucketPullRequestMetadata(sourceBranch, targetBranch, title, author, updatedAt, state);
+            metadata = new BitbucketPullRequestMetadata(targetBranch, title, author, state);
             return true;
         }
         catch
@@ -442,24 +440,7 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
 
         return string.Empty;
     }
-
-    private static DateTimeOffset? GetUpdatedAt(JsonElement root)
-    {
-        if (!root.TryGetProperty("updatedDate", out var updatedDateElement))
-            return null;
-
-        if (updatedDateElement.ValueKind == JsonValueKind.Number && updatedDateElement.TryGetInt64(out var updatedDateUnixMs))
-            return DateTimeOffset.FromUnixTimeMilliseconds(updatedDateUnixMs);
-
-        if (updatedDateElement.ValueKind == JsonValueKind.String &&
-            long.TryParse(updatedDateElement.GetString(), out updatedDateUnixMs))
-        {
-            return DateTimeOffset.FromUnixTimeMilliseconds(updatedDateUnixMs);
-        }
-
-        return null;
-    }
-
+    
     private static string GetState(JsonElement root)
     {
         if (root.TryGetProperty("state", out var stateElement) && stateElement.ValueKind == JsonValueKind.String)
@@ -474,10 +455,7 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
             return refName;
 
         const string headsPrefix = "refs/heads/";
-        if (refName.StartsWith(headsPrefix, StringComparison.OrdinalIgnoreCase))
-            return refName[headsPrefix.Length..];
-
-        return refName;
+        return refName.StartsWith(headsPrefix, StringComparison.OrdinalIgnoreCase) ? refName[headsPrefix.Length..] : refName;
     }
 
     private static bool TryParseChangesPage(string json, List<string> paths, out bool isLastPage, out int? nextPageStart)
