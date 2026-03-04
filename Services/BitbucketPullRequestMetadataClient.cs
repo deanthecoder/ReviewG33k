@@ -171,12 +171,12 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
 
     private static HttpClient CreateDefaultHttpClient()
     {
-        using var handler = new HttpClientHandler
+        var handler = new HttpClientHandler
         {
             UseDefaultCredentials = true
         };
 
-        return new HttpClient(handler)
+        return new HttpClient(handler, disposeHandler: true)
         {
             Timeout = TimeSpan.FromSeconds(8)
         };
