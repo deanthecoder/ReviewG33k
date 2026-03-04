@@ -39,7 +39,7 @@ public partial class MainWindow : Window
 {
     private enum ReviewMode
     {
-        PullRequest = 0,
+        PullRequest,
         LocalCommittedChanges,
         LocalUncommittedChanges
     }
@@ -109,6 +109,7 @@ public partial class MainWindow : Window
             persistedReviewModeIndex = m_settings.UseLocalCommittedReview ? (int)ReviewMode.LocalCommittedChanges : (int)ReviewMode.PullRequest;
         ReviewModeComboBox.SelectedIndex = persistedReviewModeIndex;
         ScanScopeComboBox.SelectedIndex = m_settings.IncludeFullModifiedFilesForAddedLineChecks ? 1 : 0;
+        UpdateComboInfoTooltips();
         LogListBox.ItemsSource = m_logLines;
 
         ApplyReviewModeUi();
@@ -168,6 +169,7 @@ public partial class MainWindow : Window
 
     private void ReviewModeComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        UpdateReviewModeInfoTooltip();
         var isLocalMode = IsAnyLocalReviewMode();
         if (isLocalMode)
         {
@@ -183,6 +185,7 @@ public partial class MainWindow : Window
 
     private void ScanScopeComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        UpdateScanScopeInfoTooltip();
         PersistIncludeFullModifiedFilesForAddedLineChecks(ShouldIncludeFullModifiedFilesForAddedLineChecks());
     }
 
@@ -973,6 +976,38 @@ public partial class MainWindow : Window
 
     private bool ShouldIncludeFullModifiedFilesForAddedLineChecks() => ScanScopeComboBox?.SelectedIndex == 1;
 
+    private void UpdateComboInfoTooltips()
+    {
+        UpdateReviewModeInfoTooltip();
+        UpdateScanScopeInfoTooltip();
+    }
+
+    private void UpdateReviewModeInfoTooltip()
+    {
+        var tooltip = GetSelectedReviewMode() switch
+        {
+            ReviewMode.LocalCommittedChanges =>
+                "Reviews committed changes in your local repo against the selected base branch (for example origin/main).",
+            ReviewMode.LocalUncommittedChanges =>
+                "Reviews your uncommitted working tree changes, without requiring commits.",
+            _ =>
+                "Reviews a Bitbucket pull request by preparing an isolated local worktree for that PR."
+        };
+
+        if (ReviewModeInfoButton != null)
+            ToolTip.SetTip(ReviewModeInfoButton, tooltip);
+    }
+
+    private void UpdateScanScopeInfoTooltip()
+    {
+        var tooltip = ShouldIncludeFullModifiedFilesForAddedLineChecks()
+            ? "Runs checks across entire modified files. More thorough, but slower."
+            : "Runs checks only on newly added lines. Faster for targeted reviews.";
+
+        if (ScanScopeInfoButton != null)
+            ToolTip.SetTip(ScanScopeInfoButton, tooltip);
+    }
+
     private void ApplyReviewModeUi()
     {
         var reviewMode = GetSelectedReviewMode();
@@ -989,8 +1024,8 @@ public partial class MainWindow : Window
 
         PrepareReviewButton.Content = reviewMode switch
         {
-            ReviewMode.LocalCommittedChanges => "Review Local (Committed)",
-            ReviewMode.LocalUncommittedChanges => "Review Local (Uncommitted)",
+            ReviewMode.LocalCommittedChanges => "Review Local",
+            ReviewMode.LocalUncommittedChanges => "Review Local",
             _ => "Review PR"
         };
     }

@@ -65,33 +65,47 @@
                                Margin="0,0,12,0"
                                Text="Scan Scope:" />
 
-                    <ComboBox x:Name="ScanScopeComboBox"
-                              Grid.Row="1"
-                              Grid.Column="1"
-                              Grid.ColumnSpan="2"
-                              Margin="0,8,0,4"
-                              MinWidth="260"
-                              SelectionChanged="ScanScopeComboBox_OnSelectionChanged">
-                        <ComboBoxItem Content="Changed lines (faster)" />
-                        <ComboBoxItem Content="Full modified files (more thorough)" />
-                    </ComboBox>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,8,0,4">
+                        <ComboBox x:Name="ScanScopeComboBox"
+                                  MinWidth="260"
+                                  SelectionChanged="ScanScopeComboBox_OnSelectionChanged">
+                            <ComboBoxItem Content="Changed lines" />
+                            <ComboBoxItem Content="Full modified files" />
+                        </ComboBox>
+                        <Button x:Name="ScanScopeInfoButton"
+                                Margin="4,0"
+                                Width="28" Height="28"
+                                Background="Transparent"
+                                BorderThickness="0">
+                            <materialIcons:MaterialIcon Width="18" Height="18"
+                                                        Foreground="#3B82F6"
+                                                        Kind="InformationOutline" />
+                        </Button>
+                    </StackPanel>
 
                     <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"
                                HorizontalAlignment="Right"
                                Margin="0,0,12,0"
                                Text="Review Mode:" />
 
-                    <ComboBox x:Name="ReviewModeComboBox"
-                              Grid.Row="2"
-                              Grid.Column="1"
-                              Grid.ColumnSpan="2"
-                              Margin="0,4"
-                              MinWidth="260"
-                              SelectionChanged="ReviewModeComboBox_OnSelectionChanged">
-                        <ComboBoxItem Content="Pull Request" />
-                        <ComboBoxItem Content="Local committed changes" />
-                        <ComboBoxItem Content="Local uncommitted changes" />
-                    </ComboBox>
+                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                        <ComboBox x:Name="ReviewModeComboBox"
+                                  MinWidth="260"
+                                  SelectionChanged="ReviewModeComboBox_OnSelectionChanged">
+                            <ComboBoxItem Content="Pull Request" />
+                            <ComboBoxItem Content="Local committed changes" />
+                            <ComboBoxItem Content="Local uncommitted changes" />
+                        </ComboBox>
+                        <Button x:Name="ReviewModeInfoButton"
+                                Margin="4,0"
+                                Width="28" Height="28"
+                                Background="Transparent"
+                                BorderThickness="0">
+                            <materialIcons:MaterialIcon Width="18" Height="18"
+                                                        Foreground="#3B82F6"
+                                                        Kind="InformationOutline" />
+                        </Button>
+                    </StackPanel>
 
                     <TextBlock x:Name="PullRequestUrlLabelTextBlock"
                                Grid.Row="3"
@@ -103,7 +117,7 @@
                     <TextBox x:Name="PullRequestUrlTextBox"
                              Grid.Row="3"
                              Grid.Column="1"
-                             Margin="0,10,0,0"
+                             Margin="0,8,0,0"
                              DragDrop.AllowDrop="True"
                              Watermark="Paste or drop a Bitbucket PR URL" />
                     <Button x:Name="OpenPullRequestButton"
@@ -171,14 +185,13 @@
                     </Grid>
 
                     <Grid Grid.Row="6"
-                          Grid.Column="0"
-                          Grid.ColumnSpan="3"
+                          Grid.Column="1"
+                          Grid.ColumnSpan="2"
                           Margin="0,12,0,0"
                           ColumnDefinitions="Auto,Auto,*,Auto">
                         <Button x:Name="PrepareReviewButton"
                                 Grid.Column="0"
                                 Classes="accent neon"
-                                Padding="14,8"
                                 Click="PrepareReviewButton_OnClick"
                                 Content="Review PR" />
                         <ProgressBar Grid.Column="1" x:Name="BusyIndicatorSpinner"
