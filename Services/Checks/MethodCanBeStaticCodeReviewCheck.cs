@@ -108,6 +108,8 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
         methodSymbol = semanticModel.GetDeclaredSymbol(method);
         if (methodSymbol == null)
             return false;
+        if (methodSymbol.DeclaredAccessibility != Accessibility.Private)
+            return false;
 
         if (methodSymbol.IsStatic ||
             methodSymbol.IsAbstract ||

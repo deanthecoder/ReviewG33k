@@ -459,7 +459,7 @@ public sealed class FixableCodeReviewChecksTests
         const string source = """
             public sealed class Sample
             {
-                public int Add(int a, int b)
+                private int Add(int a, int b)
                 {
                     return a + b;
                 }
@@ -482,7 +482,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(message, Does.Contain("Add"));
 
         var updated = File.ReadAllText(tempFile.FullName);
-        Assert.That(updated, Does.Contain("public static int Add"));
+        Assert.That(updated, Does.Contain("private static int Add"));
 
         var root = CSharpSyntaxTree.ParseText(updated).GetCompilationUnitRoot();
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Single(node => node.Identifier.ValueText == "Add");

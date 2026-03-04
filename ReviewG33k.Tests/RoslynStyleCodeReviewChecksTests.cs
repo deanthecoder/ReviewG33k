@@ -989,7 +989,29 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
-    public void MethodCanBeStaticCheckWhenMethodDoesNotUseInstanceStateReportsHint()
+    public void MethodCanBeStaticCheckWhenPrivateMethodDoesNotUseInstanceStateReportsHint()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                private int SumAbs(int left, int right)
+                {
+                    return Math.Abs(left) + Math.Abs(right);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MethodCanBeStaticCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings[0].Message, Does.Contain("`SumAbs`"));
+    }
+
+    [Test]
+    public void MethodCanBeStaticCheckWhenPublicMethodDoesNotUseInstanceStateDoesNotReport()
     {
         const string source = """
             using System;
@@ -1005,9 +1027,7 @@ public sealed class RoslynStyleCodeReviewChecksTests
 
         var report = AnalyzeSource(new MethodCanBeStaticCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
 
-        Assert.That(report.Findings, Has.Count.EqualTo(1));
-        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
-        Assert.That(report.Findings[0].Message, Does.Contain("`SumAbs`"));
+        Assert.That(report.Findings, Is.Empty);
     }
 
     [Test]
@@ -1939,6 +1959,26 @@ public sealed class RoslynStyleCodeReviewChecksTests
             """;
 
         var report = AnalyzeSource(new UnusedPrivateMemberCodeReviewCheck(), "A", source, Enumerable.Range(1, 12));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnusedPrivateMemberCheckWhenPrivateProgramMainExistsDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public static class Program
+            {
+                private static async Task Main(string[] args)
+                {
+                    await Task.Delay(1);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedPrivateMemberCodeReviewCheck(), "A", source, Enumerable.Range(1, 11), "Program.cs");
 
         Assert.That(report.Findings, Is.Empty);
     }
