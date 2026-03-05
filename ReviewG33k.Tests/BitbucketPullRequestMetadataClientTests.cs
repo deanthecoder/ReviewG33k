@@ -19,7 +19,7 @@ namespace ReviewG33k.Tests;
 public sealed class BitbucketPullRequestMetadataClientTests
 {
     [Test]
-    public async Task TryAddInlineCommentAsyncWhenAddedLineAnchorFailsFallsBackToPullRequestComment()
+    public async Task TryAddInlineCommentAsyncWhenAddedLineAnchorFailsRetriesWithContextAnchor()
     {
         using var handler = new StubHttpMessageHandler(
         [
@@ -41,8 +41,36 @@ public sealed class BitbucketPullRequestMetadataClientTests
         Assert.That(handler.RequestBodies, Has.Count.EqualTo(2));
         Assert.That(handler.RequestBodies[0], Does.Contain("\"anchor\":"));
         Assert.That(handler.RequestBodies[0], Does.Contain("\"lineType\":\"ADDED\""));
-        Assert.That(handler.RequestBodies[1], Does.Not.Contain("\"anchor\":"));
-        Assert.That(handler.RequestBodies[1], Does.Contain("[src/Feature/Foo.cs:27] Please simplify this branch."));
+        Assert.That(handler.RequestBodies[1], Does.Contain("\"anchor\":"));
+        Assert.That(handler.RequestBodies[1], Does.Contain("\"lineType\":\"CONTEXT\""));
+    }
+
+    [Test]
+    public async Task TryAddInlineCommentAsyncWhenInlineAnchorsFailFallsBackToPullRequestComment()
+    {
+        using var handler = new StubHttpMessageHandler(
+        [
+            CreateJsonResponse(HttpStatusCode.BadRequest, "{\"errors\":[{\"message\":\"Anchor line must be an added line.\"}]}"),
+            CreateJsonResponse(HttpStatusCode.BadRequest, "{\"errors\":[{\"message\":\"Line is not available in diff context.\"}]}"),
+            CreateJsonResponse(HttpStatusCode.Created, "{}")
+        ]);
+        using var httpClient = new HttpClient(handler);
+        var pullRequest = new BitbucketPullRequestReference(
+            "bitbucket.example.com",
+            "PROJ",
+            "sample-repo",
+            42,
+            "https://bitbucket.example.com/projects/PROJ/repos/sample-repo/pull-requests/42");
+
+        using var client = new BitbucketPullRequestMetadataClient(httpClient);
+        var result = await client.TryAddInlineCommentAsync(pullRequest, "src\\Feature\\Foo.cs", 27, "Please simplify this branch.");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.RequestBodies, Has.Count.EqualTo(3));
+        Assert.That(handler.RequestBodies[0], Does.Contain("\"lineType\":\"ADDED\""));
+        Assert.That(handler.RequestBodies[1], Does.Contain("\"lineType\":\"CONTEXT\""));
+        Assert.That(handler.RequestBodies[2], Does.Not.Contain("\"anchor\":"));
+        Assert.That(handler.RequestBodies[2], Does.Contain("[src/Feature/Foo.cs:27] Please simplify this branch."));
     }
 
     [Test]

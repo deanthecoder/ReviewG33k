@@ -132,25 +132,26 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
         var apiUrl = BuildCommentsApiUrl(pullRequest);
         var normalizedPath = NormalizePath(path);
         var trimmedText = text.Trim();
-        var inlinePayloadJson = JsonSerializer.Serialize(
-            new
-            {
-                text = trimmedText,
-                anchor = new
-                {
-                    line,
-                    lineType = "ADDED",
-                    fileType = "TO",
-                    path = normalizedPath
-                }
-            });
+        var inlinePayloadJson = BuildInlineAnchorPayloadJson(normalizedPath, line, trimmedText, "ADDED");
 
         var inlineResult = await TryPostCommentAsync(pullRequest, apiUrl, inlinePayloadJson, cancellationToken);
         if (inlineResult.Success)
             return (true, null);
 
+        var latestInlineError = inlineResult.ErrorMessage;
+        if (ShouldRetryInlineAsContext(inlineResult.StatusCode, inlineResult.ErrorMessage))
+        {
+            var contextInlinePayloadJson = BuildInlineAnchorPayloadJson(normalizedPath, line, trimmedText, "CONTEXT");
+            var contextInlineResult = await TryPostCommentAsync(pullRequest, apiUrl, contextInlinePayloadJson, cancellationToken);
+            if (contextInlineResult.Success)
+                return (true, null);
+
+            latestInlineError = CombineCommentErrors(inlineResult.ErrorMessage, contextInlineResult.ErrorMessage);
+            inlineResult = contextInlineResult;
+        }
+
         if (!ShouldFallbackToGeneralComment(inlineResult.StatusCode, inlineResult.ErrorMessage))
-            return (false, inlineResult.ErrorMessage);
+            return (false, latestInlineError);
 
         var fallbackPayloadJson = JsonSerializer.Serialize(new
         {
@@ -160,7 +161,7 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
         if (fallbackResult.Success)
             return (true, null);
 
-        return (false, CombineCommentErrors(inlineResult.ErrorMessage, fallbackResult.ErrorMessage));
+        return (false, CombineCommentErrors(latestInlineError, fallbackResult.ErrorMessage));
     }
 
     public void Dispose()
@@ -232,6 +233,9 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
     private static bool IsAuthFailure(HttpStatusCode statusCode) =>
         statusCode == HttpStatusCode.Unauthorized || statusCode == HttpStatusCode.Forbidden;
 
+    private static bool ShouldRetryInlineAsContext(HttpStatusCode statusCode, string errorMessage) =>
+        ShouldFallbackToGeneralComment(statusCode, errorMessage);
+
     private static bool ShouldFallbackToGeneralComment(HttpStatusCode statusCode, string errorMessage)
     {
         if (statusCode == HttpStatusCode.Conflict || (int)statusCode == 422)
@@ -245,6 +249,20 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
                 errorMessage.Contains("diff", StringComparison.OrdinalIgnoreCase) ||
                 errorMessage.Contains("hunk", StringComparison.OrdinalIgnoreCase));
     }
+
+    private static string BuildInlineAnchorPayloadJson(string normalizedPath, int line, string trimmedText, string lineType) =>
+        JsonSerializer.Serialize(
+            new
+            {
+                text = trimmedText,
+                anchor = new
+                {
+                    line,
+                    lineType,
+                    fileType = "TO",
+                    path = normalizedPath
+                }
+            });
 
     private static string BuildFallbackCommentText(string normalizedPath, int line, string text)
     {
