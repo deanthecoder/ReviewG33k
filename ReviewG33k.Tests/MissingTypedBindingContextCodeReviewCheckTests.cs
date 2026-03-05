@@ -50,6 +50,55 @@ public sealed class MissingTypedBindingContextCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenMarkupHasRelativeSourceBindingWithoutTypedContextDoesNotReport()
+    {
+        const string source = """
+            <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                <Viewbox x:Key="Add">
+                    <Path Fill="{Binding Path=(TextElement.Foreground), RelativeSource={RelativeSource AncestorType=FrameworkElement}}" />
+                </Viewbox>
+            </ResourceDictionary>
+            """;
+
+        var report = Analyze("A", "Resources/Icons.xaml", source, Enumerable.Range(1, 6));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenMarkupHasElementNameBindingWithoutTypedContextDoesNotReport()
+    {
+        const string source = """
+            <UserControl xmlns="https://github.com/avaloniaui"
+                         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                <TextBlock x:Name="SourceText" Text="Value" />
+                <TextBlock Text="{Binding Text, ElementName=SourceText}" />
+            </UserControl>
+            """;
+
+        var report = Analyze("A", "Views/SampleView.axaml", source, Enumerable.Range(1, 5));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenMarkupHasMixedBindingsWithoutTypedContextReportsHint()
+    {
+        const string source = """
+            <UserControl xmlns="https://github.com/avaloniaui"
+                         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                <TextBlock Text="{Binding Text, ElementName=SourceText}" />
+                <TextBlock Text="{Binding Title}" />
+            </UserControl>
+            """;
+
+        var report = Analyze("A", "Views/SampleView.axaml", source, Enumerable.Range(1, 5));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+    }
+
+    [Test]
     public void AnalyzeWhenModifiedMarkupHasNoAddedBindingLinesDoesNotReport()
     {
         const string source = """
