@@ -32,7 +32,7 @@ public sealed class GitWorkingTreeChangedFileSource : ICodeReviewChangedFileSour
         m_repositoryPath = repositoryPath ?? string.Empty;
     }
 
-    public async Task<CodeReviewChangedFileSourceResult> LoadAsync()
+    public async Task<CodeReviewChangedFileSourceResult> LoadAsync(Action<string> progressLogger = null)
     {
         var info = new List<string>();
         var repositoryPathInfo = m_repositoryPath.ToDir();
@@ -43,6 +43,7 @@ public sealed class GitWorkingTreeChangedFileSource : ICodeReviewChangedFileSour
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
+        progressLogger?.Invoke("Code review scan: Enumerating tracked local changes...");
         var trackedChangesResult = await m_gitCommandRunner.RunAsync(
             m_repositoryPath,
             "diff",
@@ -56,6 +57,7 @@ public sealed class GitWorkingTreeChangedFileSource : ICodeReviewChangedFileSour
         }
 
         var trackedEntries = ParseNameStatusOutput(trackedChangesResult.StandardOutput);
+        progressLogger?.Invoke("Code review scan: Enumerating untracked local files...");
         var untrackedResult = await m_gitCommandRunner.RunAsync(
             m_repositoryPath,
             "ls-files",
@@ -81,9 +83,11 @@ public sealed class GitWorkingTreeChangedFileSource : ICodeReviewChangedFileSour
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
+        progressLogger?.Invoke($"Code review scan: Loading {changedFileEntries.Length} local changed file(s)...");
         var changedFiles = new List<CodeReviewChangedFile>(changedFileEntries.Length);
-        foreach (var entry in changedFileEntries)
+        for (var index = 0; index < changedFileEntries.Length; index++)
         {
+            var entry = changedFileEntries[index];
             var fullPath = repositoryPathInfo.GetFile(entry.Path.Replace('/', Path.DirectorySeparatorChar));
             if (!fullPath.Exists())
                 continue;
@@ -95,6 +99,13 @@ public sealed class GitWorkingTreeChangedFileSource : ICodeReviewChangedFileSour
                 : await GetAddedLineNumbersAsync("HEAD", entry.Path);
 
             changedFiles.Add(new CodeReviewChangedFile(entry.Status, entry.Path, fullPath.FullName, text, lines, addedLineNumbers));
+
+            var filesProcessed = index + 1;
+            if (ShouldLogFileProgress(filesProcessed, changedFileEntries.Length))
+            {
+                progressLogger?.Invoke(
+                    $"Code review scan: Loaded {filesProcessed}/{changedFileEntries.Length} local changed file(s)...");
+            }
         }
 
         if (changedFiles.Count == 0)
@@ -245,4 +256,7 @@ public sealed class GitWorkingTreeChangedFileSource : ICodeReviewChangedFileSour
 
     private static IReadOnlyList<string> SplitLines(string text) =>
         (text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+
+    private static bool ShouldLogFileProgress(int filesProcessed, int totalFiles) =>
+        filesProcessed == 1 || filesProcessed == totalFiles || filesProcessed % 25 == 0;
 }

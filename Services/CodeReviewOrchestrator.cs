@@ -14,6 +14,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using DTC.Core.Extensions;
 using ReviewG33k.Models;
@@ -35,8 +36,11 @@ public sealed class CodeReviewOrchestrator
         string repositoryRoot,
         BitbucketPullRequestReference pullRequest,
         IReadOnlyCollection<string> changedPaths,
-        Action<string> log)
+        Action<string> log,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(repositoryRoot))
             throw new InvalidOperationException("Repository root folder is required.");
 
@@ -44,15 +48,17 @@ public sealed class CodeReviewOrchestrator
         if (!repositoryRootDir.Exists())
             throw new DirectoryNotFoundException($"Repository root folder does not exist: {repositoryRoot}");
 
-        var localRepository = await FindOrCloneRepositoryAsync(repositoryRoot, pullRequest, log);
+        var localRepository = await FindOrCloneRepositoryAsync(repositoryRoot, pullRequest, log, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var reviewRef = $"refs/remotes/origin/pr/{pullRequest.PullRequestId}";
         var reviewBranch = $"review/pr-{pullRequest.PullRequestId}";
         var fetchSpec = $"+refs/pull-requests/{pullRequest.PullRequestId}/from:{reviewRef}";
 
         log($"Fetching PR #{pullRequest.PullRequestId} from origin...");
-        var fetchResult = await m_gitCommandRunner.RunAsync(localRepository, "fetch", "--prune", "origin", fetchSpec);
+        var fetchResult = await m_gitCommandRunner.RunAsync(localRepository, cancellationToken, "fetch", "--prune", "origin", fetchSpec);
         EnsureSuccess(fetchResult, "Failed to fetch pull request from origin.");
+        cancellationToken.ThrowIfCancellationRequested();
 
         EnsureCodeReviewMarker(repositoryRoot);
 
@@ -60,21 +66,29 @@ public sealed class CodeReviewOrchestrator
             .GetDir(CodeReviewFolderName)
             .GetDir(pullRequest.RepoSlug)
             .GetDir($"PR-{pullRequest.PullRequestId}");
-        await RemoveWorktreeIfPresentAsync(localRepository, reviewFolderInfo.FullName, log);
+        await RemoveWorktreeIfPresentAsync(localRepository, reviewFolderInfo.FullName, log, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
         reviewFolderInfo.Parent?.Create();
 
         log($"Creating worktree copy at '{reviewFolderInfo.FullName}' on local branch '{reviewBranch}'...");
-        var addResult = await m_gitCommandRunner.RunAsync(localRepository, "worktree", "add", "--force", "-B", reviewBranch, reviewFolderInfo.FullName, reviewRef);
+        var addResult = await m_gitCommandRunner.RunAsync(localRepository, cancellationToken, "worktree", "add", "--force", "-B", reviewBranch, reviewFolderInfo.FullName, reviewRef);
         EnsureSuccess(addResult, "Failed to create review worktree.");
+        cancellationToken.ThrowIfCancellationRequested();
 
         var solutionPath = FindBestSolutionFile(reviewFolderInfo.FullName, changedPaths);
 
         return new PrepareReviewResult(localRepository, reviewFolderInfo.FullName, solutionPath);
     }
 
-    public async Task ClearCodeReviewFolderAsync(string repositoryRoot, Action<string> log, bool logWhenMissing = true)
+    public async Task ClearCodeReviewFolderAsync(
+        string repositoryRoot,
+        Action<string> log,
+        bool logWhenMissing = true,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(repositoryRoot))
             throw new DirectoryNotFoundException("Repository root folder does not exist.");
 
@@ -99,21 +113,23 @@ public sealed class CodeReviewOrchestrator
         log("Removing worktrees registered under CodeReview...");
         foreach (var repositoryPath in EnumerateTopLevelGitRepositories(repositoryRoot))
         {
-            var worktreeList = await m_gitCommandRunner.RunAsync(repositoryPath, "worktree", "list", "--porcelain");
+            cancellationToken.ThrowIfCancellationRequested();
+            var worktreeList = await m_gitCommandRunner.RunAsync(repositoryPath, cancellationToken, "worktree", "list", "--porcelain");
             if (!worktreeList.IsSuccess)
                 continue;
 
             foreach (var worktreePath in ParseWorktreePaths(worktreeList.StandardOutput))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!IsChildPathOf(worktreePath, codeReviewRoot.FullName))
                     continue;
 
-                var removeResult = await m_gitCommandRunner.RunAsync(repositoryPath, "worktree", "remove", "--force", worktreePath);
+                var removeResult = await m_gitCommandRunner.RunAsync(repositoryPath, cancellationToken, "worktree", "remove", "--force", worktreePath);
                 if (!removeResult.IsSuccess)
                     log($"Warning: could not remove registered worktree '{worktreePath}'. {removeResult.GetCombinedOutput()}");
             }
 
-            _ = await m_gitCommandRunner.RunAsync(repositoryPath, "worktree", "prune");
+            _ = await m_gitCommandRunner.RunAsync(repositoryPath, cancellationToken, "worktree", "prune");
         }
 
         if (codeReviewRoot.Exists())
@@ -144,9 +160,13 @@ public sealed class CodeReviewOrchestrator
             "This folder is managed by ReviewG33k. Cleanup operations are allowed only when this marker exists.");
     }
 
-    private async Task<string> FindOrCloneRepositoryAsync(string repositoryRoot, BitbucketPullRequestReference pullRequest, Action<string> log)
+    private async Task<string> FindOrCloneRepositoryAsync(
+        string repositoryRoot,
+        BitbucketPullRequestReference pullRequest,
+        Action<string> log,
+        CancellationToken cancellationToken)
     {
-        var localRepository = await FindMatchingRepositoryAsync(repositoryRoot, pullRequest);
+        var localRepository = await FindMatchingRepositoryAsync(repositoryRoot, pullRequest, cancellationToken);
         if (localRepository != null)
         {
             log($"Using local repository: {localRepository}");
@@ -156,14 +176,17 @@ public sealed class CodeReviewOrchestrator
         var targetPath = GetAvailableRepositoryPath(repositoryRoot.ToDir().GetDir(pullRequest.RepoSlug).FullName);
 
         log($"Local repository not found. Cloning '{pullRequest.CloneUrl}'...");
-        var cloneResult = await m_gitCommandRunner.RunAsync(repositoryRoot, "clone", pullRequest.CloneUrl, targetPath);
+        var cloneResult = await m_gitCommandRunner.RunAsync(repositoryRoot, cancellationToken, "clone", pullRequest.CloneUrl, targetPath);
         EnsureSuccess(cloneResult, "Failed to clone repository.");
 
         log($"Clone complete: {targetPath}");
         return targetPath;
     }
 
-    private async Task<string> FindMatchingRepositoryAsync(string repositoryRoot, BitbucketPullRequestReference pullRequest)
+    private async Task<string> FindMatchingRepositoryAsync(
+        string repositoryRoot,
+        BitbucketPullRequestReference pullRequest,
+        CancellationToken cancellationToken)
     {
         var expectedRepo = pullRequest.RepoSlug;
         var expectedProject = pullRequest.ProjectKey;
@@ -173,11 +196,12 @@ public sealed class CodeReviewOrchestrator
 
         foreach (var candidate in EnumerateTopLevelGitRepositories(repositoryRoot))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var folderName = Path.GetFileName(candidate);
             if (folderName.Equals(expectedRepo, StringComparison.OrdinalIgnoreCase) && nameOnlyMatch == null)
                 nameOnlyMatch = candidate;
 
-            var remoteUrlResult = await m_gitCommandRunner.RunAsync(candidate, "config", "--get", "remote.origin.url");
+            var remoteUrlResult = await m_gitCommandRunner.RunAsync(candidate, cancellationToken, "config", "--get", "remote.origin.url");
             if (!remoteUrlResult.IsSuccess)
                 continue;
 
@@ -263,13 +287,17 @@ public sealed class CodeReviewOrchestrator
         return result;
     }
 
-    private async Task RemoveWorktreeIfPresentAsync(string localRepository, string reviewFolder, Action<string> log)
+    private async Task RemoveWorktreeIfPresentAsync(
+        string localRepository,
+        string reviewFolder,
+        Action<string> log,
+        CancellationToken cancellationToken)
     {
         var reviewFolderInfo = reviewFolder.ToDir();
         if (reviewFolderInfo.Exists())
         {
             log($"Removing existing review folder at '{reviewFolder}'...");
-            var removeResult = await m_gitCommandRunner.RunAsync(localRepository, "worktree", "remove", "--force", reviewFolder);
+            var removeResult = await m_gitCommandRunner.RunAsync(localRepository, cancellationToken, "worktree", "remove", "--force", reviewFolder);
             if (!removeResult.IsSuccess)
                 log($"Warning: git worktree remove reported an issue. {removeResult.GetCombinedOutput()}");
 

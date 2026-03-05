@@ -188,7 +188,7 @@
                           Grid.Column="1"
                           Grid.ColumnSpan="2"
                           Margin="0,12,0,0"
-                          ColumnDefinitions="Auto,Auto,*,Auto">
+                          ColumnDefinitions="Auto,Auto,Auto,*,Auto">
                         <Button x:Name="PrepareReviewButton"
                                 Grid.Column="0"
                                 Classes="accent neon"
@@ -200,8 +200,27 @@
                                      VerticalAlignment="Center"
                                      IsVisible="False"
                                      IsIndeterminate="True" />
+                        <Button x:Name="CancelProcessingButton"
+                                Grid.Column="2"
+                                Margin="0,0,8,0"
+                                Classes="neon"
+                                Padding="8"
+                                VerticalAlignment="Center"
+                                IsVisible="False"
+                                Click="CancelProcessingButton_OnClick"
+                                ToolTip.Tip="Cancel current operation">
+                            <Grid>
+                                <materialIcons:MaterialIcon x:Name="CancelProcessingIcon"
+                                                            Width="18"
+                                                            Height="18"
+                                                            Kind="Cancel" />
+                                <TextBlock x:Name="CancelProcessingStoppingTextBlock"
+                                           IsVisible="False"
+                                           Text="Stopping..." />
+                            </Grid>
+                        </Button>
                         <Button x:Name="OpenSolutionButton"
-                                Grid.Column="3"
+                                Grid.Column="4"
                                 Classes="neon"
                                 Padding="12,8"
                                 VerticalAlignment="Center"

@@ -60,10 +60,13 @@ public partial class MainWindow : Window
     private readonly Settings m_settings = Settings.Instance;
     private readonly ObservableCollection<LogLineEntry> m_logLines = [];
     private CancellationTokenSource m_previewUpdateCancellation;
+    private CancellationTokenSource m_busyActionCancellation;
+    private bool m_busyCancellationRequested;
     private BitbucketPullRequestReference m_latestPullRequest;
     private string m_latestReviewWorktreePath;
     private string m_latestSolutionPath;
     private string m_previewPullRequestState;
+    private string m_previewPullRequestTitle;
     private string m_lastNonOpenPullRequestNoticeKey;
     private string m_vsCodeExecutablePath;
     private bool? m_previewPullRequestIsOpen;
@@ -249,12 +252,14 @@ public partial class MainWindow : Window
         CodeSmellReport report = null;
         await ExecuteBusyActionAsync(
             "Reviewing pull request...",
-            async () =>
+            async cancellationToken =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 m_latestSolutionPath = null;
                 UpdateActionButtonStates();
 
-                var metadata = await m_pullRequestMetadataClient.TryGetMetadataAsync(pullRequest);
+                var metadata = await m_pullRequestMetadataClient.TryGetMetadataAsync(pullRequest, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 UpdatePullRequestReviewState(metadata);
                 UpdateActionButtonStates();
                 if (m_previewPullRequestIsOpen == false)
@@ -263,14 +268,16 @@ public partial class MainWindow : Window
                     return;
                 }
 
-                var changedPaths = await m_pullRequestMetadataClient.TryGetChangedPathsAsync(pullRequest);
+                var changedPaths = await m_pullRequestMetadataClient.TryGetChangedPathsAsync(pullRequest, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
 
                 AppendLog($"PR detected: {pullRequest.SourceUrl}");
                 AppendLog($"PR title: {FormatMetadataText(metadata?.Title)}");
                 AppendLog($"PR author: {FormatMetadataText(metadata?.Author)}");
                 AppendLog($"PR modified files: {(changedPaths.Count > 0 ? changedPaths.Count.ToString() : "N/A")}");
 
-                var result = await m_orchestrator.PrepareReviewAsync(repositoryRoot, pullRequest, changedPaths, AppendLog);
+                var result = await m_orchestrator.PrepareReviewAsync(repositoryRoot, pullRequest, changedPaths, AppendLog, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 m_latestReviewWorktreePath = result.ReviewWorktreePath;
 
                 AppendLog($"Review worktree ready: {result.ReviewWorktreePath}");
@@ -286,7 +293,8 @@ public partial class MainWindow : Window
                 }
 
                 UpdateActionButtonStates();
-                report = await RunCodeSmellScanAsync(result.ReviewWorktreePath, metadata?.TargetBranch);
+                report = await RunCodeSmellScanAsync(result.ReviewWorktreePath, metadata?.TargetBranch, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
 
                 SetStatus("Review complete.");
             });
@@ -321,8 +329,9 @@ public partial class MainWindow : Window
         CodeSmellReport report = null;
         await ExecuteBusyActionAsync(
             "Reviewing local committed changes...",
-            async () =>
+            async cancellationToken =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 m_latestReviewWorktreePath = localRepositoryPath;
                 m_latestSolutionPath = RepositoryUtilities.FindTopLevelSolutionFile(localRepositoryPath);
                 UpdateActionButtonStates();
@@ -341,9 +350,11 @@ public partial class MainWindow : Window
                     baseBranch,
                     fetchTargetBranch: true);
 
-                var sourceResult = await changedFileSource.LoadAsync();
+                var sourceResult = await changedFileSource.LoadAsync(AppendLog);
+                cancellationToken.ThrowIfCancellationRequested();
                 SetLocalReviewChangedFilesCache(localRepositoryPath, baseBranch, ReviewMode.LocalCommittedChanges, sourceResult?.Files);
-                report = await RunCodeSmellScanAsync(sourceResult);
+                report = await RunCodeSmellScanAsync(sourceResult, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 SetStatus("Local review complete.");
             });
 
@@ -365,8 +376,9 @@ public partial class MainWindow : Window
         CodeSmellReport report = null;
         await ExecuteBusyActionAsync(
             "Reviewing local uncommitted changes...",
-            async () =>
+            async cancellationToken =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 m_latestReviewWorktreePath = localRepositoryPath;
                 m_latestSolutionPath = RepositoryUtilities.FindTopLevelSolutionFile(localRepositoryPath);
                 UpdateActionButtonStates();
@@ -380,9 +392,11 @@ public partial class MainWindow : Window
                     AppendLog("No .sln file found in local repository.");
 
                 var changedFileSource = new GitWorkingTreeChangedFileSource(m_gitCommandRunner, localRepositoryPath);
-                var sourceResult = await changedFileSource.LoadAsync();
+                var sourceResult = await changedFileSource.LoadAsync(AppendLog);
+                cancellationToken.ThrowIfCancellationRequested();
                 SetLocalReviewChangedFilesCache(localRepositoryPath, null, ReviewMode.LocalUncommittedChanges, sourceResult?.Files);
-                report = await RunCodeSmellScanAsync(sourceResult);
+                report = await RunCodeSmellScanAsync(sourceResult, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 SetStatus("Local review complete.");
             });
 
@@ -390,8 +404,9 @@ public partial class MainWindow : Window
             await ShowReviewResultsWindowAsync(report);
     }
 
-    private async Task<CodeSmellReport> RunCodeSmellScanAsync(string reviewWorktreePath, string targetBranch)
+    private async Task<CodeSmellReport> RunCodeSmellScanAsync(string reviewWorktreePath, string targetBranch, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         AppendLog("Code review scan starting...");
         SetBusyProgressIndeterminate();
         var report = await m_codeSmellReportAnalyzer.AnalyzeAsync(
@@ -399,19 +414,24 @@ public partial class MainWindow : Window
             targetBranch,
             AppendLog,
             UpdateBusyProgress,
-            ShouldIncludeFullModifiedFilesForAddedLineChecks());
+            ShouldIncludeFullModifiedFilesForAddedLineChecks(),
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         return ProcessCodeSmellReport(report);
     }
 
-    private async Task<CodeSmellReport> RunCodeSmellScanAsync(CodeReviewChangedFileSourceResult sourceResult)
+    private async Task<CodeSmellReport> RunCodeSmellScanAsync(CodeReviewChangedFileSourceResult sourceResult, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         AppendLog("Code review scan starting...");
         SetBusyProgressIndeterminate();
         var report = await m_codeSmellReportAnalyzer.AnalyzeLoadedFilesAsync(
             sourceResult,
             AppendLog,
             UpdateBusyProgress,
-            ShouldIncludeFullModifiedFilesForAddedLineChecks());
+            ShouldIncludeFullModifiedFilesForAddedLineChecks(),
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         return ProcessCodeSmellReport(report);
     }
 
@@ -486,6 +506,9 @@ public partial class MainWindow : Window
         var canOpenInVsCode = TryDetectVsCode(out _, out _);
         var canCommentInBitbucket = IsPullRequestReviewMode() && m_latestPullRequest != null;
         var canFixLocally = IsAnyLocalReviewMode();
+        var reviewWindowPullRequestTitle = canCommentInBitbucket
+            ? m_previewPullRequestTitle
+            : null;
         var findingFixer = canFixLocally ? new CodeReviewFixDispatcher(m_codeSmellReportAnalyzer.Checks) : null;
         var resultsWindow = new ReviewResultsWindow(
             report?.Findings ?? [],
@@ -496,7 +519,8 @@ public partial class MainWindow : Window
             OpenReviewFindingInVsCode,
             CommentOnReviewFindingAsync,
             ResolveReviewFindingPath,
-            ResampleLocalFindingsForFileAsync);
+            ResampleLocalFindingsForFileAsync,
+            reviewWindowPullRequestTitle);
         await resultsWindow.ShowDialog(this);
     }
 
@@ -594,7 +618,7 @@ public partial class MainWindow : Window
             if (changedFileSource == null)
                 return null;
 
-            var sourceResult = await changedFileSource.LoadAsync();
+            var sourceResult = await changedFileSource.LoadAsync(AppendLog);
             SetLocalReviewChangedFilesCache(localRepositoryPath, baseBranch, reviewMode, sourceResult?.Files);
         }
 
@@ -691,16 +715,26 @@ public partial class MainWindow : Window
         return false;
     }
 
-    private async Task ExecuteBusyActionAsync(string statusText, Func<Task> action)
+    private async Task ExecuteBusyActionAsync(string statusText, Func<CancellationToken, Task> action)
     {
         if (m_busy)
             return;
+
+        m_busyActionCancellation?.Dispose();
+        m_busyActionCancellation = new CancellationTokenSource();
+        var cancellationToken = m_busyActionCancellation.Token;
+        m_busyCancellationRequested = false;
 
         try
         {
             SetBusyState(true);
             SetStatus(statusText);
-            await action();
+            await action(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            SetStatus("Operation canceled.");
+            AppendLog("Operation canceled by user.");
         }
         catch (Exception exception)
         {
@@ -710,7 +744,10 @@ public partial class MainWindow : Window
         }
         finally
         {
+            m_busyCancellationRequested = false;
             SetBusyState(false);
+            m_busyActionCancellation?.Dispose();
+            m_busyActionCancellation = null;
         }
     }
 
@@ -908,6 +945,8 @@ public partial class MainWindow : Window
     {
         m_busy = isBusy;
         BusyIndicatorSpinner.IsVisible = isBusy;
+        CancelProcessingButton.IsVisible = isBusy;
+        UpdateCancelButtonVisualState();
 
         if (!isBusy)
         {
@@ -1045,6 +1084,10 @@ public partial class MainWindow : Window
         OpenSolutionButton.IsEnabled = !m_busy &&
                                       !string.IsNullOrWhiteSpace(m_latestSolutionPath) &&
                                       m_latestSolutionPath.ToFile().Exists();
+        CancelProcessingButton.IsEnabled = m_busy &&
+                                           !m_busyCancellationRequested &&
+                                           m_busyActionCancellation is { IsCancellationRequested: false };
+        UpdateCancelButtonVisualState();
     }
 
     private string ResolveAvailableSolutionPath()
@@ -1494,6 +1537,10 @@ public partial class MainWindow : Window
 
     private void MainWindow_OnClosing(object sender, WindowClosingEventArgs e)
     {
+        m_busyCancellationRequested = true;
+        m_busyActionCancellation?.Cancel();
+        m_busyActionCancellation?.Dispose();
+        m_busyActionCancellation = null;
         m_previewUpdateCancellation?.Cancel();
         m_previewUpdateCancellation?.Dispose();
         m_previewUpdateCancellation = null;
@@ -1659,11 +1706,33 @@ public partial class MainWindow : Window
 
         await ExecuteBusyActionAsync(
             "Clearing previous CodeReview folders...",
-            async () =>
+            async cancellationToken =>
             {
-                await m_orchestrator.ClearCodeReviewFolderAsync(repositoryRoot, AppendLog, logWhenMissing: false);
+                await m_orchestrator.ClearCodeReviewFolderAsync(repositoryRoot, AppendLog, logWhenMissing: false, cancellationToken);
                 SetStatus("Ready.");
             });
+    }
+
+    private void CancelProcessingButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!m_busy || m_busyActionCancellation == null || m_busyActionCancellation.IsCancellationRequested)
+            return;
+
+        m_busyCancellationRequested = true;
+        AppendLog("Cancel requested by user.");
+        SetStatus("Cancel requested...");
+        m_busyActionCancellation.Cancel();
+        UpdateActionButtonStates();
+    }
+
+    private void UpdateCancelButtonVisualState()
+    {
+        if (CancelProcessingIcon == null || CancelProcessingStoppingTextBlock == null)
+            return;
+
+        var isStopping = m_busy && m_busyCancellationRequested;
+        CancelProcessingIcon.IsVisible = !isStopping;
+        CancelProcessingStoppingTextBlock.IsVisible = isStopping;
     }
 
     private async Task TryPrefillPullRequestUrlFromClipboardAsync()
@@ -1789,10 +1858,14 @@ public partial class MainWindow : Window
         {
             m_previewPullRequestState = null;
             m_previewPullRequestIsOpen = null;
+            m_previewPullRequestTitle = null;
             return;
         }
 
         m_previewPullRequestState = metadata.State?.Trim();
+        m_previewPullRequestTitle = string.IsNullOrWhiteSpace(metadata.Title)
+            ? null
+            : metadata.Title.Trim();
         m_previewPullRequestIsOpen = string.IsNullOrWhiteSpace(m_previewPullRequestState)
             ? null
             : string.Equals(m_previewPullRequestState, "OPEN", StringComparison.OrdinalIgnoreCase);

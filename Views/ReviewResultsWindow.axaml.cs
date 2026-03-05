@@ -28,6 +28,7 @@ namespace ReviewG33k.Views;
 
 public partial class ReviewResultsWindow : Window
 {
+    private const string BaseWindowTitle = "Review Results";
     private const int PreviewLinesBefore = 4;
     private const int PreviewLinesAfter = 24;
     private const int CodexPromptLinesBefore = 8;
@@ -67,7 +68,8 @@ public partial class ReviewResultsWindow : Window
         Action<CodeSmellFinding> openFindingAction,
         Func<CodeSmellFinding, Task<bool>> commentFindingAction,
         Func<CodeSmellFinding, string> resolveFindingPath,
-        Func<string, Task<IReadOnlyList<CodeSmellFinding>>> resampleFileFindingsAction)
+        Func<string, Task<IReadOnlyList<CodeSmellFinding>>> resampleFileFindingsAction,
+        string pullRequestTitle = null)
     {
         m_canOpenInVsCode = canOpenInVsCode;
         m_canCommentInBitbucket = canCommentInBitbucket;
@@ -79,6 +81,7 @@ public partial class ReviewResultsWindow : Window
         m_resampleFileFindingsAction = resampleFileFindingsAction;
         m_findingFixer = findingFixer;
         InitializeComponent();
+        Title = BuildWindowTitle(pullRequestTitle);
         UpdateCopyPreviewFileNameButtonState();
         ResultsListBox.SelectionChanged += ResultsListBox_OnSelectionChanged;
         CommentSelectedButton.IsVisible = canCommentInBitbucket;
@@ -106,6 +109,11 @@ public partial class ReviewResultsWindow : Window
         UpdateBatchActionButtonStates();
         UpdateOpenSelectedButtonState();
     }
+
+    private static string BuildWindowTitle(string pullRequestTitle) =>
+        string.IsNullOrWhiteSpace(pullRequestTitle)
+            ? BaseWindowTitle
+            : $"{BaseWindowTitle} - {pullRequestTitle.Trim()}";
 
     private async void CommentFindingButton_OnClick(object sender, RoutedEventArgs e)
     {

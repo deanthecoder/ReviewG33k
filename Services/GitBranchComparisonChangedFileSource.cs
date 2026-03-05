@@ -37,7 +37,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
         m_fetchTargetBranch = fetchTargetBranch;
     }
 
-    public async Task<CodeReviewChangedFileSourceResult> LoadAsync()
+    public async Task<CodeReviewChangedFileSourceResult> LoadAsync(Action<string> progressLogger = null)
     {
         var info = new List<string>();
         var repositoryPathInfo = m_repositoryPath.ToDir();
@@ -48,6 +48,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
+        progressLogger?.Invoke("Code review scan: Resolving target branch...");
         var targetBranch = await ResolveTargetBranchAsync(info);
         if (string.IsNullOrWhiteSpace(targetBranch))
         {
@@ -60,6 +61,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
         var localBaseRefName = $"refs/heads/{targetBranch}";
         if (m_fetchTargetBranch)
         {
+            progressLogger?.Invoke($"Code review scan: Fetching target branch '{targetBranch}'...");
             var fetchTargetResult = await m_gitCommandRunner.RunAsync(
                 m_repositoryPath,
                 "fetch",
@@ -89,6 +91,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             info.Add($"Code review scan: Using local target branch '{targetBranch}' because origin/{targetBranch} was not available.");
 
         var diffRange = $"{baseRef}...HEAD";
+        progressLogger?.Invoke($"Code review scan: Enumerating files changed since {baseRef}...");
         var nameStatusResult = await m_gitCommandRunner.RunAsync(
             m_repositoryPath,
             "diff",
@@ -124,9 +127,11 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
+        progressLogger?.Invoke($"Code review scan: Loading {changedFileEntries.Length} changed file(s)...");
         var changedFiles = new List<CodeReviewChangedFile>(changedFileEntries.Length);
-        foreach (var entry in changedFileEntries)
+        for (var index = 0; index < changedFileEntries.Length; index++)
         {
+            var entry = changedFileEntries[index];
             var fullPath = repositoryPathInfo.GetFile(entry.Path.Replace('/', Path.DirectorySeparatorChar));
             if (!fullPath.Exists())
                 continue;
@@ -142,6 +147,13 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
                 addedLineNumbers = await GetAddedLineNumbersAsync("HEAD", entry.Path);
 
             changedFiles.Add(new CodeReviewChangedFile(entry.Status, entry.Path, fullPath.FullName, text, lines, addedLineNumbers));
+
+            var filesProcessed = index + 1;
+            if (ShouldLogFileProgress(filesProcessed, changedFileEntries.Length))
+            {
+                progressLogger?.Invoke(
+                    $"Code review scan: Loaded {filesProcessed}/{changedFileEntries.Length} changed file(s)...");
+            }
         }
 
         if (changedFiles.Count == 0)
@@ -397,4 +409,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
 
     private static IReadOnlyList<string> SplitLines(string text) =>
         (text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+
+    private static bool ShouldLogFileProgress(int filesProcessed, int totalFiles) =>
+        filesProcessed == 1 || filesProcessed == totalFiles || filesProcessed % 25 == 0;
 }

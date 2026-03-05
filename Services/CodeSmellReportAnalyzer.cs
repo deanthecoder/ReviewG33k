@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using ReviewG33k.Services.Checks;
 using Support = ReviewG33k.Services.Checks.Support;
@@ -44,23 +45,33 @@ public sealed class CodeSmellReportAnalyzer
         string targetBranch,
         Action<string> progressLogger = null,
         Action<int, int, string> progressReporter = null,
-        bool includeFullModifiedFilesForAddedLineChecks = false)
+        bool includeFullModifiedFilesForAddedLineChecks = false,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var changedFileSource = new GitBranchComparisonChangedFileSource(
             m_gitCommandRunner,
             reviewWorktreePath,
             targetBranch,
             fetchTargetBranch: true);
 
-        return await AnalyzeAsync(changedFileSource, progressLogger, progressReporter, includeFullModifiedFilesForAddedLineChecks);
+        return await AnalyzeAsync(
+            changedFileSource,
+            progressLogger,
+            progressReporter,
+            includeFullModifiedFilesForAddedLineChecks,
+            cancellationToken);
     }
 
     public async Task<CodeSmellReport> AnalyzeAsync(
         ICodeReviewChangedFileSource changedFileSource,
         Action<string> progressLogger = null,
         Action<int, int, string> progressReporter = null,
-        bool includeFullModifiedFilesForAddedLineChecks = false)
+        bool includeFullModifiedFilesForAddedLineChecks = false,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (changedFileSource == null)
         {
             var report = new CodeSmellReport();
@@ -68,16 +79,26 @@ public sealed class CodeSmellReportAnalyzer
             return report;
         }
 
-        var sourceResult = await changedFileSource.LoadAsync();
-        return await AnalyzeLoadedFilesAsync(sourceResult, progressLogger, progressReporter, includeFullModifiedFilesForAddedLineChecks);
+        progressLogger?.Invoke("Code review scan: Gathering changed files...");
+        var sourceResult = await changedFileSource.LoadAsync(progressLogger);
+        cancellationToken.ThrowIfCancellationRequested();
+        progressLogger?.Invoke($"Code review scan: Changed files ready ({sourceResult?.Files?.Count ?? 0}).");
+        return await AnalyzeLoadedFilesAsync(
+            sourceResult,
+            progressLogger,
+            progressReporter,
+            includeFullModifiedFilesForAddedLineChecks,
+            cancellationToken);
     }
 
     public async Task<CodeSmellReport> AnalyzeLoadedFilesAsync(
         CodeReviewChangedFileSourceResult sourceResult,
         Action<string> progressLogger = null,
         Action<int, int, string> progressReporter = null,
-        bool includeFullModifiedFilesForAddedLineChecks = false)
+        bool includeFullModifiedFilesForAddedLineChecks = false,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var report = new CodeSmellReport();
         foreach (var infoMessage in sourceResult?.InfoMessages ?? [])
             report.AddInfo(infoMessage);
@@ -86,23 +107,30 @@ public sealed class CodeSmellReportAnalyzer
         if (changedFiles.Length == 0)
             return report;
 
+        progressLogger?.Invoke($"Code review scan: Building analysis context for {changedFiles.Length} file(s)...");
         var scopedContexts = BuildScopedContexts(changedFiles);
         var totalChecks = m_checks.Count;
         progressReporter?.Invoke(0, totalChecks, null);
+        progressLogger?.Invoke($"Code review scan: Running {totalChecks} checks...");
 
-        var checkTasks = m_checks
+        var pendingCheckTasks = m_checks
             .Select(check => Task.Run(() => AnalyzeCheck(
                 check,
                 scopedContexts,
-                includeFullModifiedFilesForAddedLineChecks)))
-            .ToArray();
+                includeFullModifiedFilesForAddedLineChecks,
+                cancellationToken), cancellationToken))
+            .ToList();
 
-        for (var index = 0; index < totalChecks; index++)
+        while (pendingCheckTasks.Count > 0)
         {
-            progressLogger?.Invoke($"CHECK RUN: {index + 1}/{totalChecks} {m_checks[index].DisplayName}");
-            var checkResult = await checkTasks[index];
+            cancellationToken.ThrowIfCancellationRequested();
+            var completedTask = await Task.WhenAny(pendingCheckTasks);
+            pendingCheckTasks.Remove(completedTask);
+            var checkResult = await completedTask;
+            var completedChecks = totalChecks - pendingCheckTasks.Count;
+            progressLogger?.Invoke($"CHECK RUN: {completedChecks}/{totalChecks} {checkResult.Check.DisplayName}");
             MergeReport(report, checkResult.Report);
-            progressReporter?.Invoke(index + 1, totalChecks, checkResult.Check.DisplayName);
+            progressReporter?.Invoke(completedChecks, totalChecks, checkResult.Check.DisplayName);
         }
 
         return report;
@@ -125,7 +153,8 @@ public sealed class CodeSmellReportAnalyzer
             .Select(check => AnalyzeCheck(
                 check,
                 scopedContexts,
-                includeFullModifiedFilesForAddedLineChecks).Report)
+                includeFullModifiedFilesForAddedLineChecks,
+                CancellationToken.None).Report)
             .ToArray();
 
         foreach (var checkReport in checkReports)
@@ -149,8 +178,10 @@ public sealed class CodeSmellReportAnalyzer
     private static (ICodeReviewCheck Check, CodeSmellReport Report) AnalyzeCheck(
         ICodeReviewCheck check,
         CodeReviewCheckContextSet scopedContexts,
-        bool includeFullModifiedFilesForAddedLineChecks)
+        bool includeFullModifiedFilesForAddedLineChecks,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var checkReport = new CodeSmellReport();
         try
         {

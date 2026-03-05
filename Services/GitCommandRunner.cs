@@ -10,6 +10,7 @@
 
 using System.Diagnostics;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ReviewG33k.Services;
@@ -17,7 +18,12 @@ namespace ReviewG33k.Services;
 public sealed class GitCommandRunner
 {
     public async Task<GitCommandResult> RunAsync(string workingDirectory, params string[] arguments)
+        => await RunAsync(workingDirectory, CancellationToken.None, arguments);
+
+    public async Task<GitCommandResult> RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var startInfo = new ProcessStartInfo
         {
             FileName = "git",
@@ -44,6 +50,8 @@ public sealed class GitCommandRunner
 
         outputBuilder.Append(await outputTask);
         errorBuilder.Append(await errorTask);
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         return new GitCommandResult(process.ExitCode, outputBuilder.ToString(), errorBuilder.ToString(), string.Join(" ", arguments));
     }
