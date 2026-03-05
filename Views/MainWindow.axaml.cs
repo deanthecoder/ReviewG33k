@@ -101,6 +101,7 @@ public partial class MainWindow : Window
 
         var persistedBaseBranch = NormalizeBranchName(m_viewModel.LocalBaseBranch) ?? "main";
         SetLocalBaseBranchOptions([persistedBaseBranch], persistedBaseBranch);
+        EnsureLocalBaseBranchSelection();
         LogListBox.ItemsSource = m_logLines;
 
         _ = UpdatePullRequestPreviewAsync();
@@ -162,6 +163,7 @@ public partial class MainWindow : Window
             m_viewModel.UpdatePullRequestReviewState(null, null);
         }
 
+        EnsureLocalBaseBranchSelection();
         _ = UpdatePullRequestPreviewAsync();
         UpdateActionButtonStates();
     }
@@ -810,6 +812,30 @@ public partial class MainWindow : Window
             normalizedOptions.Add("main");
 
         m_viewModel.SetLocalBaseBranchOptions(normalizedOptions, normalizedSelection);
+        EnsureLocalBaseBranchSelection();
+    }
+
+    private void EnsureLocalBaseBranchSelection()
+    {
+        if (!IsLocalCommittedReviewMode())
+            return;
+
+        if (LocalBaseBranchComboBox?.SelectedItem is string selectedBranch &&
+            !string.IsNullOrWhiteSpace(selectedBranch))
+        {
+            return;
+        }
+
+        var fallbackBranch = m_viewModel.LocalBaseBranchOptions
+            .FirstOrDefault(branch => !string.IsNullOrWhiteSpace(branch));
+        if (string.IsNullOrWhiteSpace(fallbackBranch))
+            fallbackBranch = "main";
+
+        m_viewModel.AddLocalBaseBranchOption(fallbackBranch);
+        m_viewModel.LocalBaseBranch = fallbackBranch;
+
+        if (LocalBaseBranchComboBox != null)
+            LocalBaseBranchComboBox.SelectedItem = fallbackBranch;
     }
 
     private bool TryGetLocalRepositoryInput(out string localRepositoryPath)

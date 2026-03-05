@@ -301,7 +301,15 @@ public sealed class MainWindowViewModel : ViewModelBase
         foreach (var branchOption in normalizedOptions)
             LocalBaseBranchOptions.Add(branchOption);
 
-        LocalBaseBranch = normalizedSelection ?? LocalBaseBranchOptions.First();
+        var selectedBranch = normalizedSelection ??
+                             LocalBaseBranchOptions.FirstOrDefault(branch => !string.IsNullOrWhiteSpace(branch)) ??
+                             "main";
+        var previousBranch = m_localBaseBranch;
+        LocalBaseBranch = selectedBranch;
+
+        // Re-raise selection binding after options are repopulated, even when the selected value text is unchanged.
+        if (string.Equals(previousBranch, m_localBaseBranch, StringComparison.Ordinal))
+            OnPropertyChanged(nameof(LocalBaseBranch));
     }
 
     public void UpdateActionStateInputs(
