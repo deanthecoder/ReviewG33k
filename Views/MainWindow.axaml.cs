@@ -58,21 +58,16 @@ public partial class MainWindow : Window
     private readonly CodeSmellReportAnalyzer m_codeSmellReportAnalyzer;
     private readonly BitbucketPullRequestMetadataClient m_pullRequestMetadataClient = new();
     private readonly Settings m_settings = Settings.Instance;
+    private readonly MainWindowViewModel m_viewModel;
     private readonly ObservableCollection<LogLineEntry> m_logLines = [];
-    private readonly ObservableCollection<string> m_localBaseBranchOptions = [];
     private CancellationTokenSource m_previewUpdateCancellation;
     private CancellationTokenSource m_busyActionCancellation;
     private bool m_busyCancellationRequested;
-    private bool m_updatingLocalBaseBranchOptions;
     private BitbucketPullRequestReference m_latestPullRequest;
     private string m_latestReviewWorktreePath;
     private string m_latestSolutionPath;
-    private string m_previewPullRequestState;
-    private string m_previewPullRequestTitle;
     private string m_lastNonOpenPullRequestNoticeKey;
     private string m_vsCodeExecutablePath;
-    private bool? m_previewPullRequestIsOpen;
-    private bool m_busy;
     private bool m_isGitAvailable = true;
     private bool m_gitAvailabilityChecked;
     private bool m_vsCodeDetectionAttempted;
@@ -87,12 +82,13 @@ public partial class MainWindow : Window
     {
         m_orchestrator = new CodeReviewOrchestrator(m_gitCommandRunner);
         m_codeSmellReportAnalyzer = new CodeSmellReportAnalyzer(m_gitCommandRunner);
+        m_viewModel = new MainWindowViewModel(m_settings);
         InitializeComponent();
+        DataContext = m_viewModel;
         PullRequestUrlTextBox.AddHandler(DragDrop.DragOverEvent, PullRequestUrlTextBox_OnDragOver);
         PullRequestUrlTextBox.AddHandler(DragDrop.DropEvent, PullRequestUrlTextBox_OnDrop);
         PullRequestUrlTextBox.TextChanged += PullRequestUrlTextBox_OnTextChanged;
         RepositoryRootTextBox.TextChanged += RepositoryRootTextBox_OnTextChanged;
-        RepositoryRootTextBox.LostFocus += RepositoryRootTextBox_OnLostFocus;
         LocalRepositoryFolderTextBox.TextChanged += LocalRepositoryFolderTextBox_OnTextChanged;
         LocalRepositoryFolderTextBox.LostFocus += LocalRepositoryFolderTextBox_OnLostFocus;
         LogListBox.AddHandler(PointerPressedEvent, LogListBox_OnPointerPressed, RoutingStrategies.Bubble);
@@ -100,24 +96,10 @@ public partial class MainWindow : Window
         Activated += MainWindow_OnActivated;
         Closing += MainWindow_OnClosing;
 
-        if (!string.IsNullOrWhiteSpace(m_settings.RepositoryRootPath))
-            RepositoryRootTextBox.Text = m_settings.RepositoryRootPath;
-        if (!string.IsNullOrWhiteSpace(m_settings.LocalReviewRepositoryPath))
-            LocalRepositoryFolderTextBox.Text = m_settings.LocalReviewRepositoryPath;
-        LocalBaseBranchComboBox.ItemsSource = m_localBaseBranchOptions;
-        var persistedBaseBranch = string.IsNullOrWhiteSpace(m_settings.LocalReviewBaseBranch)
-            ? "main"
-            : m_settings.LocalReviewBaseBranch.Trim();
+        var persistedBaseBranch = NormalizeBranchName(m_viewModel.LocalBaseBranch) ?? "main";
         SetLocalBaseBranchOptions([persistedBaseBranch], persistedBaseBranch);
-        var persistedReviewModeIndex = m_settings.ReviewModeIndex;
-        if (persistedReviewModeIndex < (int)ReviewMode.PullRequest || persistedReviewModeIndex > (int)ReviewMode.LocalUncommittedChanges)
-            persistedReviewModeIndex = m_settings.UseLocalCommittedReview ? (int)ReviewMode.LocalCommittedChanges : (int)ReviewMode.PullRequest;
-        ReviewModeComboBox.SelectedIndex = persistedReviewModeIndex;
-        ScanScopeComboBox.SelectedIndex = m_settings.IncludeFullModifiedFiles ? 1 : 0;
-        UpdateComboInfoTooltips();
         LogListBox.ItemsSource = m_logLines;
 
-        ApplyReviewModeUi();
         _ = UpdatePullRequestPreviewAsync();
         UpdateActionButtonStates();
     }
@@ -128,7 +110,7 @@ public partial class MainWindow : Window
         if (topLevel == null)
             return;
 
-        var startLocation = await GetStartFolderAsync(topLevel, RepositoryRootTextBox.Text);
+        var startLocation = await GetStartFolderAsync(topLevel, m_viewModel.RepositoryRootPath);
 
         var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(
             new FolderPickerOpenOptions
@@ -141,10 +123,7 @@ public partial class MainWindow : Window
         var selectedFolder = folders.FirstOrDefault();
         var path = selectedFolder?.TryGetLocalPath();
         if (!string.IsNullOrWhiteSpace(path))
-        {
-            RepositoryRootTextBox.Text = path;
-            PersistRepositoryRootPath(path);
-        }
+            m_viewModel.RepositoryRootPath = path;
     }
 
     private async void BrowseLocalRepositoryButton_OnClick(object sender, RoutedEventArgs e)
@@ -153,7 +132,7 @@ public partial class MainWindow : Window
         if (topLevel == null)
             return;
 
-        var startLocation = await GetStartFolderAsync(topLevel, LocalRepositoryFolderTextBox.Text);
+        var startLocation = await GetStartFolderAsync(topLevel, m_viewModel.LocalRepositoryPath);
         var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(
             new FolderPickerOpenOptions
             {
@@ -167,31 +146,21 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(path))
             return;
 
-        LocalRepositoryFolderTextBox.Text = path;
-        PersistLocalReviewRepositoryPath(path);
+        m_viewModel.LocalRepositoryPath = path;
         await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
     }
 
     private void ReviewModeComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        UpdateReviewModeInfoTooltip();
         var isLocalMode = IsAnyLocalReviewMode();
         if (isLocalMode)
         {
             m_latestPullRequest = null;
-            UpdatePullRequestReviewState(null);
+            m_viewModel.UpdatePullRequestReviewState(null, null);
         }
 
-        ApplyReviewModeUi();
-        PersistReviewMode(GetSelectedReviewMode());
         _ = UpdatePullRequestPreviewAsync();
         UpdateActionButtonStates();
-    }
-
-    private void ScanScopeComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        UpdateScanScopeInfoTooltip();
-        PersistIncludeFullModifiedFiles(ShouldIncludeFullModifiedFiles());
     }
 
     private static void PullRequestUrlTextBox_OnDragOver(object sender, DragEventArgs e)
@@ -204,7 +173,7 @@ public partial class MainWindow : Window
     {
         if (TryExtractPullRequestUrl(e.Data, out var url))
         {
-            PullRequestUrlTextBox.Text = url;
+            m_viewModel.PullRequestUrl = url;
             SetStatus("Pull request URL captured from drop.");
         }
 
@@ -222,11 +191,6 @@ public partial class MainWindow : Window
 
     private void LocalBaseBranchComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (m_updatingLocalBaseBranchOptions)
-            return;
-
-        var selectedBaseBranch = GetSelectedLocalBaseBranch();
-        PersistLocalReviewBaseBranch(selectedBaseBranch);
         InvalidateLocalReviewChangedFilesCache();
     }
 
@@ -245,8 +209,6 @@ public partial class MainWindow : Window
 
         if (!TryGetPullRequestInputs(out var repositoryRoot, out var prUrlText))
             return;
-
-        PersistRepositoryRootPath(repositoryRoot);
 
         if (!BitbucketPrUrlParser.TryParse(prUrlText, out var pullRequest, out var parseError))
         {
@@ -269,9 +231,9 @@ public partial class MainWindow : Window
 
                 var metadata = await m_pullRequestMetadataClient.TryGetMetadataAsync(pullRequest, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                UpdatePullRequestReviewState(metadata);
+                m_viewModel.UpdatePullRequestReviewState(metadata?.Title, metadata?.State);
                 UpdateActionButtonStates();
-                if (m_previewPullRequestIsOpen == false)
+                if (m_viewModel.PreviewPullRequestIsOpen == false)
                 {
                     NotifyNonOpenPullRequestIfNeeded(pullRequest);
                     return;
@@ -331,11 +293,8 @@ public partial class MainWindow : Window
 
         SelectLocalBaseBranch(baseBranch);
 
-        PersistLocalReviewRepositoryPath(localRepositoryPath);
-        PersistLocalReviewBaseBranch(baseBranch);
-
         m_latestPullRequest = null;
-        UpdatePullRequestReviewState(null);
+        m_viewModel.UpdatePullRequestReviewState(null, null);
 
         CodeSmellReport report = null;
         await ExecuteBusyActionAsync(
@@ -379,10 +338,9 @@ public partial class MainWindow : Window
             return;
 
         InvalidateLocalReviewChangedFilesCache();
-        PersistLocalReviewRepositoryPath(localRepositoryPath);
 
         m_latestPullRequest = null;
-        UpdatePullRequestReviewState(null);
+        m_viewModel.UpdatePullRequestReviewState(null, null);
 
         CodeSmellReport report = null;
         await ExecuteBusyActionAsync(
@@ -518,7 +476,7 @@ public partial class MainWindow : Window
         var canCommentInBitbucket = IsPullRequestReviewMode() && m_latestPullRequest != null;
         var canFixLocally = IsAnyLocalReviewMode();
         var reviewWindowPullRequestTitle = canCommentInBitbucket
-            ? m_previewPullRequestTitle
+            ? m_viewModel.PreviewPullRequestTitle
             : null;
         var findingFixer = canFixLocally ? new CodeReviewFixDispatcher(m_codeSmellReportAnalyzer.Checks) : null;
         var resultsWindow = new ReviewResultsWindow(
@@ -573,7 +531,7 @@ public partial class MainWindow : Window
             return [];
 
         var reviewMode = GetSelectedReviewMode();
-        var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
+        var localRepositoryPath = m_viewModel.LocalRepositoryPath?.Trim();
         var baseBranch = reviewMode == ReviewMode.LocalCommittedChanges
             ? GetSelectedLocalBaseBranch()
             : null;
@@ -728,7 +686,7 @@ public partial class MainWindow : Window
 
     private async Task ExecuteBusyActionAsync(string statusText, Func<CancellationToken, Task> action)
     {
-        if (m_busy)
+        if (m_viewModel.IsBusy)
             return;
 
         m_busyActionCancellation?.Dispose();
@@ -772,8 +730,8 @@ public partial class MainWindow : Window
 
     private bool TryGetPullRequestInputs(out string repositoryRoot, out string prUrlText)
     {
-        repositoryRoot = RepositoryRootTextBox.Text?.Trim();
-        prUrlText = PullRequestUrlTextBox.Text?.Trim();
+        repositoryRoot = m_viewModel.RepositoryRootPath?.Trim();
+        prUrlText = m_viewModel.PullRequestUrl?.Trim();
 
         if (string.IsNullOrWhiteSpace(repositoryRoot))
         {
@@ -816,7 +774,7 @@ public partial class MainWindow : Window
     }
 
     private string GetSelectedLocalBaseBranch() =>
-        NormalizeBranchName(LocalBaseBranchComboBox?.SelectedItem as string);
+        NormalizeBranchName(m_viewModel.LocalBaseBranch);
 
     private void SelectLocalBaseBranch(string baseBranch)
     {
@@ -824,19 +782,8 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(normalizedBaseBranch))
             return;
 
-        if (!m_localBaseBranchOptions.Any(branch => branch.Equals(normalizedBaseBranch, StringComparison.OrdinalIgnoreCase)))
-            m_localBaseBranchOptions.Add(normalizedBaseBranch);
-
-        m_updatingLocalBaseBranchOptions = true;
-        try
-        {
-            LocalBaseBranchComboBox.SelectedItem = m_localBaseBranchOptions
-                .FirstOrDefault(branch => branch.Equals(normalizedBaseBranch, StringComparison.OrdinalIgnoreCase));
-        }
-        finally
-        {
-            m_updatingLocalBaseBranchOptions = false;
-        }
+        m_viewModel.AddLocalBaseBranchOption(normalizedBaseBranch);
+        m_viewModel.LocalBaseBranch = normalizedBaseBranch;
     }
 
     private void SetLocalBaseBranchOptions(IReadOnlyList<string> branchOptions, string selectedBaseBranch)
@@ -856,27 +803,12 @@ public partial class MainWindow : Window
         if (normalizedOptions.Count == 0)
             normalizedOptions.Add("main");
 
-        m_updatingLocalBaseBranchOptions = true;
-        try
-        {
-            m_localBaseBranchOptions.Clear();
-            foreach (var branchOption in normalizedOptions)
-                m_localBaseBranchOptions.Add(branchOption);
-
-            var selectedOption = m_localBaseBranchOptions
-                .FirstOrDefault(branch => branch.Equals(normalizedSelection, StringComparison.OrdinalIgnoreCase))
-                ?? m_localBaseBranchOptions.FirstOrDefault();
-            LocalBaseBranchComboBox.SelectedItem = selectedOption;
-        }
-        finally
-        {
-            m_updatingLocalBaseBranchOptions = false;
-        }
+        m_viewModel.SetLocalBaseBranchOptions(normalizedOptions, normalizedSelection);
     }
 
     private bool TryGetLocalRepositoryInput(out string localRepositoryPath)
     {
-        localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
+        localRepositoryPath = m_viewModel.LocalRepositoryPath?.Trim();
 
         if (string.IsNullOrWhiteSpace(localRepositoryPath))
         {
@@ -915,7 +847,7 @@ public partial class MainWindow : Window
         if (m_normalizingPullRequestUrl)
             return;
 
-        var urlText = PullRequestUrlTextBox.Text?.Trim();
+        var urlText = m_viewModel.PullRequestUrl?.Trim();
         if (string.IsNullOrWhiteSpace(urlText))
             return;
 
@@ -928,7 +860,7 @@ public partial class MainWindow : Window
         m_normalizingPullRequestUrl = true;
         try
         {
-            PullRequestUrlTextBox.Text = pullRequest.SourceUrl;
+            m_viewModel.PullRequestUrl = pullRequest.SourceUrl;
             PullRequestUrlTextBox.CaretIndex = pullRequest.SourceUrl.Length;
         }
         finally
@@ -946,66 +878,37 @@ public partial class MainWindow : Window
 
         if (IsAnyLocalReviewMode())
         {
-            UpdatePullRequestReviewState(null);
-            PullRequestMetadataTextBlock.IsVisible = false;
-            PullRequestMetadataTextBlock.Text = string.Empty;
+            m_viewModel.UpdatePullRequestMetadataPreview(null, null, null);
             UpdateActionButtonStates();
             return;
         }
 
-        var urlText = PullRequestUrlTextBox.Text?.Trim();
+        var urlText = m_viewModel.PullRequestUrl?.Trim();
         if (string.IsNullOrWhiteSpace(urlText))
         {
-            UpdatePullRequestReviewState(null);
+            m_viewModel.UpdatePullRequestMetadataPreview(null, null, null);
             UpdateActionButtonStates();
-            PullRequestMetadataTextBlock.IsVisible = false;
-            PullRequestMetadataTextBlock.Text = string.Empty;
             return;
         }
 
         if (!BitbucketPrUrlParser.TryParse(urlText, out var pullRequest, out _))
         {
-            UpdatePullRequestReviewState(null);
+            m_viewModel.UpdatePullRequestMetadataPreview(null, null, null);
             UpdateActionButtonStates();
-            PullRequestMetadataTextBlock.IsVisible = false;
-            PullRequestMetadataTextBlock.Text = string.Empty;
             return;
         }
 
-        PullRequestMetadataTextBlock.IsVisible = false;
-        PullRequestMetadataTextBlock.Text = string.Empty;
+        m_viewModel.UpdatePullRequestMetadataPreview(null, null, null);
 
         var metadata = await m_pullRequestMetadataClient.TryGetMetadataAsync(pullRequest, cancellationToken);
         if (cancellationToken.IsCancellationRequested)
             return;
 
-        UpdatePullRequestReviewState(metadata);
+        m_viewModel.UpdatePullRequestMetadataPreview(metadata?.Title, metadata?.Author, metadata?.State);
         UpdateActionButtonStates();
 
-        if (metadata == null)
-        {
-            PullRequestMetadataTextBlock.IsVisible = false;
-            PullRequestMetadataTextBlock.Text = string.Empty;
-            return;
-        }
-
-        PullRequestMetadataTextBlock.Text = BuildPullRequestMetadataText(metadata);
-        PullRequestMetadataTextBlock.IsVisible = true;
-
-        if (m_previewPullRequestIsOpen == false)
+        if (metadata != null && m_viewModel.PreviewPullRequestIsOpen == false)
             NotifyNonOpenPullRequestIfNeeded(pullRequest);
-    }
-
-    private static string BuildPullRequestMetadataText(BitbucketPullRequestMetadata metadata)
-    {
-        if (metadata == null)
-            return string.Empty;
-
-        var title = string.IsNullOrWhiteSpace(metadata.Title) ? "(no title)" : metadata.Title.Trim();
-        var author = string.IsNullOrWhiteSpace(metadata.Author) ? "Unknown author" : metadata.Author.Trim();
-        var state = FormatPullRequestState(metadata.State);
-
-        return $"Title: {title} | Author: {author} | State: {state}";
     }
 
     private static string FormatMetadataText(string value) =>
@@ -1013,18 +916,10 @@ public partial class MainWindow : Window
 
     private void SetBusyState(bool isBusy)
     {
-        m_busy = isBusy;
-        BusyIndicatorSpinner.IsVisible = isBusy;
-        CancelProcessingButton.IsVisible = isBusy;
-        UpdateCancelButtonVisualState();
+        m_viewModel.IsBusy = isBusy;
 
         if (!isBusy)
-        {
-            BusyIndicatorSpinner.IsIndeterminate = true;
-            BusyIndicatorSpinner.Minimum = 0;
-            BusyIndicatorSpinner.Maximum = 1;
-            BusyIndicatorSpinner.Value = 0;
-        }
+            m_viewModel.ResetBusyProgress();
 
         UpdateActionButtonStates();
     }
@@ -1037,13 +932,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!m_busy)
+        if (!m_viewModel.IsBusy)
             return;
 
-        BusyIndicatorSpinner.IsIndeterminate = true;
-        BusyIndicatorSpinner.Minimum = 0;
-        BusyIndicatorSpinner.Maximum = 1;
-        BusyIndicatorSpinner.Value = 0;
+        m_viewModel.SetBusyProgressIndeterminate();
     }
 
     private void UpdateBusyProgress(int completed, int total, string _)
@@ -1054,21 +946,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!m_busy || total <= 0)
+        if (!m_viewModel.IsBusy || total <= 0)
         {
-            BusyIndicatorSpinner.IsIndeterminate = true;
+            m_viewModel.SetBusyProgressIndeterminate();
             return;
         }
 
-        BusyIndicatorSpinner.IsIndeterminate = false;
-        BusyIndicatorSpinner.Minimum = 0;
-        BusyIndicatorSpinner.Maximum = total;
-        BusyIndicatorSpinner.Value = Math.Clamp(completed, 0, total);
+        m_viewModel.UpdateBusyProgress(completed, total);
     }
 
     private ReviewMode GetSelectedReviewMode()
     {
-        var selectedIndex = ReviewModeComboBox?.SelectedIndex ?? (int)ReviewMode.PullRequest;
+        var selectedIndex = m_viewModel.ReviewModeIndex;
         if (selectedIndex < (int)ReviewMode.PullRequest || selectedIndex > (int)ReviewMode.LocalUncommittedChanges)
             return ReviewMode.PullRequest;
 
@@ -1083,81 +972,30 @@ public partial class MainWindow : Window
 
     private bool IsAnyLocalReviewMode() => GetSelectedReviewMode() != ReviewMode.PullRequest;
 
-    private bool ShouldIncludeFullModifiedFiles() => ScanScopeComboBox?.SelectedIndex == 1;
-
-    private void UpdateComboInfoTooltips()
-    {
-        UpdateReviewModeInfoTooltip();
-        UpdateScanScopeInfoTooltip();
-    }
-
-    private void UpdateReviewModeInfoTooltip()
-    {
-        var tooltip = GetSelectedReviewMode() switch
-        {
-            ReviewMode.LocalCommittedChanges =>
-                "Reviews committed changes in your local repo against the selected base branch (for example origin/main).",
-            ReviewMode.LocalUncommittedChanges =>
-                "Reviews your uncommitted working tree changes, without requiring commits.",
-            _ =>
-                "Reviews a Bitbucket pull request by preparing an isolated local worktree for that PR."
-        };
-
-        if (ReviewModeInfoButton != null)
-            ToolTip.SetTip(ReviewModeInfoButton, tooltip);
-    }
-
-    private void UpdateScanScopeInfoTooltip()
-    {
-        var tooltip = ShouldIncludeFullModifiedFiles()
-            ? "Runs checks across entire modified files. More thorough, but slower."
-            : "Runs checks only on newly added lines. Faster for targeted reviews.";
-
-        if (ScanScopeInfoButton != null)
-            ToolTip.SetTip(ScanScopeInfoButton, tooltip);
-    }
-
-    private void ApplyReviewModeUi()
-    {
-        var reviewMode = GetSelectedReviewMode();
-        var isLocalMode = reviewMode != ReviewMode.PullRequest;
-        var showBaseBranch = reviewMode == ReviewMode.LocalCommittedChanges;
-
-        PullRequestUrlLabelTextBlock.IsVisible = !isLocalMode;
-        PullRequestUrlTextBox.IsVisible = !isLocalMode;
-        OpenPullRequestButton.IsVisible = !isLocalMode;
-        LocalReviewOptionsGrid.IsVisible = isLocalMode;
-        PullRequestMetadataTextBlock.IsVisible = !isLocalMode && !string.IsNullOrWhiteSpace(PullRequestMetadataTextBlock.Text);
-        LocalBaseBranchLabelTextBlock.IsVisible = showBaseBranch;
-        LocalBaseBranchComboBox.IsVisible = showBaseBranch;
-
-        PrepareReviewButton.Content = reviewMode switch
-        {
-            ReviewMode.LocalCommittedChanges => "Review Local",
-            ReviewMode.LocalUncommittedChanges => "Review Local",
-            _ => "Review PR"
-        };
-    }
+    private bool ShouldIncludeFullModifiedFiles() => m_viewModel.ScanScopeIndex == 1;
 
     private void UpdateActionButtonStates()
     {
-        var canReviewCurrentPullRequest = m_previewPullRequestIsOpen != false;
+        var canReviewCurrentPullRequest = m_viewModel.PreviewPullRequestIsOpen != false;
         var reviewMode = GetSelectedReviewMode();
         var isLocalMode = reviewMode != ReviewMode.PullRequest;
         m_latestSolutionPath = ResolveAvailableSolutionPath();
-        PrepareReviewButton.IsEnabled = !m_busy &&
-                                        m_isGitAvailable &&
-                                        (isLocalMode
-                                            ? HasValidLocalPrepareInputs(reviewMode)
-                                            : canReviewCurrentPullRequest && HasValidPullRequestPrepareInputs());
-        OpenPullRequestButton.IsEnabled = !m_busy && reviewMode == ReviewMode.PullRequest && HasValidPullRequestInput();
-        OpenSolutionButton.IsEnabled = !m_busy &&
-                                      !string.IsNullOrWhiteSpace(m_latestSolutionPath) &&
-                                      m_latestSolutionPath.ToFile().Exists();
-        CancelProcessingButton.IsEnabled = m_busy &&
-                                           !m_busyCancellationRequested &&
-                                           m_busyActionCancellation is { IsCancellationRequested: false };
-        UpdateCancelButtonVisualState();
+        var hasValidLocalPrepareInputs = HasValidLocalPrepareInputs(reviewMode);
+        var hasValidPullRequestPrepareInputs = HasValidPullRequestPrepareInputs();
+        var hasValidPullRequestInput = HasValidPullRequestInput();
+        var hasAvailableSolution = !string.IsNullOrWhiteSpace(m_latestSolutionPath) &&
+                                   m_latestSolutionPath.ToFile().Exists();
+        var canCancelCurrentOperation = m_busyActionCancellation is { IsCancellationRequested: false };
+
+        m_viewModel.UpdateActionStateInputs(
+            isGitAvailable: m_isGitAvailable,
+            canReviewCurrentPullRequest: canReviewCurrentPullRequest,
+            hasValidPullRequestInput: hasValidPullRequestInput,
+            hasValidPullRequestPrepareInputs: hasValidPullRequestPrepareInputs,
+            hasValidLocalPrepareInputs: isLocalMode && hasValidLocalPrepareInputs,
+            hasAvailableSolution: hasAvailableSolution,
+            canCancelCurrentOperation: canCancelCurrentOperation,
+            isCancellationRequested: m_busyCancellationRequested);
     }
 
     private string ResolveAvailableSolutionPath()
@@ -1172,7 +1010,7 @@ public partial class MainWindow : Window
                 return worktreeSolution;
         }
 
-        var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
+        var localRepositoryPath = m_viewModel.LocalRepositoryPath?.Trim();
         if (!string.IsNullOrWhiteSpace(localRepositoryPath) && localRepositoryPath.ToDir().Exists())
         {
             var localSolution = RepositoryUtilities.FindTopLevelSolutionFile(localRepositoryPath);
@@ -1180,7 +1018,7 @@ public partial class MainWindow : Window
                 return localSolution;
         }
 
-        var repositoryRootPath = RepositoryRootTextBox.Text?.Trim();
+        var repositoryRootPath = m_viewModel.RepositoryRootPath?.Trim();
         if (!string.IsNullOrWhiteSpace(repositoryRootPath) && repositoryRootPath.ToDir().Exists())
         {
             var rootSolution = RepositoryUtilities.FindTopLevelSolutionFile(repositoryRootPath);
@@ -1193,18 +1031,18 @@ public partial class MainWindow : Window
 
     private bool HasValidPullRequestInput()
     {
-        var prUrlText = PullRequestUrlTextBox.Text?.Trim();
+        var prUrlText = m_viewModel.PullRequestUrl?.Trim();
         return !string.IsNullOrWhiteSpace(prUrlText) &&
                BitbucketPrUrlParser.TryParse(prUrlText, out _, out _);
     }
 
     private bool HasValidPullRequestPrepareInputs()
     {
-        var repositoryRoot = RepositoryRootTextBox.Text?.Trim();
+        var repositoryRoot = m_viewModel.RepositoryRootPath?.Trim();
         if (string.IsNullOrWhiteSpace(repositoryRoot) || !repositoryRoot.ToDir().Exists())
             return false;
 
-        var prUrlText = PullRequestUrlTextBox.Text?.Trim();
+        var prUrlText = m_viewModel.PullRequestUrl?.Trim();
         if (string.IsNullOrWhiteSpace(prUrlText))
             return false;
 
@@ -1213,7 +1051,7 @@ public partial class MainWindow : Window
 
     private bool HasValidLocalPrepareInputs(ReviewMode reviewMode)
     {
-        var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
+        var localRepositoryPath = m_viewModel.LocalRepositoryPath?.Trim();
         if (string.IsNullOrWhiteSpace(localRepositoryPath) || !localRepositoryPath.ToDir().Exists())
             return false;
 
@@ -1235,7 +1073,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        StatusTextBlock.Text = status;
+        m_viewModel.StatusText = status;
     }
 
     private void AppendLog(string message)
@@ -1582,12 +1420,8 @@ public partial class MainWindow : Window
         public IBrush Foreground { get; }
     }
 
-    private void RepositoryRootTextBox_OnLostFocus(object sender, RoutedEventArgs e) =>
-        PersistRepositoryRootPath(RepositoryRootTextBox.Text);
-
     private async void LocalRepositoryFolderTextBox_OnLostFocus(object sender, RoutedEventArgs e)
     {
-        PersistLocalReviewRepositoryPath(LocalRepositoryFolderTextBox.Text);
         await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
     }
 
@@ -1616,11 +1450,6 @@ public partial class MainWindow : Window
         m_previewUpdateCancellation = null;
         m_pullRequestMetadataClient.Dispose();
 
-        PersistRepositoryRootPath(RepositoryRootTextBox.Text);
-        PersistLocalReviewRepositoryPath(LocalRepositoryFolderTextBox.Text);
-        PersistLocalReviewBaseBranch(GetSelectedLocalBaseBranch());
-        PersistReviewMode(GetSelectedReviewMode());
-        PersistIncludeFullModifiedFiles(ShouldIncludeFullModifiedFiles());
         m_settings.Dispose();
     }
 
@@ -1668,10 +1497,10 @@ public partial class MainWindow : Window
         if (!m_isGitAvailable)
             return;
 
-        var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
+        var localRepositoryPath = m_viewModel.LocalRepositoryPath?.Trim();
         if (!RepositoryUtilities.IsGitRepository(localRepositoryPath))
         {
-            var fallbackBaseBranch = NormalizeBranchName(m_settings.LocalReviewBaseBranch) ?? "main";
+            var fallbackBaseBranch = NormalizeBranchName(m_viewModel.LocalBaseBranch) ?? "main";
             SetLocalBaseBranchOptions([fallbackBaseBranch], fallbackBaseBranch);
             return;
         }
@@ -1689,7 +1518,7 @@ public partial class MainWindow : Window
             branchOptions.Add(resolvedBaseBranch);
 
         SetLocalBaseBranchOptions(branchOptions, resolvedBaseBranch);
-        PersistLocalReviewBaseBranch(resolvedBaseBranch);
+        m_viewModel.LocalBaseBranch = resolvedBaseBranch;
         InvalidateLocalReviewChangedFilesCache();
     }
 
@@ -1994,7 +1823,7 @@ public partial class MainWindow : Window
 
     private async Task RunStartupCodeReviewCleanupAsync()
     {
-        var repositoryRoot = RepositoryRootTextBox.Text?.Trim();
+        var repositoryRoot = m_viewModel.RepositoryRootPath?.Trim();
         if (string.IsNullOrWhiteSpace(repositoryRoot) || !repositoryRoot.ToDir().Exists())
             return;
 
@@ -2009,7 +1838,7 @@ public partial class MainWindow : Window
 
     private void CancelProcessingButton_OnClick(object sender, RoutedEventArgs e)
     {
-        if (!m_busy || m_busyActionCancellation == null || m_busyActionCancellation.IsCancellationRequested)
+        if (!m_viewModel.IsBusy || m_busyActionCancellation == null || m_busyActionCancellation.IsCancellationRequested)
             return;
 
         m_busyCancellationRequested = true;
@@ -2019,22 +1848,12 @@ public partial class MainWindow : Window
         UpdateActionButtonStates();
     }
 
-    private void UpdateCancelButtonVisualState()
-    {
-        if (CancelProcessingIcon == null || CancelProcessingStoppingTextBlock == null)
-            return;
-
-        var isStopping = m_busy && m_busyCancellationRequested;
-        CancelProcessingIcon.IsVisible = !isStopping;
-        CancelProcessingStoppingTextBlock.IsVisible = isStopping;
-    }
-
     private async Task TryPrefillPullRequestUrlFromClipboardAsync()
     {
         if (!IsPullRequestReviewMode())
             return;
 
-        if (!string.IsNullOrWhiteSpace(PullRequestUrlTextBox.Text))
+        if (!string.IsNullOrWhiteSpace(m_viewModel.PullRequestUrl))
             return;
 
         if (Clipboard == null)
@@ -2053,87 +1872,13 @@ public partial class MainWindow : Window
         if (!BitbucketPrUrlParser.TryParse(clipboardText, out var pullRequest, out _))
             return;
 
-        PullRequestUrlTextBox.Text = pullRequest.SourceUrl;
+        m_viewModel.PullRequestUrl = pullRequest.SourceUrl;
         SetStatus("Pull request URL loaded from clipboard.");
-    }
-
-    private void PersistRepositoryRootPath(string repositoryRootPath)
-    {
-        var normalizedPath = repositoryRootPath?.Trim();
-        if (string.Equals(m_settings.RepositoryRootPath, normalizedPath, StringComparison.Ordinal))
-            return;
-
-        m_settings.RepositoryRootPath = normalizedPath;
-
-        try
-        {
-            m_settings.Save();
-        }
-        catch (Exception exception)
-        {
-            AppendLog($"Warning: could not save app settings. {exception.Message}");
-        }
-    }
-
-    private void PersistLocalReviewRepositoryPath(string localRepositoryPath)
-    {
-        var normalizedPath = localRepositoryPath?.Trim();
-        if (string.Equals(m_settings.LocalReviewRepositoryPath, normalizedPath, StringComparison.Ordinal))
-            return;
-
-        m_settings.LocalReviewRepositoryPath = normalizedPath;
-        SaveSettingsSafely();
-    }
-
-    private void PersistLocalReviewBaseBranch(string baseBranch)
-    {
-        var normalizedBranch = string.IsNullOrWhiteSpace(baseBranch) ? "main" : baseBranch.Trim();
-        if (string.Equals(m_settings.LocalReviewBaseBranch, normalizedBranch, StringComparison.Ordinal))
-            return;
-
-        m_settings.LocalReviewBaseBranch = normalizedBranch;
-        SaveSettingsSafely();
-    }
-
-    private void PersistReviewMode(ReviewMode reviewMode)
-    {
-        var reviewModeIndex = (int)reviewMode;
-        var useLocalCommittedReview = reviewMode == ReviewMode.LocalCommittedChanges;
-        if (m_settings.ReviewModeIndex == reviewModeIndex &&
-            m_settings.UseLocalCommittedReview == useLocalCommittedReview)
-        {
-            return;
-        }
-
-        m_settings.ReviewModeIndex = reviewModeIndex;
-        m_settings.UseLocalCommittedReview = useLocalCommittedReview;
-        SaveSettingsSafely();
-    }
-
-    private void PersistIncludeFullModifiedFiles(bool includeFullModifiedFiles)
-    {
-        if (m_settings.IncludeFullModifiedFiles == includeFullModifiedFiles)
-            return;
-
-        m_settings.IncludeFullModifiedFiles = includeFullModifiedFiles;
-        SaveSettingsSafely();
-    }
-
-    private void SaveSettingsSafely()
-    {
-        try
-        {
-            m_settings.Save();
-        }
-        catch (Exception exception)
-        {
-            AppendLog($"Warning: could not save app settings. {exception.Message}");
-        }
     }
 
     private void OpenPullRequestButton_OnClick(object sender, RoutedEventArgs e)
     {
-        var prUrlText = PullRequestUrlTextBox.Text?.Trim();
+        var prUrlText = m_viewModel.PullRequestUrl?.Trim();
         if (!BitbucketPrUrlParser.TryParse(prUrlText, out var pullRequest, out var parseError))
         {
             SetStatus(parseError);
@@ -2146,31 +1891,12 @@ public partial class MainWindow : Window
         SetStatus("Pull request opened in browser.");
     }
 
-    private void UpdatePullRequestReviewState(BitbucketPullRequestMetadata metadata)
-    {
-        if (metadata == null)
-        {
-            m_previewPullRequestState = null;
-            m_previewPullRequestIsOpen = null;
-            m_previewPullRequestTitle = null;
-            return;
-        }
-
-        m_previewPullRequestState = metadata.State?.Trim();
-        m_previewPullRequestTitle = string.IsNullOrWhiteSpace(metadata.Title)
-            ? null
-            : metadata.Title.Trim();
-        m_previewPullRequestIsOpen = string.IsNullOrWhiteSpace(m_previewPullRequestState)
-            ? null
-            : string.Equals(m_previewPullRequestState, "OPEN", StringComparison.OrdinalIgnoreCase);
-    }
-
     private void NotifyNonOpenPullRequestIfNeeded(BitbucketPullRequestReference pullRequest)
     {
-        if (pullRequest == null || m_previewPullRequestIsOpen != false)
+        if (pullRequest == null || m_viewModel.PreviewPullRequestIsOpen != false)
             return;
 
-        var state = FormatPullRequestState(m_previewPullRequestState);
+        var state = m_viewModel.PreviewPullRequestStateDisplay;
         var noticeKey = $"{pullRequest.SourceUrl}|{state}";
         if (string.Equals(noticeKey, m_lastNonOpenPullRequestNoticeKey, StringComparison.Ordinal))
             return;
@@ -2183,14 +1909,6 @@ public partial class MainWindow : Window
             "Pull request is not open",
             $"{message}{Environment.NewLine}{Environment.NewLine}You can still click 'Open PR' to inspect it in Bitbucket.",
             null);
-    }
-
-    private static string FormatPullRequestState(string state)
-    {
-        if (string.IsNullOrWhiteSpace(state))
-            return "N/A";
-
-        return state.Trim().ToUpperInvariant();
     }
 
     private void OpenSolutionButton_OnClick(object sender, RoutedEventArgs e)
