@@ -1670,7 +1670,11 @@ public partial class MainWindow : Window
 
         var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
         if (!RepositoryUtilities.IsGitRepository(localRepositoryPath))
+        {
+            var fallbackBaseBranch = NormalizeBranchName(m_settings.LocalReviewBaseBranch) ?? "main";
+            SetLocalBaseBranchOptions([fallbackBaseBranch], fallbackBaseBranch);
             return;
+        }
 
         var currentBaseBranch = GetSelectedLocalBaseBranch();
         var resolvedBaseBranch = await ResolveLocalBaseBranchAsync(localRepositoryPath, currentBaseBranch, logWhenChanged: logWhenUpdated);
@@ -1856,6 +1860,15 @@ public partial class MainWindow : Window
         {
             if (logWhenChanged)
                 AppendLog($"Detected default base branch: {detectedDefaultBranch}");
+            return detectedDefaultBranch;
+        }
+
+        var hasRequestedBranch = await HasRemoteTrackingBranchAsync(localRepositoryPath, normalizedRequestedBranch) ||
+                                 await HasLocalBranchAsync(localRepositoryPath, normalizedRequestedBranch);
+        if (!hasRequestedBranch)
+        {
+            if (logWhenChanged)
+                AppendLog($"Detected default base branch: {detectedDefaultBranch} (replacing '{normalizedRequestedBranch}')");
             return detectedDefaultBranch;
         }
 
