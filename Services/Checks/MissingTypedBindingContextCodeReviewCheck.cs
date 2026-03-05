@@ -204,13 +204,8 @@ public sealed class MissingTypedBindingContextCodeReviewCheck : CodeReviewCheckB
     private static bool IsIdentifierCharacter(char value) =>
         char.IsLetterOrDigit(value) || value == '_';
 
-    private static bool HasExplicitSource(string bindingExpressionText)
-    {
-        if (string.IsNullOrWhiteSpace(bindingExpressionText))
-            return false;
-
-        return ExplicitSourceRegex.IsMatch(bindingExpressionText);
-    }
+    private static bool HasExplicitSource(string bindingExpressionText) =>
+        !string.IsNullOrWhiteSpace(bindingExpressionText) && ExplicitSourceRegex.IsMatch(bindingExpressionText);
 
     private readonly record struct BindingExpressionRange(
         int StartIndex,

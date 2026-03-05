@@ -25,6 +25,7 @@ public sealed class Settings : UserSettingsBase
         RepositoryRootPath = string.Empty;
         LocalReviewRepositoryPath = string.Empty;
         LocalReviewBaseBranch = "main";
+        CodeViewOpenTarget = "VSCode";
         ReviewModeIndex = DefaultReviewModeIndex;
         UseLocalCommittedReview = false;
         IncludeFullModifiedFiles = false;
@@ -54,16 +55,22 @@ public sealed class Settings : UserSettingsBase
         set => Set(value);
     }
 
+    public string CodeViewOpenTarget
+    {
+        get => Get<string>();
+        set => Set(value);
+    }
+
     public int ReviewModeIndex
     {
         get
         {
-            var rawValue = Get<long>(nameof(ReviewModeIndex));
+            var rawValue = Get<long>();
             return rawValue is >= int.MinValue and <= int.MaxValue
                 ? (int)rawValue
                 : DefaultReviewModeIndex;
         }
-        set => Set((long)value, nameof(ReviewModeIndex));
+        set => Set((long)value);
     }
 
     public bool UseLocalCommittedReview

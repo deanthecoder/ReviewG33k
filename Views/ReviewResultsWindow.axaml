@@ -171,7 +171,7 @@
                     CornerRadius="8"
                     Padding="8">
                 <Grid RowDefinitions="Auto,*">
-                    <Grid ColumnDefinitions="*,Auto">
+                    <Grid ColumnDefinitions="*,Auto,Auto">
                         <StackPanel Orientation="Horizontal"
                                     VerticalAlignment="Center">
                             <TextBlock x:Name="PreviewHeaderTextBlock"
@@ -194,7 +194,31 @@
                                 Classes="neon"
                                 Margin="8,0,0,6"
                                 Click="OpenSelectedButton_OnClick"
-                                Content="View Code" />
+                                ToolTip.Tip="Open selected finding using the chosen app">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon x:Name="OpenSelectedTargetIcon"
+                                                            Width="16"
+                                                            Height="16"
+                                                            Kind="CodeTags" />
+                                <TextBlock x:Name="OpenSelectedTargetText"
+                                           VerticalAlignment="Center"
+                                           Text="Open" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="OpenTargetMenuButton"
+                                Grid.Column="2"
+                                Classes="neon"
+                                Margin="4,0,0,6"
+                                Padding="8,0"
+                                Click="OpenTargetMenuButton_OnClick"
+                                ToolTip.Tip="Choose how View Code opens files">
+                            <Button.ContextMenu>
+                                <ContextMenu x:Name="OpenTargetMenu" />
+                            </Button.ContextMenu>
+                            <materialIcons:MaterialIcon Width="16"
+                                                        Height="16"
+                                                        Kind="ChevronDown" />
+                        </Button>
                     </Grid>
                     <TextBox x:Name="PreviewTextBox"
                              Grid.Row="1"

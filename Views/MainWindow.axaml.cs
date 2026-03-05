@@ -56,6 +56,7 @@ public partial class MainWindow : Window
     private static readonly IBrush PassLogBrush = Brushes.LimeGreen;
 
     private readonly GitCommandRunner m_gitCommandRunner = new();
+    private readonly CodeLocationOpener m_codeLocationOpener = new();
     private readonly CodeReviewOrchestrator m_orchestrator;
     private readonly CodeSmellReportAnalyzer m_codeSmellReportAnalyzer;
     private readonly BitbucketPullRequestMetadataClient m_pullRequestMetadataClient = new();
@@ -480,25 +481,129 @@ public partial class MainWindow : Window
 
     private async Task ShowReviewResultsWindowAsync(CodeSmellReport report)
     {
-        var canOpenInVsCode = TryDetectVsCode(out _, out _);
+        var canOpenCodeLocation = m_codeLocationOpener.TargetDefinitions.Any(definition => IsOpenTargetAvailable(definition.Target));
         var canCommentInBitbucket = IsPullRequestReviewMode() && m_latestPullRequest != null;
         var canFixLocally = IsAnyLocalReviewMode();
         var reviewWindowPullRequestTitle = canCommentInBitbucket
             ? m_viewModel.PreviewPullRequestTitle
             : null;
         var findingFixer = canFixLocally ? new CodeReviewFixDispatcher(m_codeSmellReportAnalyzer.Checks) : null;
+        var initialOpenTarget = GetConfiguredCodeOpenTarget();
+        if (!IsOpenTargetAvailable(initialOpenTarget))
+        {
+            initialOpenTarget = m_codeLocationOpener.AllTargets
+                .FirstOrDefault(IsOpenTargetAvailable);
+        }
+
         var resultsWindow = new ReviewResultsWindow(
             report?.Findings ?? [],
-            canOpenInVsCode,
+            canOpenCodeLocation,
             canCommentInBitbucket,
             canFixLocally,
             findingFixer,
             OpenReviewFindingInVsCode,
+            OpenReviewFindingAsync,
+            IsOpenTargetAvailable,
+            PersistCodeOpenTarget,
+            initialOpenTarget,
+            m_codeLocationOpener.TargetDefinitions,
             CommentOnReviewFindingAsync,
             ResolveReviewFindingPath,
             ResampleLocalFindingsForFileAsync,
             reviewWindowPullRequestTitle);
         await resultsWindow.ShowDialog(this);
+    }
+
+    private bool IsOpenTargetAvailable(CodeLocationOpenTarget target)
+    {
+        if (target == CodeLocationOpenTarget.Clipboard)
+            return Clipboard != null;
+
+        return m_codeLocationOpener.IsTargetAvailable(target);
+    }
+
+    private async Task<(bool Success, string Message)> OpenReviewFindingAsync(
+        CodeSmellFinding finding,
+        CodeLocationOpenTarget target)
+    {
+        if (finding == null)
+            return (false, "No finding selected.");
+
+        var lineNumber = finding.LineNumber > 0 ? finding.LineNumber : 1;
+        if (!TryResolveLogFile(finding.FilePath, out var resolvedFile))
+        {
+            var error = $"Could not resolve file path: {finding.FilePath}";
+            AppendLog($"WARNING: {error}");
+            SetStatus(error);
+            return (false, error);
+        }
+
+        if (target == CodeLocationOpenTarget.Clipboard)
+        {
+            if (Clipboard == null)
+            {
+                const string clipboardError = "Clipboard is unavailable.";
+                AppendLog($"WARNING: {clipboardError}");
+                SetStatus(clipboardError);
+                return (false, clipboardError);
+            }
+
+            try
+            {
+                await Clipboard.SetTextAsync(resolvedFile.FullName);
+                SetStatus($"Copied path to clipboard: {resolvedFile.FullName}");
+                return (true, null);
+            }
+            catch (Exception exception)
+            {
+                var clipboardError = $"Failed to copy to clipboard: {exception.Message}";
+                AppendLog($"WARNING: {clipboardError}");
+                SetStatus(clipboardError);
+                return (false, clipboardError);
+            }
+        }
+
+        if (!m_codeLocationOpener.TryOpenAtLocation(target, resolvedFile.FullName, lineNumber, out var launchError))
+        {
+            AppendLog($"WARNING: {launchError}");
+            SetStatus(launchError);
+            return (false, launchError);
+        }
+
+        var targetName = m_codeLocationOpener.GetDisplayName(target);
+        SetStatus($"Opened in {targetName}: {resolvedFile.Name}:{lineNumber}");
+        return (true, null);
+    }
+
+    private CodeLocationOpenTarget GetConfiguredCodeOpenTarget()
+    {
+        var configuredValue = m_settings.CodeViewOpenTarget?.Trim();
+        if (string.IsNullOrWhiteSpace(configuredValue))
+            return CodeLocationOpenTarget.VsCode;
+
+        if (configuredValue.Equals("VSCode", StringComparison.OrdinalIgnoreCase))
+            return CodeLocationOpenTarget.VsCode;
+
+        if (Enum.TryParse(configuredValue, ignoreCase: true, out CodeLocationOpenTarget parsedTarget))
+            return parsedTarget;
+
+        return CodeLocationOpenTarget.VsCode;
+    }
+
+    private void PersistCodeOpenTarget(CodeLocationOpenTarget target)
+    {
+        m_settings.CodeViewOpenTarget = target == CodeLocationOpenTarget.VsCode
+            ? "VSCode"
+            : target.ToString();
+
+        try
+        {
+            m_settings.Save();
+        }
+        catch (Exception exception)
+        {
+            AppendLog($"WARNING: Failed to persist code open target. {exception.Message}");
+        }
     }
 
     private void OpenReviewFindingInVsCode(CodeSmellFinding finding)

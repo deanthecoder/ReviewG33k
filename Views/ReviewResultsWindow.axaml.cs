@@ -20,6 +20,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using DTC.Core.Extensions;
+using Material.Icons;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
 using ReviewG33k.Services.Checks.Support;
@@ -35,6 +36,9 @@ public partial class ReviewResultsWindow : Window
     private const int CodexPromptLinesAfter = 14;
 
     private readonly Action<CodeSmellFinding> m_openFindingAction;
+    private readonly Func<CodeSmellFinding, CodeLocationOpenTarget, Task<(bool Success, string Message)>> m_openFindingWithTargetAction;
+    private readonly Func<CodeLocationOpenTarget, bool> m_isOpenTargetAvailable;
+    private readonly Action<CodeLocationOpenTarget> m_openTargetChangedAction;
     private readonly Func<CodeSmellFinding, Task<bool>> m_commentFindingAction;
     private readonly Func<CodeSmellFinding, string> m_resolveFindingPath;
     private readonly Func<string, Task<IReadOnlyList<CodeSmellFinding>>> m_resampleFileFindingsAction;
@@ -44,20 +48,14 @@ public partial class ReviewResultsWindow : Window
     private readonly bool m_canCommentInBitbucket;
     private readonly bool m_canFixLocally;
     private readonly bool m_hasPathResolver;
+    private readonly IReadOnlyList<CodeLocationOpenTargetDefinition> m_openTargetDefinitions;
+    private readonly IReadOnlyDictionary<CodeLocationOpenTarget, CodeLocationOpenTargetDefinition> m_openTargetDefinitionsByTarget;
+    private readonly Dictionary<CodeLocationOpenTarget, MenuItem> m_openTargetMenuItems = [];
+    private CodeLocationOpenTarget m_selectedOpenTarget;
     private Cursor m_previousCursor;
     private bool m_isBulkCommenting;
     private bool m_isApplyingFix;
     private string m_previewFileName;
-
-    public ReviewResultsWindow()
-        : this(Array.Empty<CodeSmellFinding>(), false, false, false, null, null, null, null, null)
-    {
-    }
-
-    public ReviewResultsWindow(IEnumerable<CodeSmellFinding> findings)
-        : this(findings, false, false, false, null, null, null, null, null)
-    {
-    }
 
     public ReviewResultsWindow(
         IEnumerable<CodeSmellFinding> findings,
@@ -66,6 +64,11 @@ public partial class ReviewResultsWindow : Window
         bool canFixLocally,
         ICodeReviewFindingFixer findingFixer,
         Action<CodeSmellFinding> openFindingAction,
+        Func<CodeSmellFinding, CodeLocationOpenTarget, Task<(bool Success, string Message)>> openFindingWithTargetAction,
+        Func<CodeLocationOpenTarget, bool> isOpenTargetAvailable,
+        Action<CodeLocationOpenTarget> openTargetChangedAction,
+        CodeLocationOpenTarget initialOpenTarget,
+        IReadOnlyList<CodeLocationOpenTargetDefinition> openTargetDefinitions,
         Func<CodeSmellFinding, Task<bool>> commentFindingAction,
         Func<CodeSmellFinding, string> resolveFindingPath,
         Func<string, Task<IReadOnlyList<CodeSmellFinding>>> resampleFileFindingsAction,
@@ -76,11 +79,20 @@ public partial class ReviewResultsWindow : Window
         m_canFixLocally = canFixLocally;
         m_hasPathResolver = resolveFindingPath != null;
         m_openFindingAction = openFindingAction;
+        m_openFindingWithTargetAction = openFindingWithTargetAction;
+        m_isOpenTargetAvailable = isOpenTargetAvailable;
+        m_openTargetChangedAction = openTargetChangedAction;
+        m_selectedOpenTarget = initialOpenTarget;
+        m_openTargetDefinitions = (openTargetDefinitions ?? []).Where(definition => definition != null).ToArray();
+        m_openTargetDefinitionsByTarget = m_openTargetDefinitions.ToDictionary(definition => definition.Target);
         m_commentFindingAction = commentFindingAction;
         m_resolveFindingPath = resolveFindingPath;
         m_resampleFileFindingsAction = resampleFileFindingsAction;
         m_findingFixer = findingFixer;
         InitializeComponent();
+        InitializeOpenTargetMenuItems();
+        if (m_openTargetDefinitions.Count > 0 && !m_openTargetDefinitionsByTarget.ContainsKey(m_selectedOpenTarget))
+            m_selectedOpenTarget = m_openTargetDefinitions[0].Target;
         Title = BuildWindowTitle(pullRequestTitle);
         UpdateCopyPreviewFileNameButtonState();
         ResultsListBox.SelectionChanged += ResultsListBox_OnSelectionChanged;
@@ -107,6 +119,7 @@ public partial class ReviewResultsWindow : Window
 
         UpdateSummaryText();
         UpdateBatchActionButtonStates();
+        UpdateOpenTargetUi();
         UpdateOpenSelectedButtonState();
     }
 
@@ -385,12 +398,35 @@ public partial class ReviewResultsWindow : Window
         UpdatePreviewForFinding(row.Finding);
     }
 
-    private void OpenSelectedButton_OnClick(object sender, RoutedEventArgs e)
+    private async void OpenSelectedButton_OnClick(object sender, RoutedEventArgs e)
     {
         if (ResultsListBox.SelectedItem is not ReviewResultRow row || !row.CanOpenActive)
             return;
 
+        if (m_openFindingWithTargetAction != null)
+        {
+            var result = await m_openFindingWithTargetAction(row.Finding, m_selectedOpenTarget);
+            if (!result.Success && !string.IsNullOrWhiteSpace(result.Message))
+                SetPreviewText(result.Message, "Preview");
+            return;
+        }
+
         m_openFindingAction?.Invoke(row.Finding);
+    }
+
+    private void OpenTargetMenuButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (OpenTargetMenu == null || sender is not Control control)
+            return;
+
+        OpenTargetMenu.PlacementTarget = control;
+        OpenTargetMenu.Open();
+    }
+
+    private void OpenTargetMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: CodeLocationOpenTarget target })
+            SelectOpenTarget(target);
     }
 
     private ReviewResultRow MapToRow(CodeSmellFinding finding) =>
@@ -632,7 +668,80 @@ public partial class ReviewResultsWindow : Window
         if (OpenSelectedButton == null)
             return;
 
-        OpenSelectedButton.IsEnabled = ResultsListBox.SelectedItem is ReviewResultRow row && row.CanOpenActive;
+        OpenSelectedButton.IsEnabled = ResultsListBox.SelectedItem is ReviewResultRow row &&
+                                      row.CanOpenActive &&
+                                      IsOpenTargetAvailable(m_selectedOpenTarget);
+    }
+
+    private bool IsOpenTargetAvailable(CodeLocationOpenTarget target) =>
+        m_isOpenTargetAvailable?.Invoke(target) ?? true;
+
+    private void SelectOpenTarget(CodeLocationOpenTarget target)
+    {
+        m_selectedOpenTarget = target;
+        m_openTargetChangedAction?.Invoke(target);
+        UpdateOpenTargetUi();
+        UpdateOpenSelectedButtonState();
+    }
+
+    private void UpdateOpenTargetUi()
+    {
+        foreach (var definition in m_openTargetDefinitions)
+        {
+            if (m_openTargetMenuItems.TryGetValue(definition.Target, out var menuItem))
+                UpdateOpenTargetMenuItem(menuItem, definition);
+        }
+
+        var selectedTargetDefinition = GetOpenTargetDefinition(m_selectedOpenTarget);
+        var selectedTargetName = selectedTargetDefinition?.DisplayName ?? m_selectedOpenTarget.ToString();
+        var selectedTargetIcon = selectedTargetDefinition?.IconKind ?? MaterialIconKind.CodeTags;
+
+        if (OpenSelectedTargetText != null)
+            OpenSelectedTargetText.Text = $"Open ({selectedTargetName})";
+        if (OpenSelectedTargetIcon != null)
+            OpenSelectedTargetIcon.Kind = selectedTargetIcon;
+        if (OpenSelectedButton != null)
+            ToolTip.SetTip(OpenSelectedButton, $"Open selected finding using {selectedTargetName}");
+    }
+
+    private void UpdateOpenTargetMenuItem(MenuItem menuItem, CodeLocationOpenTargetDefinition definition)
+    {
+        if (menuItem == null || definition == null)
+            return;
+
+        var isAvailable = IsOpenTargetAvailable(definition.Target);
+        var isSelected = definition.Target == m_selectedOpenTarget;
+        menuItem.Header = isSelected
+            ? $"✓ {definition.DisplayName}"
+            : definition.DisplayName;
+        menuItem.IsEnabled = isAvailable;
+    }
+
+    private void InitializeOpenTargetMenuItems()
+    {
+        if (OpenTargetMenu == null)
+            return;
+
+        var menuItems = new List<MenuItem>();
+        foreach (var definition in m_openTargetDefinitions)
+        {
+            var menuItem = new MenuItem
+            {
+                Tag = definition.Target
+            };
+            menuItem.Click += OpenTargetMenuItem_OnClick;
+            m_openTargetMenuItems[definition.Target] = menuItem;
+            menuItems.Add(menuItem);
+        }
+
+        OpenTargetMenu.ItemsSource = menuItems;
+    }
+
+    private CodeLocationOpenTargetDefinition GetOpenTargetDefinition(CodeLocationOpenTarget target)
+    {
+        return m_openTargetDefinitionsByTarget.TryGetValue(target, out var definition)
+            ? definition
+            : null;
     }
 
     private string BuildExportText(out int exportedCount)
