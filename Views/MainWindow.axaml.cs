@@ -1965,7 +1965,8 @@ public partial class MainWindow : Window
             normalized = updated;
         }
 
-        return normalized.Equals("HEAD", StringComparison.OrdinalIgnoreCase)
+        return normalized.Equals("HEAD", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Equals("origin", StringComparison.OrdinalIgnoreCase)
             ? null
             : normalized;
 
