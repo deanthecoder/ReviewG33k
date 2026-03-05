@@ -733,7 +733,7 @@ public sealed class FixableCodeReviewChecksTests
     }
 
     [Test]
-    public void LocalVariableCanBeConstCheckDetectsInChangedFileWhenLineIsNotInAddedSet()
+    public void LocalVariableCanBeConstCheckSkipsChangedFileWhenLineIsNotInAddedSet()
     {
         using var tempFile = new TempFile(".cs");
         const string source = """
@@ -756,9 +756,7 @@ public sealed class FixableCodeReviewChecksTests
         var check = new LocalVariableCanBeConstCodeReviewCheck();
         check.Analyze(context, report);
 
-        Assert.That(report.Findings, Has.Count.EqualTo(1));
-        Assert.That(report.Findings[0].RuleId, Is.EqualTo("local-variable-can-be-const"));
-        Assert.That(report.Findings[0].LineNumber, Is.EqualTo(5));
+        Assert.That(report.Findings, Is.Empty);
     }
 
     [Test]
@@ -769,8 +767,8 @@ public sealed class FixableCodeReviewChecksTests
             public enum CodeReviewCheckScope
             {
                 AddedLinesOnly = 0,
-                WholeChangedFile = 1,
-                ChangedFileSet = 2
+                ChangedFileSet = 1,
+                ExtraScope = 2
             }
             """;
 
@@ -794,7 +792,7 @@ public sealed class FixableCodeReviewChecksTests
         var updated = File.ReadAllText(tempFile.FullName);
         Assert.That(updated, Does.Contain("AddedLinesOnly,"));
         Assert.That(updated, Does.Not.Contain("AddedLinesOnly = 0"));
-        Assert.That(updated, Does.Contain("WholeChangedFile = 1"));
+        Assert.That(updated, Does.Contain("ChangedFileSet = 1"));
     }
 
     [Test]

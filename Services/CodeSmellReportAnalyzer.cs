@@ -45,7 +45,7 @@ public sealed class CodeSmellReportAnalyzer
         string targetBranch,
         Action<string> progressLogger = null,
         Action<int, int, string> progressReporter = null,
-        bool includeFullModifiedFilesForAddedLineChecks = false,
+        bool includeFullModifiedFiles = false,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -60,7 +60,7 @@ public sealed class CodeSmellReportAnalyzer
             changedFileSource,
             progressLogger,
             progressReporter,
-            includeFullModifiedFilesForAddedLineChecks,
+            includeFullModifiedFiles,
             cancellationToken);
     }
 
@@ -68,7 +68,7 @@ public sealed class CodeSmellReportAnalyzer
         ICodeReviewChangedFileSource changedFileSource,
         Action<string> progressLogger = null,
         Action<int, int, string> progressReporter = null,
-        bool includeFullModifiedFilesForAddedLineChecks = false,
+        bool includeFullModifiedFiles = false,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -87,7 +87,7 @@ public sealed class CodeSmellReportAnalyzer
             sourceResult,
             progressLogger,
             progressReporter,
-            includeFullModifiedFilesForAddedLineChecks,
+            includeFullModifiedFiles,
             cancellationToken);
     }
 
@@ -95,7 +95,7 @@ public sealed class CodeSmellReportAnalyzer
         CodeReviewChangedFileSourceResult sourceResult,
         Action<string> progressLogger = null,
         Action<int, int, string> progressReporter = null,
-        bool includeFullModifiedFilesForAddedLineChecks = false,
+        bool includeFullModifiedFiles = false,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -117,7 +117,7 @@ public sealed class CodeSmellReportAnalyzer
             .Select(check => Task.Run(() => AnalyzeCheck(
                 check,
                 scopedContexts,
-                includeFullModifiedFilesForAddedLineChecks,
+                includeFullModifiedFiles,
                 cancellationToken), cancellationToken))
             .ToList();
 
@@ -138,7 +138,7 @@ public sealed class CodeSmellReportAnalyzer
 
     public CodeSmellReport AnalyzeFiles(
         IReadOnlyList<CodeReviewChangedFile> changedFiles,
-        bool includeFullModifiedFilesForAddedLineChecks = false)
+        bool includeFullModifiedFiles = false)
     {
         ArgumentNullException.ThrowIfNull(changedFiles);
 
@@ -153,7 +153,7 @@ public sealed class CodeSmellReportAnalyzer
             .Select(check => AnalyzeCheck(
                 check,
                 scopedContexts,
-                includeFullModifiedFilesForAddedLineChecks,
+                includeFullModifiedFiles,
                 CancellationToken.None).Report)
             .ToArray();
 
@@ -178,14 +178,14 @@ public sealed class CodeSmellReportAnalyzer
     private static (ICodeReviewCheck Check, CodeSmellReport Report) AnalyzeCheck(
         ICodeReviewCheck check,
         CodeReviewCheckContextSet scopedContexts,
-        bool includeFullModifiedFilesForAddedLineChecks,
+        bool includeFullModifiedFiles,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var checkReport = new CodeSmellReport();
         try
         {
-            var scopedContext = GetContextForScope(scopedContexts, check.Scope, includeFullModifiedFilesForAddedLineChecks);
+            var scopedContext = GetContextForScope(scopedContexts, check.Scope, includeFullModifiedFiles);
             check.Analyze(scopedContext, checkReport);
         }
         catch (Exception exception)
@@ -200,22 +200,21 @@ public sealed class CodeSmellReportAnalyzer
     private static CodeReviewCheckContextSet BuildScopedContexts(IReadOnlyList<CodeReviewChangedFile> changedFiles)
     {
         var addedLinesContext = BuildContext(changedFiles, includeAllFileLines: false);
-        var wholeChangedFileContext = BuildContext(changedFiles, includeAllFileLines: true);
+        var fullFileContext = BuildContext(changedFiles, includeAllFileLines: true);
 
-        return new CodeReviewCheckContextSet(addedLinesContext, wholeChangedFileContext);
+        return new CodeReviewCheckContextSet(addedLinesContext, fullFileContext);
     }
 
     private static CodeReviewAnalysisContext GetContextForScope(
         CodeReviewCheckContextSet contexts,
         CodeReviewCheckScope scope,
-        bool includeFullModifiedFilesForAddedLineChecks)
+        bool includeFullModifiedFiles)
     {
         return scope switch
         {
-            CodeReviewCheckScope.WholeChangedFile => contexts.WholeChangedFileContext,
-            CodeReviewCheckScope.ChangedFileSet => contexts.ChangedFileSetContext,
-            _ => includeFullModifiedFilesForAddedLineChecks
-                ? contexts.WholeChangedFileContext
+            CodeReviewCheckScope.ChangedFileSet => contexts.FullFileContext,
+            _ => includeFullModifiedFiles
+                ? contexts.FullFileContext
                 : contexts.AddedLinesOnlyContext
         };
     }
@@ -254,17 +253,15 @@ public sealed class CodeSmellReportAnalyzer
 
     private sealed class CodeReviewCheckContextSet
     {
-        public CodeReviewCheckContextSet(CodeReviewAnalysisContext addedLinesOnlyContext, CodeReviewAnalysisContext wholeChangedFileContext)
+        public CodeReviewCheckContextSet(CodeReviewAnalysisContext addedLinesOnlyContext, CodeReviewAnalysisContext fullFileContext)
         {
             AddedLinesOnlyContext = addedLinesOnlyContext;
-            WholeChangedFileContext = wholeChangedFileContext;
+            FullFileContext = fullFileContext;
         }
 
         public CodeReviewAnalysisContext AddedLinesOnlyContext { get; }
 
-        public CodeReviewAnalysisContext WholeChangedFileContext { get; }
-
-        public CodeReviewAnalysisContext ChangedFileSetContext => WholeChangedFileContext;
+        public CodeReviewAnalysisContext FullFileContext { get; }
     }
 
     private static IReadOnlyList<ICodeReviewCheck> CreateChecks() =>
@@ -322,3 +319,5 @@ public sealed class CodeSmellReportAnalyzer
         new UnusedLocalVariableCodeReviewCheck()
     ];
 }
+
+

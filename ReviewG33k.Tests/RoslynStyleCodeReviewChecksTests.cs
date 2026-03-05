@@ -1332,8 +1332,8 @@ public sealed class RoslynStyleCodeReviewChecksTests
             public enum CodeReviewCheckScope
             {
                 AddedLinesOnly = 0,
-                WholeChangedFile = 1,
-                ChangedFileSet = 2
+                ChangedFileSet = 1,
+                ExtraScope = 2
             }
             """;
 
@@ -2106,6 +2106,25 @@ public sealed class RoslynStyleCodeReviewChecksTests
             """;
 
         var report = AnalyzeSource(new UnusedLocalVariableCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnusedLocalVariableCheckWhenLineIsOutsideAddedSetDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Run()
+                {
+                    var unused = 123;
+                    return 7;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedLocalVariableCodeReviewCheck(), "M", source, [1]);
 
         Assert.That(report.Findings, Is.Empty);
     }

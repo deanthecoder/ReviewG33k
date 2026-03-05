@@ -59,9 +59,11 @@ public partial class MainWindow : Window
     private readonly BitbucketPullRequestMetadataClient m_pullRequestMetadataClient = new();
     private readonly Settings m_settings = Settings.Instance;
     private readonly ObservableCollection<LogLineEntry> m_logLines = [];
+    private readonly ObservableCollection<string> m_localBaseBranchOptions = [];
     private CancellationTokenSource m_previewUpdateCancellation;
     private CancellationTokenSource m_busyActionCancellation;
     private bool m_busyCancellationRequested;
+    private bool m_updatingLocalBaseBranchOptions;
     private BitbucketPullRequestReference m_latestPullRequest;
     private string m_latestReviewWorktreePath;
     private string m_latestSolutionPath;
@@ -93,8 +95,6 @@ public partial class MainWindow : Window
         RepositoryRootTextBox.LostFocus += RepositoryRootTextBox_OnLostFocus;
         LocalRepositoryFolderTextBox.TextChanged += LocalRepositoryFolderTextBox_OnTextChanged;
         LocalRepositoryFolderTextBox.LostFocus += LocalRepositoryFolderTextBox_OnLostFocus;
-        LocalBaseBranchTextBox.TextChanged += LocalBaseBranchTextBox_OnTextChanged;
-        LocalBaseBranchTextBox.LostFocus += LocalBaseBranchTextBox_OnLostFocus;
         LogListBox.AddHandler(PointerPressedEvent, LogListBox_OnPointerPressed, RoutingStrategies.Bubble);
         Opened += MainWindow_OnOpened;
         Activated += MainWindow_OnActivated;
@@ -104,14 +104,16 @@ public partial class MainWindow : Window
             RepositoryRootTextBox.Text = m_settings.RepositoryRootPath;
         if (!string.IsNullOrWhiteSpace(m_settings.LocalReviewRepositoryPath))
             LocalRepositoryFolderTextBox.Text = m_settings.LocalReviewRepositoryPath;
-        LocalBaseBranchTextBox.Text = string.IsNullOrWhiteSpace(m_settings.LocalReviewBaseBranch)
+        LocalBaseBranchComboBox.ItemsSource = m_localBaseBranchOptions;
+        var persistedBaseBranch = string.IsNullOrWhiteSpace(m_settings.LocalReviewBaseBranch)
             ? "main"
-            : m_settings.LocalReviewBaseBranch;
+            : m_settings.LocalReviewBaseBranch.Trim();
+        SetLocalBaseBranchOptions([persistedBaseBranch], persistedBaseBranch);
         var persistedReviewModeIndex = m_settings.ReviewModeIndex;
         if (persistedReviewModeIndex < (int)ReviewMode.PullRequest || persistedReviewModeIndex > (int)ReviewMode.LocalUncommittedChanges)
             persistedReviewModeIndex = m_settings.UseLocalCommittedReview ? (int)ReviewMode.LocalCommittedChanges : (int)ReviewMode.PullRequest;
         ReviewModeComboBox.SelectedIndex = persistedReviewModeIndex;
-        ScanScopeComboBox.SelectedIndex = m_settings.IncludeFullModifiedFilesForAddedLineChecks ? 1 : 0;
+        ScanScopeComboBox.SelectedIndex = m_settings.IncludeFullModifiedFiles ? 1 : 0;
         UpdateComboInfoTooltips();
         LogListBox.ItemsSource = m_logLines;
 
@@ -189,7 +191,7 @@ public partial class MainWindow : Window
     private void ScanScopeComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         UpdateScanScopeInfoTooltip();
-        PersistIncludeFullModifiedFilesForAddedLineChecks(ShouldIncludeFullModifiedFilesForAddedLineChecks());
+        PersistIncludeFullModifiedFiles(ShouldIncludeFullModifiedFiles());
     }
 
     private static void PullRequestUrlTextBox_OnDragOver(object sender, DragEventArgs e)
@@ -218,8 +220,15 @@ public partial class MainWindow : Window
     private void LocalRepositoryFolderTextBox_OnTextChanged(object sender, TextChangedEventArgs e) =>
         InvalidateLocalReviewChangedFilesCache();
 
-    private void LocalBaseBranchTextBox_OnTextChanged(object sender, TextChangedEventArgs e) =>
+    private void LocalBaseBranchComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (m_updatingLocalBaseBranchOptions)
+            return;
+
+        var selectedBaseBranch = GetSelectedLocalBaseBranch();
+        PersistLocalReviewBaseBranch(selectedBaseBranch);
         InvalidateLocalReviewChangedFilesCache();
+    }
 
     private async void PrepareReviewButton_OnClick(object sender, RoutedEventArgs e)
     {
@@ -305,7 +314,10 @@ public partial class MainWindow : Window
 
     private async Task PrepareLocalCommittedReviewAsync()
     {
-        if (!TryGetLocalCommittedReviewInputs(out var localRepositoryPath, out var baseBranch))
+        if (!TryGetLocalRepositoryInput(out var localRepositoryPath))
+            return;
+        await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
+        if (!TryGetLocalCommittedReviewInputs(out localRepositoryPath, out var baseBranch))
             return;
 
         InvalidateLocalReviewChangedFilesCache();
@@ -317,8 +329,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!string.Equals(LocalBaseBranchTextBox.Text?.Trim(), baseBranch, StringComparison.Ordinal))
-            LocalBaseBranchTextBox.Text = baseBranch;
+        SelectLocalBaseBranch(baseBranch);
 
         PersistLocalReviewRepositoryPath(localRepositoryPath);
         PersistLocalReviewBaseBranch(baseBranch);
@@ -414,7 +425,7 @@ public partial class MainWindow : Window
             targetBranch,
             AppendLog,
             UpdateBusyProgress,
-            ShouldIncludeFullModifiedFilesForAddedLineChecks(),
+            ShouldIncludeFullModifiedFiles(),
             cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return ProcessCodeSmellReport(report);
@@ -429,7 +440,7 @@ public partial class MainWindow : Window
             sourceResult,
             AppendLog,
             UpdateBusyProgress,
-            ShouldIncludeFullModifiedFilesForAddedLineChecks(),
+            ShouldIncludeFullModifiedFiles(),
             cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return ProcessCodeSmellReport(report);
@@ -564,7 +575,7 @@ public partial class MainWindow : Window
         var reviewMode = GetSelectedReviewMode();
         var localRepositoryPath = LocalRepositoryFolderTextBox.Text?.Trim();
         var baseBranch = reviewMode == ReviewMode.LocalCommittedChanges
-            ? LocalBaseBranchTextBox.Text?.Trim()
+            ? GetSelectedLocalBaseBranch()
             : null;
         if (string.IsNullOrWhiteSpace(localRepositoryPath) || !localRepositoryPath.ToDir().Exists())
         {
@@ -588,7 +599,7 @@ public partial class MainWindow : Window
 
         var report = m_codeSmellReportAnalyzer.AnalyzeFiles(
             [refreshedTargetFile],
-            ShouldIncludeFullModifiedFilesForAddedLineChecks());
+            ShouldIncludeFullModifiedFiles());
         return report.Findings
             .Where(finding => finding != null)
             .Where(finding => RepositoryUtilities.AreSameRepoPath(finding.FilePath, filePath))
@@ -790,7 +801,7 @@ public partial class MainWindow : Window
 
     private bool TryGetLocalCommittedReviewInputs(out string localRepositoryPath, out string baseBranch)
     {
-        baseBranch = LocalBaseBranchTextBox.Text?.Trim();
+        baseBranch = GetSelectedLocalBaseBranch();
         if (!TryGetLocalRepositoryInput(out localRepositoryPath))
             return false;
 
@@ -802,6 +813,65 @@ public partial class MainWindow : Window
         }
 
         return true;
+    }
+
+    private string GetSelectedLocalBaseBranch() =>
+        NormalizeBranchName(LocalBaseBranchComboBox?.SelectedItem as string);
+
+    private void SelectLocalBaseBranch(string baseBranch)
+    {
+        var normalizedBaseBranch = NormalizeBranchName(baseBranch);
+        if (string.IsNullOrWhiteSpace(normalizedBaseBranch))
+            return;
+
+        if (!m_localBaseBranchOptions.Any(branch => branch.Equals(normalizedBaseBranch, StringComparison.OrdinalIgnoreCase)))
+            m_localBaseBranchOptions.Add(normalizedBaseBranch);
+
+        m_updatingLocalBaseBranchOptions = true;
+        try
+        {
+            LocalBaseBranchComboBox.SelectedItem = m_localBaseBranchOptions
+                .FirstOrDefault(branch => branch.Equals(normalizedBaseBranch, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            m_updatingLocalBaseBranchOptions = false;
+        }
+    }
+
+    private void SetLocalBaseBranchOptions(IReadOnlyList<string> branchOptions, string selectedBaseBranch)
+    {
+        var normalizedOptions = (branchOptions ?? [])
+            .Select(NormalizeBranchName)
+            .Where(branch => !string.IsNullOrWhiteSpace(branch))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var normalizedSelection = NormalizeBranchName(selectedBaseBranch);
+        if (!string.IsNullOrWhiteSpace(normalizedSelection) &&
+            !normalizedOptions.Any(branch => branch.Equals(normalizedSelection, StringComparison.OrdinalIgnoreCase)))
+        {
+            normalizedOptions.Add(normalizedSelection);
+        }
+
+        if (normalizedOptions.Count == 0)
+            normalizedOptions.Add("main");
+
+        m_updatingLocalBaseBranchOptions = true;
+        try
+        {
+            m_localBaseBranchOptions.Clear();
+            foreach (var branchOption in normalizedOptions)
+                m_localBaseBranchOptions.Add(branchOption);
+
+            var selectedOption = m_localBaseBranchOptions
+                .FirstOrDefault(branch => branch.Equals(normalizedSelection, StringComparison.OrdinalIgnoreCase))
+                ?? m_localBaseBranchOptions.FirstOrDefault();
+            LocalBaseBranchComboBox.SelectedItem = selectedOption;
+        }
+        finally
+        {
+            m_updatingLocalBaseBranchOptions = false;
+        }
     }
 
     private bool TryGetLocalRepositoryInput(out string localRepositoryPath)
@@ -1013,7 +1083,7 @@ public partial class MainWindow : Window
 
     private bool IsAnyLocalReviewMode() => GetSelectedReviewMode() != ReviewMode.PullRequest;
 
-    private bool ShouldIncludeFullModifiedFilesForAddedLineChecks() => ScanScopeComboBox?.SelectedIndex == 1;
+    private bool ShouldIncludeFullModifiedFiles() => ScanScopeComboBox?.SelectedIndex == 1;
 
     private void UpdateComboInfoTooltips()
     {
@@ -1039,7 +1109,7 @@ public partial class MainWindow : Window
 
     private void UpdateScanScopeInfoTooltip()
     {
-        var tooltip = ShouldIncludeFullModifiedFilesForAddedLineChecks()
+        var tooltip = ShouldIncludeFullModifiedFiles()
             ? "Runs checks across entire modified files. More thorough, but slower."
             : "Runs checks only on newly added lines. Faster for targeted reviews.";
 
@@ -1059,7 +1129,7 @@ public partial class MainWindow : Window
         LocalReviewOptionsGrid.IsVisible = isLocalMode;
         PullRequestMetadataTextBlock.IsVisible = !isLocalMode && !string.IsNullOrWhiteSpace(PullRequestMetadataTextBlock.Text);
         LocalBaseBranchLabelTextBlock.IsVisible = showBaseBranch;
-        LocalBaseBranchTextBox.IsVisible = showBaseBranch;
+        LocalBaseBranchComboBox.IsVisible = showBaseBranch;
 
         PrepareReviewButton.Content = reviewMode switch
         {
@@ -1153,7 +1223,7 @@ public partial class MainWindow : Window
         if (reviewMode == ReviewMode.LocalUncommittedChanges)
             return true;
 
-        var baseBranch = LocalBaseBranchTextBox.Text?.Trim();
+        var baseBranch = GetSelectedLocalBaseBranch();
         return !string.IsNullOrWhiteSpace(baseBranch);
     }
 
@@ -1515,11 +1585,11 @@ public partial class MainWindow : Window
     private void RepositoryRootTextBox_OnLostFocus(object sender, RoutedEventArgs e) =>
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
 
-    private void LocalRepositoryFolderTextBox_OnLostFocus(object sender, RoutedEventArgs e) =>
+    private async void LocalRepositoryFolderTextBox_OnLostFocus(object sender, RoutedEventArgs e)
+    {
         PersistLocalReviewRepositoryPath(LocalRepositoryFolderTextBox.Text);
-
-    private void LocalBaseBranchTextBox_OnLostFocus(object sender, RoutedEventArgs e) =>
-        PersistLocalReviewBaseBranch(LocalBaseBranchTextBox.Text);
+        await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
+    }
 
     private async void MainWindow_OnOpened(object sender, EventArgs e)
     {
@@ -1548,9 +1618,9 @@ public partial class MainWindow : Window
 
         PersistRepositoryRootPath(RepositoryRootTextBox.Text);
         PersistLocalReviewRepositoryPath(LocalRepositoryFolderTextBox.Text);
-        PersistLocalReviewBaseBranch(LocalBaseBranchTextBox.Text);
+        PersistLocalReviewBaseBranch(GetSelectedLocalBaseBranch());
         PersistReviewMode(GetSelectedReviewMode());
-        PersistIncludeFullModifiedFilesForAddedLineChecks(ShouldIncludeFullModifiedFilesForAddedLineChecks());
+        PersistIncludeFullModifiedFiles(ShouldIncludeFullModifiedFiles());
         m_settings.Dispose();
     }
 
@@ -1602,16 +1672,174 @@ public partial class MainWindow : Window
         if (!RepositoryUtilities.IsGitRepository(localRepositoryPath))
             return;
 
-        var currentBaseBranch = LocalBaseBranchTextBox.Text?.Trim();
+        var currentBaseBranch = GetSelectedLocalBaseBranch();
         var resolvedBaseBranch = await ResolveLocalBaseBranchAsync(localRepositoryPath, currentBaseBranch, logWhenChanged: logWhenUpdated);
         if (string.IsNullOrWhiteSpace(resolvedBaseBranch))
             return;
-        if (string.Equals(currentBaseBranch, resolvedBaseBranch, StringComparison.OrdinalIgnoreCase))
-            return;
 
-        LocalBaseBranchTextBox.Text = resolvedBaseBranch;
+        var branchOptions = await TryGetLocalBaseBranchOptionsAsync(localRepositoryPath);
+        if (!branchOptions.Any())
+            branchOptions = [resolvedBaseBranch];
+
+        if (!branchOptions.Any(branch => branch.Equals(resolvedBaseBranch, StringComparison.OrdinalIgnoreCase)))
+            branchOptions.Add(resolvedBaseBranch);
+
+        SetLocalBaseBranchOptions(branchOptions, resolvedBaseBranch);
         PersistLocalReviewBaseBranch(resolvedBaseBranch);
-        UpdateActionButtonStates();
+        InvalidateLocalReviewChangedFilesCache();
+    }
+
+    private async Task<List<string>> TryGetLocalBaseBranchOptionsAsync(string localRepositoryPath)
+    {
+        var branchOptions = new List<string>();
+        var seenBranches = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddBranchOption(string branchName)
+        {
+            var normalizedBranchName = NormalizeBranchName(branchName);
+            if (string.IsNullOrWhiteSpace(normalizedBranchName) || !seenBranches.Add(normalizedBranchName))
+                return;
+
+            branchOptions.Add(normalizedBranchName);
+        }
+
+        var defaultBranch = await TryGetDefaultRemoteBranchAsync(localRepositoryPath);
+        var stopBranchCandidates = new List<string>();
+        AddStopBranchCandidate(defaultBranch);
+        AddStopBranchCandidate("main");
+        AddStopBranchCandidate("master");
+
+        var currentBranchResult = await m_gitCommandRunner.RunAsync(
+            localRepositoryPath,
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "HEAD");
+        if (currentBranchResult.IsSuccess)
+            AddBranchOption(currentBranchResult.StandardOutput);
+
+        var stopBranchRef = await ResolveFirstExistingBranchReferenceAsync(localRepositoryPath, stopBranchCandidates);
+        var stopCommitHash = await TryGetMergeBaseCommitAsync(localRepositoryPath, stopBranchRef);
+        var branchTipsByCommit = await LoadBranchTipsByCommitAsync(localRepositoryPath);
+
+        var historyArguments = string.IsNullOrWhiteSpace(stopCommitHash)
+            ? new[] { "rev-list", "--first-parent", "HEAD" }
+            : new[] { "rev-list", "--first-parent", $"{stopCommitHash}..HEAD" };
+        var historyResult = await m_gitCommandRunner.RunAsync(localRepositoryPath, historyArguments);
+        if (historyResult.IsSuccess)
+        {
+            foreach (var commitHash in ParseGitOutputLines(historyResult.StandardOutput))
+            {
+                if (branchTipsByCommit.TryGetValue(commitHash, out var branchesAtCommit))
+                {
+                    foreach (var branchAtCommit in branchesAtCommit)
+                        AddBranchOption(branchAtCommit);
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(stopCommitHash) &&
+            branchTipsByCommit.TryGetValue(stopCommitHash, out var stopCommitBranches))
+        {
+            foreach (var stopCommitBranch in stopCommitBranches)
+                AddBranchOption(stopCommitBranch);
+        }
+
+        var normalizedStopBranch = NormalizeBranchName(stopBranchRef);
+        if (!string.IsNullOrWhiteSpace(normalizedStopBranch))
+            AddBranchOption(normalizedStopBranch);
+        else if (!string.IsNullOrWhiteSpace(defaultBranch))
+            AddBranchOption(defaultBranch);
+
+        return branchOptions;
+
+        void AddStopBranchCandidate(string branchName)
+        {
+            var normalizedBranchName = NormalizeBranchName(branchName);
+            if (string.IsNullOrWhiteSpace(normalizedBranchName))
+                return;
+
+            if (!stopBranchCandidates.Any(candidate => candidate.Equals(normalizedBranchName, StringComparison.OrdinalIgnoreCase)))
+                stopBranchCandidates.Add(normalizedBranchName);
+        }
+    }
+
+    private async Task<Dictionary<string, List<string>>> LoadBranchTipsByCommitAsync(string localRepositoryPath)
+    {
+        var branchTipsByCommit = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var refsResult = await m_gitCommandRunner.RunAsync(
+            localRepositoryPath,
+            "for-each-ref",
+            "--format=%(objectname)%09%(refname:short)",
+            "refs/heads",
+            "refs/remotes/origin");
+        if (!refsResult.IsSuccess)
+            return branchTipsByCommit;
+
+        foreach (var line in ParseGitOutputLines(refsResult.StandardOutput))
+        {
+            var separatorIndex = line.IndexOf('\t');
+            if (separatorIndex <= 0 || separatorIndex >= line.Length - 1)
+                continue;
+
+            var commitHash = line[..separatorIndex].Trim();
+            var branchName = NormalizeBranchName(line[(separatorIndex + 1)..]);
+            if (string.IsNullOrWhiteSpace(commitHash) || string.IsNullOrWhiteSpace(branchName))
+                continue;
+
+            if (!branchTipsByCommit.TryGetValue(commitHash, out var branchesAtCommit))
+            {
+                branchesAtCommit = [];
+                branchTipsByCommit[commitHash] = branchesAtCommit;
+            }
+
+            if (!branchesAtCommit.Any(candidate => candidate.Equals(branchName, StringComparison.OrdinalIgnoreCase)))
+                branchesAtCommit.Add(branchName);
+        }
+
+        return branchTipsByCommit;
+    }
+
+    private async Task<string> ResolveFirstExistingBranchReferenceAsync(string localRepositoryPath, IReadOnlyList<string> branchNames)
+    {
+        foreach (var branchName in branchNames ?? [])
+        {
+            var branchReference = await ResolveBranchReferenceAsync(localRepositoryPath, branchName);
+            if (!string.IsNullOrWhiteSpace(branchReference))
+                return branchReference;
+        }
+
+        return null;
+    }
+
+    private async Task<string> ResolveBranchReferenceAsync(string localRepositoryPath, string branchName)
+    {
+        var normalizedBranchName = NormalizeBranchName(branchName);
+        if (string.IsNullOrWhiteSpace(normalizedBranchName))
+            return null;
+
+        if (await HasRemoteTrackingBranchAsync(localRepositoryPath, normalizedBranchName))
+            return $"origin/{normalizedBranchName}";
+        if (await HasLocalBranchAsync(localRepositoryPath, normalizedBranchName))
+            return normalizedBranchName;
+
+        return null;
+    }
+
+    private async Task<string> TryGetMergeBaseCommitAsync(string localRepositoryPath, string branchReference)
+    {
+        if (string.IsNullOrWhiteSpace(branchReference))
+            return null;
+
+        var result = await m_gitCommandRunner.RunAsync(
+            localRepositoryPath,
+            "merge-base",
+            "HEAD",
+            branchReference);
+        if (!result.IsSuccess)
+            return null;
+
+        return ParseGitOutputLines(result.StandardOutput).FirstOrDefault();
     }
 
     private async Task<string> ResolveLocalBaseBranchAsync(string localRepositoryPath, string requestedBaseBranch, bool logWhenChanged)
@@ -1680,6 +1908,58 @@ public partial class MainWindow : Window
             "--quiet",
             $"refs/remotes/origin/{branchName}");
         return result.IsSuccess;
+    }
+
+    private async Task<bool> HasLocalBranchAsync(string localRepositoryPath, string branchName)
+    {
+        if (string.IsNullOrWhiteSpace(branchName))
+            return false;
+
+        var result = await m_gitCommandRunner.RunAsync(
+            localRepositoryPath,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            $"refs/heads/{branchName}");
+        return result.IsSuccess;
+    }
+
+    private static List<string> ParseGitOutputLines(string output) =>
+        (output ?? string.Empty)
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToList();
+
+    private static string NormalizeBranchName(string branchName)
+    {
+        var normalized = branchName?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+            return null;
+
+        while (true)
+        {
+            var updated = normalized;
+            updated = StripPrefix(updated, "refs/heads/");
+            updated = StripPrefix(updated, "refs/remotes/");
+            updated = StripPrefix(updated, "heads/");
+            updated = StripPrefix(updated, "remotes/");
+            updated = StripPrefix(updated, "origin/");
+
+            if (updated.Equals(normalized, StringComparison.Ordinal))
+                break;
+
+            normalized = updated;
+        }
+
+        return normalized.Equals("HEAD", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : normalized;
+
+        static string StripPrefix(string text, string prefix) =>
+            text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                ? text[prefix.Length..]
+                : text;
     }
 
     private static string ParseRemoteHeadBranch(string rawOutput)
@@ -1816,12 +2096,12 @@ public partial class MainWindow : Window
         SaveSettingsSafely();
     }
 
-    private void PersistIncludeFullModifiedFilesForAddedLineChecks(bool includeFullModifiedFilesForAddedLineChecks)
+    private void PersistIncludeFullModifiedFiles(bool includeFullModifiedFiles)
     {
-        if (m_settings.IncludeFullModifiedFilesForAddedLineChecks == includeFullModifiedFilesForAddedLineChecks)
+        if (m_settings.IncludeFullModifiedFiles == includeFullModifiedFiles)
             return;
 
-        m_settings.IncludeFullModifiedFilesForAddedLineChecks = includeFullModifiedFilesForAddedLineChecks;
+        m_settings.IncludeFullModifiedFiles = includeFullModifiedFiles;
         SaveSettingsSafely();
     }
 
@@ -2010,3 +2290,5 @@ public partial class MainWindow : Window
         return Encoding.Unicode.GetString(bytes);
     }
 }
+
+

@@ -15,6 +15,7 @@ namespace ReviewG33k.ViewModels;
 public sealed class Settings : UserSettingsBase
 {
     private const int DefaultReviewModeIndex = -1;
+    private const string LegacyIncludeFullModifiedFilesKey = "IncludeFullModifiedFilesForAddedLineChecks";
 
     public static Settings Instance { get; } = new();
 
@@ -26,7 +27,7 @@ public sealed class Settings : UserSettingsBase
         LocalReviewBaseBranch = "main";
         ReviewModeIndex = DefaultReviewModeIndex;
         UseLocalCommittedReview = false;
-        IncludeFullModifiedFilesForAddedLineChecks = false;
+        IncludeFullModifiedFiles = false;
     }
 
     public string RepositoryRootPath
@@ -71,9 +72,11 @@ public sealed class Settings : UserSettingsBase
         set => Set(value);
     }
 
-    public bool IncludeFullModifiedFilesForAddedLineChecks
+    public bool IncludeFullModifiedFiles
     {
-        get => Get<bool>();
-        set => Set(value);
+        // Keep using the legacy persisted key so existing user settings carry over.
+        get => Get<bool>(LegacyIncludeFullModifiedFilesKey);
+        set => Set(value, LegacyIncludeFullModifiedFilesKey);
     }
 }
+

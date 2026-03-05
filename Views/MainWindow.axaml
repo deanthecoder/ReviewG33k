@@ -178,10 +178,10 @@
                                    Margin="14,0,8,0"
                                    VerticalAlignment="Center"
                                    Text="Base Branch:" />
-                        <TextBox x:Name="LocalBaseBranchTextBox"
-                                 Grid.Column="4"
-                                 Width="140"
-                                 Watermark="main" />
+                        <ComboBox x:Name="LocalBaseBranchComboBox"
+                                  Grid.Column="4"
+                                  Width="220"
+                                  SelectionChanged="LocalBaseBranchComboBox_OnSelectionChanged" />
                     </Grid>
 
                     <Grid Grid.Row="6"

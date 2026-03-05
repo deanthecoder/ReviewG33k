@@ -62,8 +62,8 @@ public sealed class CodeSmellReportAnalyzerTests
         Assert.That(constructorEventSubscriptionCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(resxMissingLocaleKeysCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
         Assert.That(resxUnexpectedExtraKeysCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
-        Assert.That(localVariableCanBeConstCheck.Scope, Is.EqualTo(CodeReviewCheckScope.WholeChangedFile));
-        Assert.That(unusedLocalVariableCheck.Scope, Is.EqualTo(CodeReviewCheckScope.WholeChangedFile));
+        Assert.That(localVariableCanBeConstCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(unusedLocalVariableCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
     }
 
     [Test]
@@ -85,10 +85,36 @@ public sealed class CodeSmellReportAnalyzerTests
         var analyzer = new CodeSmellReportAnalyzer(new GitCommandRunner());
         var changedFile = CreateChangedFile(CreateStringConcatSource(), [1]);
 
-        var report = analyzer.AnalyzeFiles([changedFile], includeFullModifiedFilesForAddedLineChecks: true);
+        var report = analyzer.AnalyzeFiles([changedFile], includeFullModifiedFiles: true);
 
         Assert.That(
             report.Findings.Any(finding => finding.RuleId == CodeReviewRuleIds.StringConcatSameTarget),
+            Is.True);
+    }
+
+    [Test]
+    public void AnalyzeFilesWhenChangedLineScopeSkipsLocalVariableConstOutsideAddedLines()
+    {
+        var analyzer = new CodeSmellReportAnalyzer(new GitCommandRunner());
+        var changedFile = CreateChangedFile(CreateConstCandidateSource(), [1]);
+
+        var report = analyzer.AnalyzeFiles([changedFile]);
+
+        Assert.That(
+            report.Findings.Any(finding => finding.RuleId == "local-variable-can-be-const"),
+            Is.False);
+    }
+
+    [Test]
+    public void AnalyzeFilesWhenFullModifiedFileScopeEnabledIncludesLocalVariableConstOutsideAddedLines()
+    {
+        var analyzer = new CodeSmellReportAnalyzer(new GitCommandRunner());
+        var changedFile = CreateChangedFile(CreateConstCandidateSource(), [1]);
+
+        var report = analyzer.AnalyzeFiles([changedFile], includeFullModifiedFiles: true);
+
+        Assert.That(
+            report.Findings.Any(finding => finding.RuleId == "local-variable-can-be-const"),
             Is.True);
     }
 
@@ -155,6 +181,18 @@ public sealed class CodeSmellReportAnalyzerTests
         }
         """;
 
+    private static string CreateConstCandidateSource() =>
+        """
+        public sealed class Sample
+        {
+            public void Run()
+            {
+                var title = "ReviewG33k";
+                System.Console.WriteLine(title);
+            }
+        }
+        """;
+
     private sealed class ThrowingTestCheck : CodeReviewCheckBase
     {
         public override string RuleId => "throwing-test-check";
@@ -185,3 +223,5 @@ public sealed class CodeSmellReportAnalyzerTests
         }
     }
 }
+
+

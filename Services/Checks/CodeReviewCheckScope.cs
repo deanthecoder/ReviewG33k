@@ -12,6 +12,6 @@ namespace ReviewG33k.Services.Checks;
 
 public enum CodeReviewCheckScope
 {
-    AddedLinesOnly ,
-    WholeChangedFile ,
-    ChangedFileSet }
+    AddedLinesOnly,
+    ChangedFileSet
+}
