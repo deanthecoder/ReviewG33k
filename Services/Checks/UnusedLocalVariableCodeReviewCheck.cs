@@ -22,7 +22,7 @@ public sealed class UnusedLocalVariableCodeReviewCheck : RoslynSemanticCodeRevie
 
     public override string DisplayName => "Unused local variables";
 
-    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.WholeChangedFile;
+    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
 
     protected override void AnalyzeFile(
         CodeReviewAnalysisContext context,
@@ -43,6 +43,9 @@ public sealed class UnusedLocalVariableCodeReviewCheck : RoslynSemanticCodeRevie
                     continue;
 
                 var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(variable);
+                if (!file.IsAdded && !file.AddedLineNumbers.Contains(lineNumber))
+                    continue;
+
                 AddFinding(
                     report,
                     CodeReviewFindingSeverity.Hint,

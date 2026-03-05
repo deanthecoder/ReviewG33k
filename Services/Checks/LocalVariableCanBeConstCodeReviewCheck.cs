@@ -25,7 +25,7 @@ public sealed class LocalVariableCanBeConstCodeReviewCheck : RoslynSemanticCodeR
 
     public override string DisplayName => "Local variable can be const";
 
-    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.WholeChangedFile;
+    public override CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
 
     protected override void AnalyzeFile(
         CodeReviewAnalysisContext context,
@@ -80,6 +80,9 @@ public sealed class LocalVariableCanBeConstCodeReviewCheck : RoslynSemanticCodeR
                     continue;
 
                 var lineNumber = variable.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                if (!file.IsAdded && !file.AddedLineNumbers.Contains(lineNumber))
+                    continue;
+
                 AddFinding(
                     report,
                     CodeReviewFindingSeverity.Hint,
