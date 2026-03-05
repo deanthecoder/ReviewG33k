@@ -14,6 +14,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -37,6 +38,7 @@ namespace ReviewG33k.Views;
 
 public partial class MainWindow : Window
 {
+    private const string ApplicationTitle = "ReviewG33k";
     private enum ReviewMode
     {
         PullRequest,
@@ -85,6 +87,7 @@ public partial class MainWindow : Window
         m_viewModel = new MainWindowViewModel(m_settings);
         InitializeComponent();
         DataContext = m_viewModel;
+        Title = BuildWindowTitle();
         PullRequestUrlTextBox.AddHandler(DragDrop.DragOverEvent, PullRequestUrlTextBox_OnDragOver);
         PullRequestUrlTextBox.AddHandler(DragDrop.DropEvent, PullRequestUrlTextBox_OnDrop);
         PullRequestUrlTextBox.TextChanged += PullRequestUrlTextBox_OnTextChanged;
@@ -161,6 +164,15 @@ public partial class MainWindow : Window
 
         _ = UpdatePullRequestPreviewAsync();
         UpdateActionButtonStates();
+    }
+
+    private static string BuildWindowTitle()
+    {
+        var assembly = Assembly.GetEntryAssembly() ?? typeof(MainWindow).Assembly;
+        var displayVersion = assembly.GetDisplayVersion();
+        return string.IsNullOrWhiteSpace(displayVersion)
+            ? ApplicationTitle
+            : $"{ApplicationTitle} v{displayVersion}";
     }
 
     private static void PullRequestUrlTextBox_OnDragOver(object sender, DragEventArgs e)
@@ -309,10 +321,7 @@ public partial class MainWindow : Window
                 AppendLog($"Local review repository: {localRepositoryPath}");
                 AppendLog($"Comparing current branch changes against: origin/{baseBranch}");
 
-                if (!string.IsNullOrWhiteSpace(m_latestSolutionPath))
-                    AppendLog($"Solution selected: {m_latestSolutionPath}");
-                else
-                    AppendLog("No .sln file found in local repository.");
+                AppendLog(string.IsNullOrWhiteSpace(m_latestSolutionPath) ? "No .sln file found in local repository." : $"Solution selected: {m_latestSolutionPath}");
 
                 var changedFileSource = new GitBranchComparisonChangedFileSource(
                     m_gitCommandRunner,
@@ -355,10 +364,7 @@ public partial class MainWindow : Window
                 AppendLog($"Local review repository: {localRepositoryPath}");
                 AppendLog("Comparing local uncommitted/untracked changes against: HEAD");
 
-                if (!string.IsNullOrWhiteSpace(m_latestSolutionPath))
-                    AppendLog($"Solution selected: {m_latestSolutionPath}");
-                else
-                    AppendLog("No .sln file found in local repository.");
+                AppendLog(string.IsNullOrWhiteSpace(m_latestSolutionPath) ? "No .sln file found in local repository." : $"Solution selected: {m_latestSolutionPath}");
 
                 var changedFileSource = new GitWorkingTreeChangedFileSource(m_gitCommandRunner, localRepositoryPath);
                 var sourceResult = await changedFileSource.LoadAsync(AppendLog);
@@ -1990,10 +1996,10 @@ public partial class MainWindow : Window
             case Uri uri:
                 yield return uri.ToString();
                 yield break;
-            case byte[] bytes when bytes.Length > 0:
+            case byte[] { Length: > 0 } bytes:
                 yield return DecodeBytes(bytes);
                 yield break;
-            case MemoryStream stream when stream.Length > 0:
+            case MemoryStream { Length: > 0 } stream:
                 yield return DecodeBytes(stream.ToArray());
                 yield break;
             case IEnumerable<object> enumerable:
