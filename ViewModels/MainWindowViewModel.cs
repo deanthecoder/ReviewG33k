@@ -53,6 +53,10 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<string> LocalBaseBranchOptions { get; } = [];
 
+    public MainWindowViewModel()
+    {
+    }
+    
     public MainWindowViewModel(Settings settings)
     {
         m_settings = settings ?? throw new ArgumentNullException(nameof(settings));

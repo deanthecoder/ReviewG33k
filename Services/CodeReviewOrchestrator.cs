@@ -66,14 +66,7 @@ public sealed class CodeReviewOrchestrator
             .GetDir(CodeReviewFolderName)
             .GetDir(pullRequest.RepoSlug)
             .GetDir($"PR-{pullRequest.PullRequestId}");
-        await RemoveWorktreeIfPresentAsync(localRepository, reviewFolderInfo.FullName, log, cancellationToken);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        reviewFolderInfo.Parent?.Create();
-
-        log($"Creating worktree copy at '{reviewFolderInfo.FullName}' on local branch '{reviewBranch}'...");
-        var addResult = await m_gitCommandRunner.RunAsync(localRepository, cancellationToken, "worktree", "add", "--force", "-B", reviewBranch, reviewFolderInfo.FullName, reviewRef);
-        EnsureSuccess(addResult, "Failed to create review worktree.");
+        await EnsureReviewWorktreeReadyAsync(localRepository, reviewFolderInfo.FullName, reviewBranch, reviewRef, log, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
         var solutionPath = FindBestSolutionFile(reviewFolderInfo.FullName, changedPaths);
@@ -287,24 +280,62 @@ public sealed class CodeReviewOrchestrator
         return result;
     }
 
-    private async Task RemoveWorktreeIfPresentAsync(
+    private async Task EnsureReviewWorktreeReadyAsync(
         string localRepository,
         string reviewFolder,
+        string reviewBranch,
+        string reviewRef,
         Action<string> log,
         CancellationToken cancellationToken)
     {
         var reviewFolderInfo = reviewFolder.ToDir();
-        if (reviewFolderInfo.Exists())
+        if (!reviewFolderInfo.Exists())
         {
-            log($"Removing existing review folder at '{reviewFolder}'...");
-            var removeResult = await m_gitCommandRunner.RunAsync(localRepository, cancellationToken, "worktree", "remove", "--force", reviewFolder);
-            if (!removeResult.IsSuccess)
-                log($"Warning: git worktree remove reported an issue. {removeResult.GetCombinedOutput()}");
-
-            // git worktree remove often deletes the folder itself.
-            if (reviewFolderInfo.Exists())
-                reviewFolderInfo.TryDelete();
+            reviewFolderInfo.Parent?.Create();
+            log($"Creating worktree copy at '{reviewFolder}' on local branch '{reviewBranch}'...");
+            var addResult = await m_gitCommandRunner.RunAsync(localRepository, cancellationToken, "worktree", "add", "--force", "-B", reviewBranch, reviewFolder, reviewRef);
+            EnsureSuccess(addResult, "Failed to create review worktree.");
+            return;
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var currentHeadResult = await m_gitCommandRunner.RunAsync(reviewFolder, cancellationToken, "rev-parse", "--verify", "HEAD");
+        var targetHeadResult = await m_gitCommandRunner.RunAsync(localRepository, cancellationToken, "rev-parse", "--verify", reviewRef);
+        if (currentHeadResult.IsSuccess &&
+            targetHeadResult.IsSuccess &&
+            AreSameCommit(currentHeadResult.StandardOutput, targetHeadResult.StandardOutput))
+        {
+            log($"Reusing existing review worktree at '{reviewFolder}' (already up to date).");
+            return;
+        }
+
+        log($"Refreshing existing review worktree at '{reviewFolder}'...");
+        var checkoutResult = await m_gitCommandRunner.RunAsync(reviewFolder, cancellationToken, "checkout", "--force", "-B", reviewBranch, reviewRef);
+        EnsureSuccess(
+            checkoutResult,
+            $"Failed to refresh existing review worktree at '{reviewFolder}'. Close apps using this folder and retry.");
+
+        var cleanResult = await m_gitCommandRunner.RunAsync(reviewFolder, cancellationToken, "clean", "-fd");
+        if (!cleanResult.IsSuccess)
+            log($"Warning: could not fully clean review worktree. {cleanResult.GetCombinedOutput()}");
+    }
+
+    private static bool AreSameCommit(string leftCommit, string rightCommit) =>
+        string.Equals(
+            NormalizeCommitHash(leftCommit),
+            NormalizeCommitHash(rightCommit),
+            StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeCommitHash(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var firstLine = value
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault() ?? string.Empty;
+        return firstLine.Trim();
     }
 
     private static IEnumerable<string> ParseWorktreePaths(string output)
