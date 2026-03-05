@@ -1964,6 +1964,28 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void UnusedPrivateMemberCheckWhenPrivateExtensionMethodIsUsedViaExtensionSyntaxDoesNotReport()
+    {
+        const string source = """
+            public static class SampleExtensions
+            {
+                public static void Run(this string input)
+                {
+                    input.TrySetColor("Accent", 123);
+                }
+
+                private static void TrySetColor(this string input, string key, object value)
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedPrivateMemberCodeReviewCheck(), "A", source, Enumerable.Range(1, 13));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void DisposableNotDisposedCheckWhenPassedToConstructorDoesNotReport()
     {
         const string source = """

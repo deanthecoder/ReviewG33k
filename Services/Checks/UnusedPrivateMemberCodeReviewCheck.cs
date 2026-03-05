@@ -190,8 +190,21 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
         if (left == null || right == null)
             return false;
 
-        return SymbolEqualityComparer.Default.Equals(left, right) ||
-               SymbolEqualityComparer.Default.Equals(left.OriginalDefinition, right.OriginalDefinition);
+        var normalizedLeft = NormalizeSymbolForComparison(left);
+        var normalizedRight = NormalizeSymbolForComparison(right);
+
+        return SymbolEqualityComparer.Default.Equals(normalizedLeft, normalizedRight) ||
+               SymbolEqualityComparer.Default.Equals(normalizedLeft?.OriginalDefinition, normalizedRight?.OriginalDefinition);
+    }
+
+    private static ISymbol NormalizeSymbolForComparison(ISymbol symbol)
+    {
+        if (symbol is not IMethodSymbol methodSymbol)
+            return symbol;
+
+        // Extension invocation syntax (`value.ExtensionMethod(...)`) often produces a reduced method symbol.
+        // Compare against the underlying declared extension method to avoid false "unused" reports.
+        return methodSymbol.ReducedFrom ?? methodSymbol.ConstructedFrom ?? methodSymbol;
     }
 
     private static bool IsInPartialType(SyntaxNode node)
