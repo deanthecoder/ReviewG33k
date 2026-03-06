@@ -8,6 +8,8 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System.Net;
+using ReviewG33k.Services;
 using ReviewG33k.ViewModels;
 
 namespace ReviewG33k.Tests;
@@ -68,6 +70,14 @@ public sealed class MainWindowViewModelTests
     }
 
     [Test]
+    public void PullRequestUrlWhenValidBitbucketUrlCanonicalizesValue()
+    {
+        var viewModel = new MainWindowViewModel(new Settings());
+        viewModel.PullRequestUrl = " https://bitbucket.example.com/projects/PROJ/repos/sample-repo/pull-requests/42?foo=bar ";
+        Assert.That(viewModel.PullRequestUrl, Is.EqualTo("https://bitbucket.example.com/projects/PROJ/repos/sample-repo/pull-requests/42"));
+    }
+
+    [Test]
     public void AddLocalBaseBranchOptionWhenDuplicateIgnoringCaseDoesNotAddAgain()
     {
         var viewModel = new MainWindowViewModel(new Settings());
@@ -106,6 +116,8 @@ public sealed class MainWindowViewModelTests
         Assert.Multiple(() =>
         {
             Assert.That(viewModel.ShowPullRequestInputs, Is.True);
+            Assert.That(viewModel.IsPullRequestReviewMode, Is.True);
+            Assert.That(viewModel.IsAnyLocalReviewMode, Is.False);
             Assert.That(viewModel.ShowLocalBaseBranch, Is.False);
             Assert.That(viewModel.PrepareReviewButtonText, Is.EqualTo("Review PR"));
         });
@@ -122,8 +134,27 @@ public sealed class MainWindowViewModelTests
         Assert.Multiple(() =>
         {
             Assert.That(viewModel.ShowPullRequestInputs, Is.False);
+            Assert.That(viewModel.IsLocalCommittedReviewMode, Is.True);
+            Assert.That(viewModel.IsAnyLocalReviewMode, Is.True);
             Assert.That(viewModel.ShowLocalBaseBranch, Is.True);
             Assert.That(viewModel.PrepareReviewButtonText, Is.EqualTo("Review Local"));
+        });
+    }
+
+    [Test]
+    public void ReviewModeFlagsWhenLocalUncommittedSelectedReflectState()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 2
+        };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.IsPullRequestReviewMode, Is.False);
+            Assert.That(viewModel.IsLocalCommittedReviewMode, Is.False);
+            Assert.That(viewModel.IsLocalUncommittedReviewMode, Is.True);
+            Assert.That(viewModel.IsAnyLocalReviewMode, Is.True);
         });
     }
 
@@ -151,7 +182,6 @@ public sealed class MainWindowViewModelTests
         };
 
         viewModel.UpdateActionStateInputs(
-            isGitAvailable: true,
             canReviewCurrentPullRequest: false,
             hasValidPullRequestInput: true,
             hasValidPullRequestPrepareInputs: true,
@@ -177,7 +207,6 @@ public sealed class MainWindowViewModelTests
         };
 
         viewModel.UpdateActionStateInputs(
-            isGitAvailable: true,
             canReviewCurrentPullRequest: true,
             hasValidPullRequestInput: true,
             hasValidPullRequestPrepareInputs: true,
@@ -197,6 +226,28 @@ public sealed class MainWindowViewModelTests
     }
 
     [Test]
+    public void IsGitAvailableWhenFalseDisablesPrepareReview()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 1
+        };
+
+        viewModel.UpdateActionStateInputs(
+            canReviewCurrentPullRequest: true,
+            hasValidPullRequestInput: true,
+            hasValidPullRequestPrepareInputs: true,
+            hasValidLocalPrepareInputs: true,
+            hasAvailableSolution: false,
+            canCancelCurrentOperation: false,
+            isCancellationRequested: false);
+        Assert.That(viewModel.CanPrepareReview, Is.True);
+
+        viewModel.IsGitAvailable = false;
+        Assert.That(viewModel.CanPrepareReview, Is.False);
+    }
+
+    [Test]
     public void UpdateActionStateInputsWhenCancellationRequestedShowsStoppingText()
     {
         var viewModel = new MainWindowViewModel(new Settings())
@@ -206,7 +257,6 @@ public sealed class MainWindowViewModelTests
         };
 
         viewModel.UpdateActionStateInputs(
-            isGitAvailable: true,
             canReviewCurrentPullRequest: true,
             hasValidPullRequestInput: true,
             hasValidPullRequestPrepareInputs: true,
@@ -277,9 +327,11 @@ public sealed class MainWindowViewModelTests
             ScanScopeIndex = 0
         };
         Assert.That(viewModel.ScanScopeInfoTooltip, Does.Contain("newly added lines"));
+        Assert.That(viewModel.IncludeFullModifiedFiles, Is.False);
 
         viewModel.ScanScopeIndex = 1;
         Assert.That(viewModel.ScanScopeInfoTooltip, Does.Contain("entire modified files"));
+        Assert.That(viewModel.IncludeFullModifiedFiles, Is.True);
     }
 
     [Test]
@@ -362,5 +414,326 @@ public sealed class MainWindowViewModelTests
             Assert.That(viewModel.PreviewPullRequestStateDisplay, Is.EqualTo("N/A"));
             Assert.That(viewModel.PreviewPullRequestIsOpen, Is.Null);
         });
+    }
+
+    [Test]
+    public void TryParsePullRequestUrlWhenValidReturnsPullRequest()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            PullRequestUrl = "https://bitbucket.example.com/projects/PROJ/repos/sample-repo/pull-requests/42"
+        };
+
+        var parsed = viewModel.TryParsePullRequestUrl(out var pullRequest, out var parseError);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(parsed, Is.True);
+            Assert.That(parseError, Is.Null.Or.Empty);
+            Assert.That(pullRequest, Is.Not.Null);
+            Assert.That(pullRequest.SourceUrl, Is.EqualTo("https://bitbucket.example.com/projects/PROJ/repos/sample-repo/pull-requests/42"));
+        });
+    }
+
+    [Test]
+    public void TryParsePullRequestUrlWhenInvalidReturnsFalse()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            PullRequestUrl = "not-a-valid-pr-url"
+        };
+
+        var parsed = viewModel.TryParsePullRequestUrl(out var pullRequest, out var parseError);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(parsed, Is.False);
+            Assert.That(pullRequest, Is.Null);
+            Assert.That(parseError, Is.Not.Null.And.Not.Empty);
+        });
+    }
+
+    [Test]
+    public void RefreshActionStateWhenPullRequestIsMergedKeepsPrepareEnabled()
+    {
+        var tempRoot = CreateTempRoot();
+        try
+        {
+            var settings = new Settings
+            {
+                RepositoryRootPath = tempRoot
+            };
+            var viewModel = new MainWindowViewModel(settings)
+            {
+                ReviewModeIndex = 0,
+                PullRequestUrl = "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/19"
+            };
+            viewModel.UpdatePullRequestReviewState("Merged PR", "MERGED");
+
+            var resolvedSolutionPath = viewModel.RefreshActionState(
+                new MainWindowActionStateService(new MainWindowInputValidationService()),
+                latestSolutionPath: null,
+                latestReviewWorktreePath: null,
+                canCancelCurrentOperation: false,
+                isCancellationRequested: false);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(resolvedSolutionPath, Is.Null);
+                Assert.That(viewModel.CanPrepareReview, Is.True);
+            });
+        }
+        finally
+        {
+            DeleteTempRoot(tempRoot);
+        }
+    }
+
+    [Test]
+    public async Task RefreshPullRequestPreviewAsyncWhenNotInPullRequestModeClearsPreview()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 1,
+            PullRequestUrl = "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/27"
+        };
+        viewModel.UpdatePullRequestMetadataPreview("Existing", "Dean", "OPEN");
+
+        using var metadataClient = CreateMetadataClient([]);
+        var previewService = new PullRequestPreviewService(metadataClient);
+        var preview = await viewModel.RefreshPullRequestPreviewAsync(previewService, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(preview.PullRequest, Is.Null);
+            Assert.That(preview.Metadata, Is.Null);
+            Assert.That(viewModel.PullRequestMetadataText, Is.EqualTo(string.Empty));
+        });
+    }
+
+    [Test]
+    public void MarkGitAvailabilityCheckedReturnsTrueOnlyOnce()
+    {
+        var viewModel = new MainWindowViewModel(new Settings());
+
+        var first = viewModel.MarkGitAvailabilityChecked();
+        var second = viewModel.MarkGitAvailabilityChecked();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first, Is.True);
+            Assert.That(second, Is.False);
+        });
+    }
+
+    [Test]
+    public void TryApplyPullRequestUrlFromClipboardWhenEligibleAppliesCanonicalUrl()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 0
+        };
+
+        var applied = viewModel.TryApplyPullRequestUrlFromClipboard(
+            " https://bitbucket.example.com/projects/PROJ/repos/sample-repo/pull-requests/42?foo=bar ");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied, Is.True);
+            Assert.That(viewModel.PullRequestUrl, Is.EqualTo("https://bitbucket.example.com/projects/PROJ/repos/sample-repo/pull-requests/42"));
+        });
+    }
+
+    [Test]
+    public void TryApplyPullRequestUrlFromClipboardWhenNotPullRequestModeDoesNotApply()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 1
+        };
+
+        var applied = viewModel.TryApplyPullRequestUrlFromClipboard(
+            "https://bitbucket.example.com/projects/PROJ/repos/sample-repo/pull-requests/42");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied, Is.False);
+            Assert.That(viewModel.PullRequestUrl, Is.EqualTo(string.Empty));
+        });
+    }
+
+    [Test]
+    public void ConfigureCommandsWhenPrepareIsAllowedEnablesPrepareReviewCommand()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 1
+        };
+        viewModel.UpdateActionStateInputs(
+            canReviewCurrentPullRequest: true,
+            hasValidPullRequestInput: false,
+            hasValidPullRequestPrepareInputs: false,
+            hasValidLocalPrepareInputs: true,
+            hasAvailableSolution: false,
+            canCancelCurrentOperation: false,
+            isCancellationRequested: false);
+
+        viewModel.ConfigureCommands(
+            () => Task.CompletedTask,
+            () => Task.CompletedTask,
+            () => Task.CompletedTask,
+            () => { },
+            () => { },
+            () => { });
+
+        Assert.That(viewModel.PrepareReviewCommand.CanExecute(null), Is.True);
+    }
+
+    [Test]
+    public async Task PrepareReviewCommandWhenExecutedRunsConfiguredAsyncDelegate()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 1
+        };
+        viewModel.UpdateActionStateInputs(
+            canReviewCurrentPullRequest: true,
+            hasValidPullRequestInput: false,
+            hasValidPullRequestPrepareInputs: false,
+            hasValidLocalPrepareInputs: true,
+            hasAvailableSolution: false,
+            canCancelCurrentOperation: false,
+            isCancellationRequested: false);
+
+        var commandInvoked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        viewModel.ConfigureCommands(
+            () => Task.CompletedTask,
+            () => Task.CompletedTask,
+            () =>
+            {
+                commandInvoked.TrySetResult(true);
+                return Task.CompletedTask;
+            },
+            () => { },
+            () => { },
+            () => { });
+
+        viewModel.PrepareReviewCommand.Execute(null);
+        var completed = await Task.WhenAny(commandInvoked.Task, Task.Delay(1000));
+        Assert.That(completed, Is.EqualTo(commandInvoked.Task));
+    }
+
+    [Test]
+    public void CancelProcessingCommandCanExecuteTracksCancellationState()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 0,
+            IsBusy = true
+        };
+        viewModel.ConfigureCommands(
+            () => Task.CompletedTask,
+            () => Task.CompletedTask,
+            () => Task.CompletedTask,
+            () => { },
+            () => { },
+            () => { });
+
+        viewModel.UpdateActionStateInputs(
+            canReviewCurrentPullRequest: true,
+            hasValidPullRequestInput: true,
+            hasValidPullRequestPrepareInputs: true,
+            hasValidLocalPrepareInputs: false,
+            hasAvailableSolution: false,
+            canCancelCurrentOperation: true,
+            isCancellationRequested: false);
+        Assert.That(viewModel.CancelProcessingCommand.CanExecute(null), Is.True);
+
+        viewModel.UpdateActionStateInputs(
+            canReviewCurrentPullRequest: true,
+            hasValidPullRequestInput: true,
+            hasValidPullRequestPrepareInputs: true,
+            hasValidLocalPrepareInputs: false,
+            hasAvailableSolution: false,
+            canCancelCurrentOperation: true,
+            isCancellationRequested: true);
+        Assert.That(viewModel.CancelProcessingCommand.CanExecute(null), Is.False);
+    }
+
+    [Test]
+    public void CopyLogLineCommandWhenNotConfiguredIsDisabled()
+    {
+        var viewModel = new MainWindowViewModel(new Settings());
+
+        Assert.That(viewModel.CopyLogLineCommand.CanExecute(new LogLineEntry("line", null)), Is.False);
+    }
+
+    [Test]
+    public async Task CopyLogLineCommandWhenConfiguredRunsDelegateForLogEntry()
+    {
+        var viewModel = new MainWindowViewModel(new Settings());
+        var copiedEntry = (LogLineEntry)null;
+        var commandInvoked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        viewModel.ConfigureCommands(
+            () => Task.CompletedTask,
+            () => Task.CompletedTask,
+            () => Task.CompletedTask,
+            () => { },
+            () => { },
+            () => { },
+            parameter =>
+            {
+                copiedEntry = parameter as LogLineEntry;
+                commandInvoked.TrySetResult(true);
+                return Task.CompletedTask;
+            },
+            parameter => parameter is LogLineEntry);
+
+        var entryToCopy = new LogLineEntry("copy me", null);
+        Assert.That(viewModel.CopyLogLineCommand.CanExecute(entryToCopy), Is.True);
+        Assert.That(viewModel.CopyLogLineCommand.CanExecute(null), Is.False);
+
+        viewModel.CopyLogLineCommand.Execute(entryToCopy);
+        var completed = await Task.WhenAny(commandInvoked.Task, Task.Delay(1000));
+        Assert.That(completed, Is.EqualTo(commandInvoked.Task));
+        Assert.That(copiedEntry, Is.SameAs(entryToCopy));
+    }
+
+    private static BitbucketPullRequestMetadataClient CreateMetadataClient(IEnumerable<HttpResponseMessage> responses)
+    {
+        var httpClient = new HttpClient(new StubHttpMessageHandler(responses));
+        return new BitbucketPullRequestMetadataClient(httpClient);
+    }
+
+    private static string CreateTempRoot()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ReviewG33kViewModelTests-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private static void DeleteTempRoot(string tempRoot)
+    {
+        if (Directory.Exists(tempRoot))
+            Directory.Delete(tempRoot, recursive: true);
+    }
+
+    private sealed class StubHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly Queue<HttpResponseMessage> m_responses;
+
+        public StubHttpMessageHandler(IEnumerable<HttpResponseMessage> responses)
+        {
+            m_responses = new Queue<HttpResponseMessage>(responses ?? []);
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (m_responses.Count == 0)
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+
+            return Task.FromResult(m_responses.Dequeue());
+        }
     }
 }

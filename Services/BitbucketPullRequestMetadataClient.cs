@@ -16,6 +16,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.RegularExpressions;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -45,6 +46,8 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
     private readonly bool m_ownsHttpClient;
     private readonly ConcurrentDictionary<string, BitbucketPullRequestMetadata> m_metadataCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, string[]> m_changedPathsCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, string> m_mergeCommitHashCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Regex CommitHashRegex = new("^[0-9a-f]{7,40}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public BitbucketPullRequestMetadataClient()
         : this(CreateDefaultHttpClient(), ownsHttpClient: true)
@@ -111,6 +114,31 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
 
         m_changedPathsCache[pullRequest.SourceUrl] = uniquePaths;
         return uniquePaths;
+    }
+
+    internal async Task<string> TryGetMergeCommitHashAsync(BitbucketPullRequestReference pullRequest, CancellationToken cancellationToken = default)
+    {
+        if (pullRequest == null)
+            return null;
+
+        if (m_mergeCommitHashCache.TryGetValue(pullRequest.SourceUrl, out var cachedHash))
+            return cachedHash;
+
+        var metadataJson = await TryGetResponseTextAsync(pullRequest, BuildMetadataApiUrl(pullRequest), cancellationToken);
+        if (TryExtractMergeCommitHashFromMetadata(metadataJson, out var metadataMergeCommitHash))
+        {
+            m_mergeCommitHashCache[pullRequest.SourceUrl] = metadataMergeCommitHash;
+            return metadataMergeCommitHash;
+        }
+
+        var activitiesJson = await TryGetResponseTextAsync(pullRequest, BuildActivitiesApiUrl(pullRequest, 0, 200), cancellationToken);
+        if (TryExtractMergeCommitHashFromActivities(activitiesJson, out var activitiesMergeCommitHash))
+        {
+            m_mergeCommitHashCache[pullRequest.SourceUrl] = activitiesMergeCommitHash;
+            return activitiesMergeCommitHash;
+        }
+
+        return null;
     }
 
     public async Task<(bool Success, string ErrorMessage)> TryAddInlineCommentAsync(
@@ -390,6 +418,9 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
     private static string BuildChangesApiUrl(BitbucketPullRequestReference pullRequest, int start, int limit) =>
         $"https://{pullRequest.Host}/rest/api/1.0/projects/{Uri.EscapeDataString(pullRequest.ProjectKey)}/repos/{Uri.EscapeDataString(pullRequest.RepoSlug)}/pull-requests/{pullRequest.PullRequestId}/changes?start={start}&limit={limit}";
 
+    private static string BuildActivitiesApiUrl(BitbucketPullRequestReference pullRequest, int start, int limit) =>
+        $"https://{pullRequest.Host}/rest/api/1.0/projects/{Uri.EscapeDataString(pullRequest.ProjectKey)}/repos/{Uri.EscapeDataString(pullRequest.RepoSlug)}/pull-requests/{pullRequest.PullRequestId}/activities?start={start}&limit={limit}";
+
     private static string BuildCommentsApiUrl(BitbucketPullRequestReference pullRequest) =>
         $"https://{pullRequest.Host}/rest/api/1.0/projects/{Uri.EscapeDataString(pullRequest.ProjectKey)}/repos/{Uri.EscapeDataString(pullRequest.RepoSlug)}/pull-requests/{pullRequest.PullRequestId}/comments";
 
@@ -517,6 +548,114 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
             return false;
         }
     }
+
+    private static bool TryExtractMergeCommitHashFromMetadata(string json, out string mergeCommitHash)
+    {
+        mergeCommitHash = null;
+        if (string.IsNullOrWhiteSpace(json))
+            return false;
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("properties", out var propertiesElement) || propertiesElement.ValueKind != JsonValueKind.Object)
+                return false;
+
+            if (!propertiesElement.TryGetProperty("mergeCommit", out var mergeCommitElement) || mergeCommitElement.ValueKind != JsonValueKind.Object)
+                return false;
+
+            return TryGetCommitHashFromElement(mergeCommitElement, out mergeCommitHash);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryExtractMergeCommitHashFromActivities(string json, out string mergeCommitHash)
+    {
+        mergeCommitHash = null;
+        if (string.IsNullOrWhiteSpace(json))
+            return false;
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("values", out var valuesElement) || valuesElement.ValueKind != JsonValueKind.Array)
+                return false;
+
+            foreach (var activityElement in valuesElement.EnumerateArray())
+            {
+                if (!IsMergedActivity(activityElement))
+                    continue;
+
+                if (activityElement.TryGetProperty("commit", out var commitElement) &&
+                    commitElement.ValueKind == JsonValueKind.Object &&
+                    TryGetCommitHashFromElement(commitElement, out mergeCommitHash))
+                {
+                    return true;
+                }
+
+                if (TryGetCommitHashFromElement(activityElement, out mergeCommitHash))
+                    return true;
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsMergedActivity(JsonElement activityElement)
+    {
+        if (!activityElement.TryGetProperty("action", out var actionElement) || actionElement.ValueKind != JsonValueKind.String)
+            return false;
+
+        var action = actionElement.GetString();
+        return string.Equals(action, "MERGED", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryGetCommitHashFromElement(JsonElement element, out string commitHash)
+    {
+        commitHash = null;
+
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            if (element.TryGetProperty("id", out var idElement) &&
+                idElement.ValueKind == JsonValueKind.String &&
+                IsCommitHashLike(idElement.GetString()))
+            {
+                commitHash = idElement.GetString();
+                return true;
+            }
+
+            if (element.TryGetProperty("hash", out var hashElement) &&
+                hashElement.ValueKind == JsonValueKind.String &&
+                IsCommitHashLike(hashElement.GetString()))
+            {
+                commitHash = hashElement.GetString();
+                return true;
+            }
+
+            foreach (var property in element.EnumerateObject())
+            {
+                if (property.Value.ValueKind != JsonValueKind.Object)
+                    continue;
+
+                if (TryGetCommitHashFromElement(property.Value, out commitHash))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsCommitHashLike(string value) =>
+        !string.IsNullOrWhiteSpace(value) && CommitHashRegex.IsMatch(value.Trim());
 
     private static bool TryGetChangedPath(JsonElement changeElement, out string path)
     {

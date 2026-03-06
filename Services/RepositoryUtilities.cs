@@ -26,8 +26,9 @@ public static class RepositoryUtilities
         if (string.IsNullOrWhiteSpace(rootFolder) || !rootFolder.ToDir().Exists())
             return null;
 
-        return Directory
-            .EnumerateFiles(rootFolder, "*.sln", SearchOption.AllDirectories)
+        return rootFolder.ToDir()
+            .TryGetFiles("*.sln", SearchOption.AllDirectories)
+            .Select(file => file.FullName)
             .Select(path => new
             {
                 Path = path,

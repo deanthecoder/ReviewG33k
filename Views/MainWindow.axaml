@@ -6,6 +6,7 @@
         xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:viewModels="clr-namespace:ReviewG33k.ViewModels"
         mc:Ignorable="d"
+        x:Name="MainWindowRoot"
         x:Class="ReviewG33k.Views.MainWindow"
         Width="980" Height="700"
         MinWidth="880" MinHeight="520"
@@ -59,7 +60,7 @@
                             Grid.Column="2"
                             Margin="10,0,0,0"
                             Classes="neon"
-                            Click="BrowseRepositoryRootButton_OnClick"
+                            Command="{Binding BrowseRepositoryRootCommand}"
                             ToolTip.Tip="Browse folder&#10;Used as the parent location for local clones/worktrees.">
                         <materialIcons:MaterialIcon Width="18"
                                                     Height="18"
@@ -98,8 +99,7 @@
                     <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
                         <ComboBox x:Name="ReviewModeComboBox"
                                   MinWidth="260"
-                                  SelectedIndex="{Binding ReviewModeIndex, Mode=TwoWay}"
-                                  SelectionChanged="ReviewModeComboBox_OnSelectionChanged">
+                                  SelectedIndex="{Binding ReviewModeIndex, Mode=TwoWay}">
                             <ComboBoxItem Content="Pull Request" />
                             <ComboBoxItem Content="Local committed changes" />
                             <ComboBoxItem Content="Local uncommitted changes" />
@@ -138,7 +138,7 @@
                             Margin="10,10,0,0"
                             Classes="neon"
                             Padding="12,8"
-                            Click="OpenPullRequestButton_OnClick"
+                            Command="{Binding OpenPullRequestCommand}"
                             IsVisible="{Binding ShowPullRequestInputs}"
                             IsEnabled="{Binding CanOpenPullRequest}"
                             ToolTip.Tip="Open pull request URL">
@@ -183,7 +183,7 @@
                         <Button Grid.Column="2"
                                 Margin="10,0,0,0"
                                 Classes="neon"
-                                Click="BrowseLocalRepositoryButton_OnClick"
+                                Command="{Binding BrowseLocalRepositoryCommand}"
                                 ToolTip.Tip="Browse folder">
                             <materialIcons:MaterialIcon Width="18"
                                                         Height="18"
@@ -200,8 +200,7 @@
                                   Width="220"
                                   IsVisible="{Binding ShowLocalBaseBranch}"
                                   ItemsSource="{Binding LocalBaseBranchOptions}"
-                                  SelectedItem="{Binding LocalBaseBranch, Mode=TwoWay}"
-                                  SelectionChanged="LocalBaseBranchComboBox_OnSelectionChanged" />
+                                  SelectedItem="{Binding LocalBaseBranch, Mode=TwoWay}" />
                     </Grid>
 
                     <Grid Grid.Row="6"
@@ -212,7 +211,7 @@
                         <Button x:Name="PrepareReviewButton"
                                 Grid.Column="0"
                                 Classes="accent neon"
-                                Click="PrepareReviewButton_OnClick"
+                                Command="{Binding PrepareReviewCommand}"
                                 IsEnabled="{Binding CanPrepareReview}"
                                 Content="{Binding PrepareReviewButtonText}" />
                         <ProgressBar Grid.Column="1" x:Name="BusyIndicatorSpinner"
@@ -231,7 +230,7 @@
                                 VerticalAlignment="Center"
                                 IsVisible="{Binding IsBusy}"
                                 IsEnabled="{Binding CanCancelProcessing}"
-                                Click="CancelProcessingButton_OnClick"
+                                Command="{Binding CancelProcessingCommand}"
                                 ToolTip.Tip="Cancel current operation">
                             <Grid>
                                 <materialIcons:MaterialIcon x:Name="CancelProcessingIcon"
@@ -250,7 +249,7 @@
                                 Padding="12,8"
                                 VerticalAlignment="Center"
                                 HorizontalAlignment="Right"
-                                Click="OpenSolutionButton_OnClick"
+                                Command="{Binding OpenSolutionCommand}"
                                 IsEnabled="{Binding CanOpenSolution}"
                                 Content="Open Solution" />
                     </Grid>
@@ -301,7 +300,8 @@
                                     <Button Grid.Column="1"
                                             Classes="logCopyButton"
                                             Margin="6,0,16,0"
-                                            Click="CopyLogLineButton_OnClick"
+                                            Command="{Binding #MainWindowRoot.CopyLogLineCommand}"
+                                            CommandParameter="{Binding .}"
                                             VerticalContentAlignment="Center"
                                             ToolTip.Tip="Copy line"
                                             Content="⧉" />

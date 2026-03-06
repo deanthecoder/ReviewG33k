@@ -13,7 +13,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Input;
+using DTC.Core.Commands;
 using DTC.Core.ViewModels;
+using ReviewG33k.Models;
+using ReviewG33k.Services;
 
 namespace ReviewG33k.ViewModels;
 
@@ -50,11 +56,27 @@ public sealed class MainWindowViewModel : ViewModelBase
     private bool m_busyProgressIsIndeterminate = true;
     private double m_busyProgressMaximum = 1;
     private double m_busyProgressValue;
+    private bool m_gitAvailabilityChecked;
+    private CommandBase m_browseRepositoryRootCommandImpl;
+    private CommandBase m_browseLocalRepositoryCommandImpl;
+    private CommandBase m_prepareReviewCommandImpl;
+    private CommandBase m_cancelProcessingCommandImpl;
+    private CommandBase m_openPullRequestCommandImpl;
+    private CommandBase m_openSolutionCommandImpl;
+    private CommandBase m_copyLogLineCommandImpl;
 
     public ObservableCollection<string> LocalBaseBranchOptions { get; } = [];
+    public ICommand BrowseRepositoryRootCommand { get; private set; }
+    public ICommand BrowseLocalRepositoryCommand { get; private set; }
+    public ICommand PrepareReviewCommand { get; private set; }
+    public ICommand CancelProcessingCommand { get; private set; }
+    public ICommand OpenPullRequestCommand { get; private set; }
+    public ICommand OpenSolutionCommand { get; private set; }
+    public ICommand CopyLogLineCommand { get; private set; }
 
     public MainWindowViewModel()
     {
+        InitializeDisabledCommands();
     }
     
     public MainWindowViewModel(Settings settings)
@@ -66,6 +88,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         m_reviewModeIndex = ResolveInitialReviewModeIndex(m_settings);
         m_scanScopeIndex = m_settings.IncludeFullModifiedFiles ? 1 : 0;
         LocalBaseBranchOptions.Add(m_localBaseBranch);
+        InitializeDisabledCommands();
     }
 
     public string RepositoryRootPath
@@ -139,13 +162,14 @@ public sealed class MainWindowViewModel : ViewModelBase
             m_settings.IncludeFullModifiedFiles = normalizedValue == 1;
             SaveSettingsSafely();
             OnPropertyChanged(nameof(ScanScopeInfoTooltip));
+            OnPropertyChanged(nameof(IncludeFullModifiedFiles));
         }
     }
 
     public string PullRequestUrl
     {
         get => m_pullRequestUrl;
-        set => SetField(ref m_pullRequestUrl, value ?? string.Empty);
+        set => SetField(ref m_pullRequestUrl, NormalizePullRequestUrl(value));
     }
 
     public string PullRequestMetadataText
@@ -208,7 +232,27 @@ public sealed class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public bool IsGitAvailable
+    {
+        get => m_isGitAvailable;
+        set
+        {
+            if (!SetField(ref m_isGitAvailable, value))
+                return;
+
+            OnActionStateChanged();
+        }
+    }
+
     public bool ShowPullRequestInputs => m_reviewModeIndex == PullRequestReviewModeIndex;
+
+    public bool IsPullRequestReviewMode => m_reviewModeIndex == PullRequestReviewModeIndex;
+
+    public bool IsLocalCommittedReviewMode => m_reviewModeIndex == LocalCommittedReviewModeIndex;
+
+    public bool IsLocalUncommittedReviewMode => m_reviewModeIndex == LocalUncommittedReviewModeIndex;
+
+    public bool IsAnyLocalReviewMode => !IsPullRequestReviewMode;
 
     public bool ShowPullRequestMetadata =>
         ShowPullRequestInputs && !string.IsNullOrWhiteSpace(m_pullRequestMetadataText);
@@ -232,6 +276,17 @@ public sealed class MainWindowViewModel : ViewModelBase
     public string ScanScopeInfoTooltip => m_scanScopeIndex == 1
         ? "Runs checks across entire modified files. More thorough, but slower."
         : "Runs checks only on newly added lines. Faster for targeted reviews.";
+
+    public bool IncludeFullModifiedFiles => m_scanScopeIndex == 1;
+
+    internal bool MarkGitAvailabilityChecked()
+    {
+        if (m_gitAvailabilityChecked)
+            return false;
+
+        m_gitAvailabilityChecked = true;
+        return true;
+    }
 
     public bool CanPrepareReview => !m_isBusy &&
                                     m_isGitAvailable &&
@@ -267,6 +322,66 @@ public sealed class MainWindowViewModel : ViewModelBase
     {
         get => m_busyProgressValue;
         private set => SetField(ref m_busyProgressValue, value);
+    }
+
+    public void ConfigureCommands(
+        Func<Task> browseRepositoryRootAsync,
+        Func<Task> browseLocalRepositoryAsync,
+        Func<Task> prepareReviewAsync,
+        Action cancelProcessing,
+        Action openPullRequest,
+        Action openSolution,
+        Func<object, Task> copyLogLineAsync = null,
+        Func<object, bool> canCopyLogLine = null)
+    {
+        ArgumentNullException.ThrowIfNull(browseRepositoryRootAsync);
+        ArgumentNullException.ThrowIfNull(browseLocalRepositoryAsync);
+        ArgumentNullException.ThrowIfNull(prepareReviewAsync);
+        ArgumentNullException.ThrowIfNull(cancelProcessing);
+        ArgumentNullException.ThrowIfNull(openPullRequest);
+        ArgumentNullException.ThrowIfNull(openSolution);
+
+        m_browseRepositoryRootCommandImpl = new AsyncRelayCommand(
+            _ => browseRepositoryRootAsync(),
+            _ => !IsBusy);
+        m_browseLocalRepositoryCommandImpl = new AsyncRelayCommand(
+            _ => browseLocalRepositoryAsync(),
+            _ => !IsBusy);
+        m_prepareReviewCommandImpl = new AsyncRelayCommand(
+            _ => prepareReviewAsync(),
+            _ => CanPrepareReview);
+        m_cancelProcessingCommandImpl = new RelayCommand(
+            _ => cancelProcessing(),
+            _ => CanCancelProcessing);
+        m_openPullRequestCommandImpl = new RelayCommand(
+            _ => openPullRequest(),
+            _ => CanOpenPullRequest);
+        m_openSolutionCommandImpl = new RelayCommand(
+            _ => openSolution(),
+            _ => CanOpenSolution);
+        if (copyLogLineAsync != null)
+        {
+            m_copyLogLineCommandImpl = new AsyncRelayCommand(
+                parameter => copyLogLineAsync(parameter),
+                parameter => canCopyLogLine?.Invoke(parameter) ?? parameter != null);
+            CopyLogLineCommand = m_copyLogLineCommandImpl;
+            OnPropertyChanged(nameof(CopyLogLineCommand));
+        }
+
+        BrowseRepositoryRootCommand = m_browseRepositoryRootCommandImpl;
+        BrowseLocalRepositoryCommand = m_browseLocalRepositoryCommandImpl;
+        PrepareReviewCommand = m_prepareReviewCommandImpl;
+        CancelProcessingCommand = m_cancelProcessingCommandImpl;
+        OpenPullRequestCommand = m_openPullRequestCommandImpl;
+        OpenSolutionCommand = m_openSolutionCommandImpl;
+
+        OnPropertyChanged(nameof(BrowseRepositoryRootCommand));
+        OnPropertyChanged(nameof(BrowseLocalRepositoryCommand));
+        OnPropertyChanged(nameof(PrepareReviewCommand));
+        OnPropertyChanged(nameof(CancelProcessingCommand));
+        OnPropertyChanged(nameof(OpenPullRequestCommand));
+        OnPropertyChanged(nameof(OpenSolutionCommand));
+        RaiseCommandCanExecuteChanged();
     }
 
     public void AddLocalBaseBranchOption(string baseBranch)
@@ -313,7 +428,6 @@ public sealed class MainWindowViewModel : ViewModelBase
     }
 
     public void UpdateActionStateInputs(
-        bool isGitAvailable,
         bool canReviewCurrentPullRequest,
         bool hasValidPullRequestInput,
         bool hasValidPullRequestPrepareInputs,
@@ -323,7 +437,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         bool isCancellationRequested)
     {
         var hasAnyChange = false;
-        hasAnyChange |= SetIfDifferent(ref m_isGitAvailable, isGitAvailable);
         hasAnyChange |= SetIfDifferent(ref m_canReviewCurrentPullRequest, canReviewCurrentPullRequest);
         hasAnyChange |= SetIfDifferent(ref m_hasValidPullRequestInput, hasValidPullRequestInput);
         hasAnyChange |= SetIfDifferent(ref m_hasValidPullRequestPrepareInputs, hasValidPullRequestPrepareInputs);
@@ -362,6 +475,125 @@ public sealed class MainWindowViewModel : ViewModelBase
         var normalizedTitle = string.IsNullOrWhiteSpace(title) ? "(no title)" : title.Trim();
         var normalizedAuthor = string.IsNullOrWhiteSpace(author) ? "Unknown author" : author.Trim();
         PullRequestMetadataText = $"Title: {normalizedTitle} | Author: {normalizedAuthor} | State: {PreviewPullRequestStateDisplay}";
+    }
+
+    public void ClearPullRequestPreview() =>
+        UpdatePullRequestMetadataPreview(null, null, null);
+
+    internal async Task<PullRequestPreviewResult> RefreshPullRequestPreviewAsync(
+        PullRequestPreviewService pullRequestPreviewService,
+        CancellationToken cancellationToken)
+    {
+        if (pullRequestPreviewService == null)
+            throw new ArgumentNullException(nameof(pullRequestPreviewService));
+
+        ClearPullRequestPreview();
+
+        var previewResult = await pullRequestPreviewService.TryBuildPreviewAsync(
+            IsPullRequestReviewMode,
+            PullRequestUrl,
+            cancellationToken);
+        if (cancellationToken.IsCancellationRequested)
+            return PullRequestPreviewResult.Empty;
+
+        UpdatePullRequestMetadataPreview(
+            previewResult.Metadata?.Title,
+            previewResult.Metadata?.Author,
+            previewResult.Metadata?.State);
+        return previewResult;
+    }
+
+    internal string RefreshActionState(
+        MainWindowActionStateService actionStateService,
+        string latestSolutionPath,
+        string latestReviewWorktreePath,
+        bool canCancelCurrentOperation,
+        bool isCancellationRequested)
+    {
+        if (actionStateService == null)
+            throw new ArgumentNullException(nameof(actionStateService));
+
+        var actionState = actionStateService.BuildSnapshot(
+            RepositoryRootPath,
+            LocalRepositoryPath,
+            LocalBaseBranchService.NormalizeBranchName(LocalBaseBranch),
+            PullRequestUrl,
+            IsAnyLocalReviewMode,
+            IsLocalUncommittedReviewMode,
+            PreviewPullRequestIsOpen,
+            PreviewPullRequestState,
+            latestSolutionPath,
+            latestReviewWorktreePath,
+            canCancelCurrentOperation,
+            isCancellationRequested);
+
+        UpdateActionStateInputs(
+            canReviewCurrentPullRequest: actionState.CanReviewCurrentPullRequest,
+            hasValidPullRequestInput: actionState.HasValidPullRequestInput,
+            hasValidPullRequestPrepareInputs: actionState.HasValidPullRequestPrepareInputs,
+            hasValidLocalPrepareInputs: actionState.IsAnyLocalReviewMode && actionState.HasValidLocalPrepareInputs,
+            hasAvailableSolution: actionState.HasAvailableSolution,
+            canCancelCurrentOperation: actionState.CanCancelCurrentOperation,
+            isCancellationRequested: actionState.IsCancellationRequested);
+        return actionState.ResolvedSolutionPath;
+    }
+
+    internal async Task<bool> TryAutoDetectLocalBaseBranchAsync(
+        LocalBaseBranchService localBaseBranchService,
+        bool logWhenUpdated,
+        Action<string> appendLog)
+    {
+        if (localBaseBranchService == null)
+            throw new ArgumentNullException(nameof(localBaseBranchService));
+        if (!IsGitAvailable)
+            return false;
+
+        var localRepositoryPath = LocalRepositoryPath?.Trim();
+        if (!RepositoryUtilities.IsGitRepository(localRepositoryPath))
+        {
+            var fallbackBaseBranch = LocalBaseBranchService.NormalizeBranchName(LocalBaseBranch) ?? "main";
+            SetLocalBaseBranchOptions([fallbackBaseBranch], fallbackBaseBranch);
+            return false;
+        }
+
+        var currentBaseBranch = LocalBaseBranchService.NormalizeBranchName(LocalBaseBranch);
+        var resolvedBaseBranch = await localBaseBranchService.ResolveLocalBaseBranchAsync(
+            localRepositoryPath,
+            currentBaseBranch,
+            logWhenChanged: logWhenUpdated,
+            appendLog);
+        if (string.IsNullOrWhiteSpace(resolvedBaseBranch))
+            return false;
+
+        var branchOptions = await localBaseBranchService.GetLocalBaseBranchOptionsAsync(localRepositoryPath);
+        if (!branchOptions.Any())
+            branchOptions = [resolvedBaseBranch];
+
+        if (!branchOptions.Any(branch => branch.Equals(resolvedBaseBranch, StringComparison.OrdinalIgnoreCase)))
+            branchOptions.Add(resolvedBaseBranch);
+
+        SetLocalBaseBranchOptions(branchOptions, resolvedBaseBranch);
+        LocalBaseBranch = resolvedBaseBranch;
+        return true;
+    }
+
+    internal bool TryApplyPullRequestUrlFromClipboard(string clipboardText)
+    {
+        if (!IsPullRequestReviewMode)
+            return false;
+        if (!string.IsNullOrWhiteSpace(PullRequestUrl))
+            return false;
+        if (!BitbucketPrUrlParser.TryParse(clipboardText, out var pullRequest, out _))
+            return false;
+
+        PullRequestUrl = pullRequest.SourceUrl;
+        return true;
+    }
+
+    public bool TryParsePullRequestUrl(out BitbucketPullRequestReference pullRequest, out string parseError)
+    {
+        var prUrlText = m_pullRequestUrl?.Trim();
+        return BitbucketPrUrlParser.TryParse(prUrlText, out pullRequest, out parseError);
     }
 
     public void ResetBusyProgress()
@@ -409,6 +641,15 @@ public sealed class MainWindowViewModel : ViewModelBase
             : normalizedBranch;
     }
 
+    private static string NormalizePullRequestUrl(string value)
+    {
+        var normalizedValue = (value ?? string.Empty).Trim();
+        if (!BitbucketPrUrlParser.TryParse(normalizedValue, out var pullRequest, out _))
+            return normalizedValue;
+
+        return pullRequest.SourceUrl;
+    }
+
     private void SaveSettingsSafely()
     {
         try
@@ -424,10 +665,15 @@ public sealed class MainWindowViewModel : ViewModelBase
     private void OnReviewModeUiChanged()
     {
         OnPropertyChanged(nameof(ShowPullRequestInputs));
+        OnPropertyChanged(nameof(IsPullRequestReviewMode));
+        OnPropertyChanged(nameof(IsLocalCommittedReviewMode));
+        OnPropertyChanged(nameof(IsLocalUncommittedReviewMode));
+        OnPropertyChanged(nameof(IsAnyLocalReviewMode));
         OnPropertyChanged(nameof(ShowPullRequestMetadata));
         OnPropertyChanged(nameof(ShowLocalBaseBranch));
         OnPropertyChanged(nameof(PrepareReviewButtonText));
         OnPropertyChanged(nameof(ReviewModeInfoTooltip));
+        RaiseCommandCanExecuteChanged();
     }
 
     private void OnActionStateChanged()
@@ -437,6 +683,37 @@ public sealed class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanOpenSolution));
         OnPropertyChanged(nameof(CanCancelProcessing));
         OnPropertyChanged(nameof(ShowCancelStoppingText));
+        RaiseCommandCanExecuteChanged();
+    }
+
+    private void InitializeDisabledCommands()
+    {
+        m_browseRepositoryRootCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
+        m_browseLocalRepositoryCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
+        m_prepareReviewCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
+        m_cancelProcessingCommandImpl = new RelayCommand(_ => { }, _ => false);
+        m_openPullRequestCommandImpl = new RelayCommand(_ => { }, _ => false);
+        m_openSolutionCommandImpl = new RelayCommand(_ => { }, _ => false);
+        m_copyLogLineCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
+
+        BrowseRepositoryRootCommand = m_browseRepositoryRootCommandImpl;
+        BrowseLocalRepositoryCommand = m_browseLocalRepositoryCommandImpl;
+        PrepareReviewCommand = m_prepareReviewCommandImpl;
+        CancelProcessingCommand = m_cancelProcessingCommandImpl;
+        OpenPullRequestCommand = m_openPullRequestCommandImpl;
+        OpenSolutionCommand = m_openSolutionCommandImpl;
+        CopyLogLineCommand = m_copyLogLineCommandImpl;
+    }
+
+    private void RaiseCommandCanExecuteChanged()
+    {
+        m_browseRepositoryRootCommandImpl?.RaiseCanExecuteChanged();
+        m_browseLocalRepositoryCommandImpl?.RaiseCanExecuteChanged();
+        m_prepareReviewCommandImpl?.RaiseCanExecuteChanged();
+        m_cancelProcessingCommandImpl?.RaiseCanExecuteChanged();
+        m_openPullRequestCommandImpl?.RaiseCanExecuteChanged();
+        m_openSolutionCommandImpl?.RaiseCanExecuteChanged();
+        m_copyLogLineCommandImpl?.RaiseCanExecuteChanged();
     }
 
     private static bool SetIfDifferent<T>(ref T field, T value)

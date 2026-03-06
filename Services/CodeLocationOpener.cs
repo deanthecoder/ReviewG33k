@@ -328,8 +328,12 @@ public sealed class CodeLocationOpener
         if (!detectionAttempted)
         {
             detectionAttempted = true;
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var candidatePath in candidatePaths ?? [])
             {
+                if (string.IsNullOrWhiteSpace(candidatePath) || !seen.Add(candidatePath))
+                    continue;
+
                 if (!candidatePath.ToFile().Exists())
                     continue;
 
@@ -377,7 +381,7 @@ public sealed class CodeLocationOpener
 
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (!string.IsNullOrWhiteSpace(localAppData))
-            yield return localAppData.ToDir().GetDir("Programs").GetDir("Microsoft VS Code").GetFile("Code.exe").FullName;
+            yield return localAppData.ToDir().GetDir("Programs/Microsoft VS Code").GetFile("Code.exe").FullName;
 
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         if (!string.IsNullOrWhiteSpace(programFiles))
@@ -407,7 +411,7 @@ public sealed class CodeLocationOpener
         foreach (var yearDir in vsRoot.EnumerateDirectories())
         foreach (var skuDir in yearDir.EnumerateDirectories())
         {
-            var devenv = skuDir.GetDir("Common7").GetDir("IDE").GetFile("devenv.exe");
+            var devenv = skuDir.GetDir("Common7/IDE").GetFile("devenv.exe");
             yield return devenv.FullName;
         }
     }
@@ -420,12 +424,8 @@ public sealed class CodeLocationOpener
 
         if (isWindows)
         {
-            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            if (!string.IsNullOrWhiteSpace(localAppData))
-            {
-                yield return localAppData.ToDir().GetDir("Programs").GetDir("Rider").GetDir("bin").GetFile("rider64.exe").FullName;
-                yield return localAppData.ToDir().GetDir("JetBrains").GetDir("Toolbox").GetDir("apps").GetDir("Rider").GetFile("rider64.exe").FullName;
-            }
+            foreach (var candidate in GetWindowsRiderCandidates())
+                yield return candidate;
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
@@ -436,6 +436,58 @@ public sealed class CodeLocationOpener
             yield return "/usr/local/bin/rider";
             yield return "/snap/bin/rider";
             yield return "/opt/rider/bin/rider.sh";
+        }
+    }
+
+    private static IEnumerable<string> GetWindowsRiderCandidates()
+    {
+        const string riderExecutableName = "rider64.exe";
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrWhiteSpace(localAppData))
+        {
+            var localAppDataDir = localAppData.ToDir();
+            yield return localAppDataDir.GetDir("Programs/Rider/bin").GetFile(riderExecutableName).FullName;
+
+            var toolboxAppsRoot = localAppDataDir.GetDir("JetBrains/Toolbox/apps/Rider");
+            if (toolboxAppsRoot.Exists())
+            {
+                foreach (var candidate in toolboxAppsRoot.TryGetFiles(riderExecutableName, SearchOption.AllDirectories))
+                    yield return candidate.FullName;
+            }
+        }
+
+        foreach (var programFilesRoot in GetProgramFilesRoots())
+        {
+            var jetBrainsRoot = programFilesRoot.ToDir().GetDir("JetBrains");
+            if (!jetBrainsRoot.Exists())
+                continue;
+
+            yield return jetBrainsRoot.GetDir("Rider/bin").GetFile(riderExecutableName).FullName;
+
+            foreach (var installDir in jetBrainsRoot.TryGetDirs())
+            {
+                if (!installDir.Name.Contains("Rider", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                yield return installDir.GetDir("bin").GetFile(riderExecutableName).FullName;
+            }
+        }
+    }
+
+    private static IEnumerable<string> GetProgramFilesRoots()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var folder in new[]
+                 {
+                     Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                     Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
+                 })
+        {
+            if (string.IsNullOrWhiteSpace(folder) || !seen.Add(folder))
+                continue;
+
+            yield return folder;
         }
     }
 

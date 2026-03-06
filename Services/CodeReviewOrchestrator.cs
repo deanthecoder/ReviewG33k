@@ -62,15 +62,79 @@ public sealed class CodeReviewOrchestrator
 
         EnsureCodeReviewMarker(repositoryRoot);
 
-        var reviewFolderInfo = repositoryRootDir
-            .GetDir(CodeReviewFolderName)
-            .GetDir(pullRequest.RepoSlug)
-            .GetDir($"PR-{pullRequest.PullRequestId}");
+        var reviewFolderInfo = repositoryRootDir.GetDir(
+            $"{CodeReviewFolderName}/{pullRequest.RepoSlug}/PR-{pullRequest.PullRequestId}");
         await EnsureReviewWorktreeReadyAsync(localRepository, reviewFolderInfo.FullName, reviewBranch, reviewRef, log, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
         var solutionPath = FindBestSolutionFile(reviewFolderInfo.FullName, changedPaths);
 
+        return new PrepareReviewResult(localRepository, reviewFolderInfo.FullName, solutionPath);
+    }
+
+    internal async Task<PrepareReviewResult> PrepareMergedCommitReviewAsync(
+        string repositoryRoot,
+        BitbucketPullRequestReference pullRequest,
+        string targetBranch,
+        string mergeCommitHash,
+        IReadOnlyCollection<string> changedPaths,
+        Action<string> log,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (string.IsNullOrWhiteSpace(repositoryRoot))
+            throw new InvalidOperationException("Repository root folder is required.");
+        if (pullRequest == null)
+            throw new InvalidOperationException("Pull request details are required.");
+        if (string.IsNullOrWhiteSpace(mergeCommitHash))
+            throw new InvalidOperationException("Merge commit hash is required.");
+
+        var repositoryRootDir = repositoryRoot.ToDir();
+        if (!repositoryRootDir.Exists())
+            throw new DirectoryNotFoundException($"Repository root folder does not exist: {repositoryRoot}");
+
+        var localRepository = await FindOrCloneRepositoryAsync(repositoryRoot, pullRequest, log, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!string.IsNullOrWhiteSpace(targetBranch))
+        {
+            log?.Invoke($"Fetching target branch '{targetBranch}' before merge-commit review...");
+            _ = await m_gitCommandRunner.RunAsync(
+                localRepository,
+                cancellationToken,
+                "fetch",
+                "--prune",
+                "origin",
+                $"+refs/heads/{targetBranch}:refs/remotes/origin/{targetBranch}");
+        }
+
+        if (!await CommitExistsAsync(localRepository, mergeCommitHash, cancellationToken))
+        {
+            log?.Invoke("Merge commit not present locally. Fetching latest origin refs...");
+            _ = await m_gitCommandRunner.RunAsync(localRepository, cancellationToken, "fetch", "--prune", "origin");
+            if (!await CommitExistsAsync(localRepository, mergeCommitHash, cancellationToken))
+            {
+                throw new InvalidOperationException(
+                    $"Merge commit '{mergeCommitHash}' could not be resolved from local repository or origin.");
+            }
+        }
+
+        EnsureCodeReviewMarker(repositoryRoot);
+
+        var reviewFolderInfo = repositoryRootDir.GetDir(
+            $"{CodeReviewFolderName}/{pullRequest.RepoSlug}/PR-{pullRequest.PullRequestId}-Merged");
+        var reviewBranch = $"review/pr-{pullRequest.PullRequestId}-merged";
+        await EnsureReviewWorktreeReadyAsync(
+            localRepository,
+            reviewFolderInfo.FullName,
+            reviewBranch,
+            mergeCommitHash,
+            log,
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var solutionPath = FindBestSolutionFile(reviewFolderInfo.FullName, changedPaths);
         return new PrepareReviewResult(localRepository, reviewFolderInfo.FullName, solutionPath);
     }
 
@@ -321,6 +385,20 @@ public sealed class CodeReviewOrchestrator
             log($"Warning: could not fully clean review worktree. {cleanResult.GetCombinedOutput()}");
     }
 
+    private async Task<bool> CommitExistsAsync(string localRepository, string commitHash, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(localRepository) || string.IsNullOrWhiteSpace(commitHash))
+            return false;
+
+        var commitResult = await m_gitCommandRunner.RunAsync(
+            localRepository,
+            cancellationToken,
+            "cat-file",
+            "-e",
+            $"{commitHash}^{{commit}}");
+        return commitResult.IsSuccess;
+    }
+
     private static bool AreSameCommit(string leftCommit, string rightCommit) =>
         string.Equals(
             NormalizeCommitHash(leftCommit),
@@ -350,7 +428,7 @@ public sealed class CodeReviewOrchestrator
 
     private static IEnumerable<string> EnumerateTopLevelGitRepositories(string repositoryRoot)
     {
-        foreach (var directory in repositoryRoot.ToDir().EnumerateDirectories())
+        foreach (var directory in repositoryRoot.ToDir().TryGetDirs())
         {
             if (directory.Name.Equals(CodeReviewFolderName, StringComparison.OrdinalIgnoreCase))
                 continue;

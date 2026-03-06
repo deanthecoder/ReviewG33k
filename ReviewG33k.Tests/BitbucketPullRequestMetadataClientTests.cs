@@ -19,6 +19,85 @@ namespace ReviewG33k.Tests;
 public sealed class BitbucketPullRequestMetadataClientTests
 {
     [Test]
+    public async Task TryGetMergeCommitHashAsyncWhenMetadataContainsMergeCommitReturnsHash()
+    {
+        const string mergeCommit = "0a1b2c3d4e5f67890123456789abcdef01234567";
+        using var handler = new StubHttpMessageHandler(
+        [
+            CreateJsonResponse(
+                HttpStatusCode.OK,
+                $$"""
+                  {
+                    "state": "MERGED",
+                    "properties": {
+                      "mergeCommit": {
+                        "id": "{{mergeCommit}}"
+                      }
+                    }
+                  }
+                  """)
+        ]);
+        using var httpClient = new HttpClient(handler);
+        var pullRequest = new BitbucketPullRequestReference(
+            "bitbucket.example.com",
+            "PROJ",
+            "sample-repo",
+            42,
+            "https://bitbucket.example.com/projects/PROJ/repos/sample-repo/pull-requests/42");
+
+        using var client = new BitbucketPullRequestMetadataClient(httpClient);
+        var hash = await client.TryGetMergeCommitHashAsync(pullRequest);
+
+        Assert.That(hash, Is.EqualTo(mergeCommit));
+    }
+
+    [Test]
+    public async Task TryGetMergeCommitHashAsyncWhenMetadataMissingFallsBackToActivities()
+    {
+        const string mergeCommit = "abcdef0123456789abcdef0123456789abcdef01";
+        using var handler = new StubHttpMessageHandler(
+        [
+            CreateJsonResponse(
+                HttpStatusCode.OK,
+                """
+                {
+                  "state": "MERGED",
+                  "properties": { }
+                }
+                """),
+            CreateJsonResponse(
+                HttpStatusCode.OK,
+                $$"""
+                {
+                  "values": [
+                    {
+                      "action": "COMMENTED"
+                    },
+                    {
+                      "action": "MERGED",
+                      "commit": {
+                        "id": "{{mergeCommit}}"
+                      }
+                    }
+                  ]
+                }
+                """)
+        ]);
+        using var httpClient = new HttpClient(handler);
+        var pullRequest = new BitbucketPullRequestReference(
+            "bitbucket.example.com",
+            "PROJ",
+            "sample-repo",
+            42,
+            "https://bitbucket.example.com/projects/PROJ/repos/sample-repo/pull-requests/42");
+
+        using var client = new BitbucketPullRequestMetadataClient(httpClient);
+        var hash = await client.TryGetMergeCommitHashAsync(pullRequest);
+
+        Assert.That(hash, Is.EqualTo(mergeCommit));
+    }
+
+    [Test]
     public async Task TryAddInlineCommentAsyncWhenAddedLineAnchorFailsRetriesWithContextAnchor()
     {
         using var handler = new StubHttpMessageHandler(
