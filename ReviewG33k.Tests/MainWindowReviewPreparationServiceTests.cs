@@ -91,7 +91,6 @@ public sealed class MainWindowReviewPreparationServiceTests
             gitRunner,
             new CodeReviewOrchestrator(gitRunner),
             new CodeSmellReportAnalyzer(gitRunner),
-            new CodeSmellReportLogService(),
             metadataClient);
     }
 

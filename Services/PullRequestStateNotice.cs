@@ -13,16 +13,24 @@ using ReviewG33k.Models;
 
 namespace ReviewG33k.Services;
 
-internal sealed class PullRequestStateNoticeService
+/// <summary>
+/// Builds user-facing notices for pull requests that are not in the OPEN state.
+/// </summary>
+/// <remarks>
+/// Useful for keeping warning-message rules in one place while callers own deduplication state
+/// through the generated notice key.
+/// </remarks>
+internal static class PullRequestStateNotice
 {
-    private string m_lastNonOpenPullRequestNoticeKey;
-
-    public bool TryCreateNonOpenPullRequestNotice(
+    public static bool TryCreateNonOpenPullRequestNotice(
         BitbucketPullRequestReference pullRequest,
         bool? isPullRequestOpen,
         string pullRequestStateDisplay,
+        string lastNoticeKey,
+        out string noticeKey,
         out string message)
     {
+        noticeKey = lastNoticeKey;
         message = null;
 
         if (pullRequest == null || isPullRequestOpen != false)
@@ -31,11 +39,11 @@ internal sealed class PullRequestStateNoticeService
         var normalizedState = string.IsNullOrWhiteSpace(pullRequestStateDisplay)
             ? "N/A"
             : pullRequestStateDisplay.Trim();
-        var noticeKey = $"{pullRequest.SourceUrl}|{normalizedState}";
-        if (string.Equals(noticeKey, m_lastNonOpenPullRequestNoticeKey, StringComparison.Ordinal))
+        var candidateNoticeKey = $"{pullRequest.SourceUrl}|{normalizedState}";
+        if (string.Equals(candidateNoticeKey, lastNoticeKey, StringComparison.Ordinal))
             return false;
 
-        m_lastNonOpenPullRequestNoticeKey = noticeKey;
+        noticeKey = candidateNoticeKey;
         message = normalizedState.Equals("MERGED", StringComparison.OrdinalIgnoreCase)
             ? $"PR #{pullRequest.PullRequestId} is MERGED. ReviewG33k will attempt merge-commit fallback."
             : $"PR #{pullRequest.PullRequestId} is {normalizedState}. Review checkout requires an OPEN pull request.";

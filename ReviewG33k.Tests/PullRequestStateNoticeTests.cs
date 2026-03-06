@@ -14,18 +14,19 @@ using ReviewG33k.Services;
 namespace ReviewG33k.Tests;
 
 [TestFixture]
-public sealed class PullRequestStateNoticeServiceTests
+public sealed class PullRequestStateNoticeTests
 {
     [Test]
     public void TryCreateNonOpenPullRequestNoticeWhenPullRequestIsOpenReturnsFalse()
     {
-        var service = new PullRequestStateNoticeService();
         var pullRequest = CreatePullRequest(42);
 
-        var shouldNotify = service.TryCreateNonOpenPullRequestNotice(
+        var shouldNotify = PullRequestStateNotice.TryCreateNonOpenPullRequestNotice(
             pullRequest,
             isPullRequestOpen: true,
             pullRequestStateDisplay: "OPEN",
+            lastNoticeKey: null,
+            out _,
             out var message);
 
         Assert.Multiple(() =>
@@ -38,18 +39,23 @@ public sealed class PullRequestStateNoticeServiceTests
     [Test]
     public void TryCreateNonOpenPullRequestNoticeWhenClosedFirstTimeReturnsTrueAndSecondTimeReturnsFalse()
     {
-        var service = new PullRequestStateNoticeService();
         var pullRequest = CreatePullRequest(7);
+        string lastNoticeKey = null;
 
-        var first = service.TryCreateNonOpenPullRequestNotice(
+        var first = PullRequestStateNotice.TryCreateNonOpenPullRequestNotice(
             pullRequest,
             isPullRequestOpen: false,
             pullRequestStateDisplay: "DECLINED",
+            lastNoticeKey,
+            out var firstNoticeKey,
             out var firstMessage);
-        var second = service.TryCreateNonOpenPullRequestNotice(
+        lastNoticeKey = firstNoticeKey;
+        var second = PullRequestStateNotice.TryCreateNonOpenPullRequestNotice(
             pullRequest,
             isPullRequestOpen: false,
             pullRequestStateDisplay: "DECLINED",
+            lastNoticeKey,
+            out _,
             out var secondMessage);
 
         Assert.Multiple(() =>
@@ -64,13 +70,14 @@ public sealed class PullRequestStateNoticeServiceTests
     [Test]
     public void TryCreateNonOpenPullRequestNoticeWhenMergedUsesFallbackMessage()
     {
-        var service = new PullRequestStateNoticeService();
         var pullRequest = CreatePullRequest(99);
 
-        var shouldNotify = service.TryCreateNonOpenPullRequestNotice(
+        var shouldNotify = PullRequestStateNotice.TryCreateNonOpenPullRequestNotice(
             pullRequest,
             isPullRequestOpen: false,
             pullRequestStateDisplay: "MERGED",
+            lastNoticeKey: null,
+            out _,
             out var message);
 
         Assert.Multiple(() =>

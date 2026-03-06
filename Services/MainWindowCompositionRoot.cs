@@ -36,14 +36,11 @@ internal static class MainWindowCompositionRoot
         var codeSmellReportAnalyzer = new CodeSmellReportAnalyzer(gitCommandRunner);
         var localFindingResampleService = new LocalFindingResampleService(gitCommandRunner, codeSmellReportAnalyzer);
         var pullRequestPreviewService = new PullRequestPreviewService(pullRequestMetadataClient);
-        var pullRequestStateNoticeService = new PullRequestStateNoticeService();
         var startupService = new MainWindowStartupService(gitAvailabilityService, orchestrator);
-        var codeSmellReportLogService = new CodeSmellReportLogService();
         var reviewExecutionService = new ReviewExecutionService(
             gitCommandRunner,
             orchestrator,
             codeSmellReportAnalyzer,
-            codeSmellReportLogService,
             pullRequestMetadataClient);
         var reviewPreparationService = new MainWindowReviewPreparationService(
             inputValidationService,
@@ -62,7 +59,6 @@ internal static class MainWindowCompositionRoot
             localBaseBranchService,
             localFindingResampleService,
             pullRequestPreviewService,
-            pullRequestStateNoticeService,
             codeSmellReportAnalyzer,
             pullRequestMetadataClient,
             startupService,

@@ -20,20 +20,17 @@ internal sealed class ReviewExecutionService
     private readonly GitCommandRunner m_gitCommandRunner;
     private readonly CodeReviewOrchestrator m_orchestrator;
     private readonly CodeSmellReportAnalyzer m_codeSmellReportAnalyzer;
-    private readonly CodeSmellReportLogService m_codeSmellReportLogService;
     private readonly BitbucketPullRequestMetadataClient m_pullRequestMetadataClient;
 
     public ReviewExecutionService(
         GitCommandRunner gitCommandRunner,
         CodeReviewOrchestrator orchestrator,
         CodeSmellReportAnalyzer codeSmellReportAnalyzer,
-        CodeSmellReportLogService codeSmellReportLogService,
         BitbucketPullRequestMetadataClient pullRequestMetadataClient)
     {
         m_gitCommandRunner = gitCommandRunner ?? throw new ArgumentNullException(nameof(gitCommandRunner));
         m_orchestrator = orchestrator ?? throw new ArgumentNullException(nameof(orchestrator));
         m_codeSmellReportAnalyzer = codeSmellReportAnalyzer ?? throw new ArgumentNullException(nameof(codeSmellReportAnalyzer));
-        m_codeSmellReportLogService = codeSmellReportLogService ?? throw new ArgumentNullException(nameof(codeSmellReportLogService));
         m_pullRequestMetadataClient = pullRequestMetadataClient ?? throw new ArgumentNullException(nameof(pullRequestMetadataClient));
     }
 
@@ -199,7 +196,7 @@ internal sealed class ReviewExecutionService
             includeFullModifiedFiles,
             cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        return m_codeSmellReportLogService.ProcessReport(report, m_codeSmellReportAnalyzer.Checks, appendLog);
+        return CodeSmellReportLogService.ProcessReport(report, m_codeSmellReportAnalyzer.Checks, appendLog);
     }
 
     private async Task<CodeSmellReport> RunCodeSmellScanAsync(
@@ -218,7 +215,7 @@ internal sealed class ReviewExecutionService
             includeFullModifiedFiles,
             cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        return m_codeSmellReportLogService.ProcessReport(report, m_codeSmellReportAnalyzer.Checks, appendLog);
+        return CodeSmellReportLogService.ProcessReport(report, m_codeSmellReportAnalyzer.Checks, appendLog);
     }
 
     private static string FormatMetadataText(string value) =>

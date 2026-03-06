@@ -33,7 +33,6 @@ internal sealed class MainWindowDependencies
         LocalBaseBranchService localBaseBranchService,
         LocalFindingResampleService localFindingResampleService,
         PullRequestPreviewService pullRequestPreviewService,
-        PullRequestStateNoticeService pullRequestStateNoticeService,
         CodeSmellReportAnalyzer codeSmellReportAnalyzer,
         BitbucketPullRequestMetadataClient pullRequestMetadataClient,
         MainWindowStartupService startupService,
@@ -49,7 +48,6 @@ internal sealed class MainWindowDependencies
         LocalBaseBranchService = localBaseBranchService ?? throw new ArgumentNullException(nameof(localBaseBranchService));
         LocalFindingResampleService = localFindingResampleService ?? throw new ArgumentNullException(nameof(localFindingResampleService));
         PullRequestPreviewService = pullRequestPreviewService ?? throw new ArgumentNullException(nameof(pullRequestPreviewService));
-        PullRequestStateNoticeService = pullRequestStateNoticeService ?? throw new ArgumentNullException(nameof(pullRequestStateNoticeService));
         CodeSmellReportAnalyzer = codeSmellReportAnalyzer ?? throw new ArgumentNullException(nameof(codeSmellReportAnalyzer));
         PullRequestMetadataClient = pullRequestMetadataClient ?? throw new ArgumentNullException(nameof(pullRequestMetadataClient));
         StartupService = startupService ?? throw new ArgumentNullException(nameof(startupService));
@@ -75,8 +73,6 @@ internal sealed class MainWindowDependencies
     public LocalFindingResampleService LocalFindingResampleService { get; }
 
     public PullRequestPreviewService PullRequestPreviewService { get; }
-
-    public PullRequestStateNoticeService PullRequestStateNoticeService { get; }
 
     public CodeSmellReportAnalyzer CodeSmellReportAnalyzer { get; }
 

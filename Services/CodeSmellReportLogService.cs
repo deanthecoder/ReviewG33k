@@ -15,11 +15,18 @@ using ReviewG33k.Services.Checks;
 
 namespace ReviewG33k.Services;
 
-internal sealed class CodeSmellReportLogService
+/// <summary>
+/// Writes a code-smell analysis report to the application log in a readable, review-focused format.
+/// </summary>
+/// <remarks>
+/// Useful for keeping log presentation rules consistent across review modes without repeating
+/// finding/status formatting logic at each execution call site.
+/// </remarks>
+internal static class CodeSmellReportLogService
 {
     private const string CheckErrorInfoPrefix = "CHECK ERROR:";
 
-    public CodeSmellReport ProcessReport(CodeSmellReport report, IReadOnlyList<ICodeReviewCheck> checks, Action<string> appendLog)
+    public static CodeSmellReport ProcessReport(CodeSmellReport report, IReadOnlyList<ICodeReviewCheck> checks, Action<string> appendLog)
     {
         foreach (var info in report.Info)
             appendLog?.Invoke(info);

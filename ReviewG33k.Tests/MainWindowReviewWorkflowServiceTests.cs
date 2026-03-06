@@ -121,7 +121,6 @@ public sealed class MainWindowReviewWorkflowServiceTests
             gitRunner,
             new CodeReviewOrchestrator(gitRunner),
             new CodeSmellReportAnalyzer(gitRunner),
-            new CodeSmellReportLogService(),
             metadataClient);
         var preparationService = new MainWindowReviewPreparationService(
             new MainWindowInputValidationService(),

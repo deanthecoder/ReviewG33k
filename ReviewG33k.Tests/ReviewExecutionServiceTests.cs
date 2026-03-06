@@ -26,7 +26,6 @@ public sealed class ReviewExecutionServiceTests
                 null,
                 new CodeReviewOrchestrator(new GitCommandRunner()),
                 new CodeSmellReportAnalyzer(new GitCommandRunner()),
-                new CodeSmellReportLogService(),
                 new BitbucketPullRequestMetadataClient(new HttpClient(new StubHttpMessageHandler([])))),
             Throws.ArgumentNullException);
     }
@@ -54,7 +53,6 @@ public sealed class ReviewExecutionServiceTests
             gitRunner,
             new CodeReviewOrchestrator(gitRunner),
             new CodeSmellReportAnalyzer(gitRunner),
-            new CodeSmellReportLogService(),
             metadataClient);
         var pullRequest = new BitbucketPullRequestReference(
             "bitbucket.example.com",

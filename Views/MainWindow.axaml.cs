@@ -43,7 +43,6 @@ public partial class MainWindow : Window
     private readonly LocalBaseBranchService m_localBaseBranchService;
     private readonly LocalFindingResampleService m_localFindingResampleService;
     private readonly PullRequestPreviewService m_pullRequestPreviewService;
-    private readonly PullRequestStateNoticeService m_pullRequestStateNoticeService;
     private readonly CodeSmellReportAnalyzer m_codeSmellReportAnalyzer;
     private readonly BitbucketPullRequestMetadataClient m_pullRequestMetadataClient;
     private readonly MainWindowStartupService m_startupService;
@@ -56,6 +55,7 @@ public partial class MainWindow : Window
     private BitbucketPullRequestReference m_latestPullRequest;
     private string m_latestReviewWorktreePath;
     private string m_latestSolutionPath;
+    private string m_lastNonOpenPullRequestNoticeKey;
     private bool m_isInitializing;
 
     public ICommand CopyLogLineCommand => m_viewModel.CopyLogLineCommand;
@@ -80,7 +80,6 @@ public partial class MainWindow : Window
         m_localBaseBranchService = dependencies.LocalBaseBranchService;
         m_localFindingResampleService = dependencies.LocalFindingResampleService;
         m_pullRequestPreviewService = dependencies.PullRequestPreviewService;
-        m_pullRequestStateNoticeService = dependencies.PullRequestStateNoticeService;
         m_codeSmellReportAnalyzer = dependencies.CodeSmellReportAnalyzer;
         m_pullRequestMetadataClient = dependencies.PullRequestMetadataClient;
         m_startupService = dependencies.StartupService;
@@ -790,15 +789,18 @@ public partial class MainWindow : Window
 
     private void NotifyNonOpenPullRequestIfNeeded(BitbucketPullRequestReference pullRequest)
     {
-        if (!m_pullRequestStateNoticeService.TryCreateNonOpenPullRequestNotice(
+        if (!PullRequestStateNotice.TryCreateNonOpenPullRequestNotice(
                 pullRequest,
                 m_viewModel.PreviewPullRequestIsOpen,
                 m_viewModel.PreviewPullRequestStateDisplay,
+                m_lastNonOpenPullRequestNoticeKey,
+                out var noticeKey,
                 out var message))
         {
             return;
         }
 
+        m_lastNonOpenPullRequestNoticeKey = noticeKey;
         AppendLog($"WARNING: {message}");
         SetStatus(message);
         ShowMessage(
