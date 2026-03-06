@@ -239,7 +239,7 @@ public sealed class CodeSmellReportAnalyzer
                 .Select(file => Path.GetFileName(file.Path)),
             StringComparer.OrdinalIgnoreCase);
 
-        return new CodeReviewAnalysisContext(csharpFiles, addedTestFilesByName, resxFiles);
+        return new CodeReviewAnalysisContext(csharpFiles, addedTestFilesByName, resxFiles, sourceFiles);
     }
 
     private static CodeReviewChangedFile CreateWholeFileClone(CodeReviewChangedFile file)
@@ -277,6 +277,7 @@ public sealed class CodeSmellReportAnalyzer
         new PrivateGetOnlyAutoPropertyShouldBeFieldCodeReviewCheck(),
         new PrivatePropertyShouldBeFieldCodeReviewCheck(),
         new PrivateFieldCanBeReadonlyCodeReviewCheck(),
+        new PrivateFieldUsedInSingleMethodCodeReviewCheck(),
         new MissingBlankLineBetweenMethodsCodeReviewCheck(),
         new MethodParameterCountCodeReviewCheck(),
         new GenericTypeNameSuffixCodeReviewCheck(),
@@ -290,6 +291,8 @@ public sealed class CodeSmellReportAnalyzer
         new MethodCanBeStaticCodeReviewCheck(),
         new RedundantSelfLookupCodeReviewCheck(),
         new BooleanLiteralComparisonCodeReviewCheck(),
+        new ConsecutiveBooleanArgumentsCodeReviewCheck(),
+        new NumericStringCultureForFileWriteCodeReviewCheck(),
         new UnnecessaryCastCodeReviewCheck(),
         new UnnecessaryEnumMemberValueCodeReviewCheck(),
         new UnnecessaryVerbatimStringPrefixCodeReviewCheck(),
@@ -304,6 +307,7 @@ public sealed class CodeSmellReportAnalyzer
         new MissingUnitTestsCodeReviewCheck(),
         new MissingTestsForNewPublicMethodsCodeReviewCheck(),
         new MissingReadmeForNewProjectCodeReviewCheck(),
+        new MissingDisclaimerForNewSourceFileCodeReviewCheck(),
         new MissingTypedBindingContextCodeReviewCheck(),
         new FixedSizeLayoutContainerCodeReviewCheck(),
         new SingleChildWrapperContainerCodeReviewCheck(),

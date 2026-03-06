@@ -117,6 +117,25 @@ public sealed class CodeReviewFileClassificationTests
         Assert.That(result, Is.True);
     }
 
+    [TestCase("src/Foo.cs", true)]
+    [TestCase("src/Foo.CS", true)]
+    [TestCase("native/Foo.cpp", true)]
+    [TestCase("native/Foo.H", true)]
+    [TestCase("web/app.js", true)]
+    [TestCase("web/app.ts", true)]
+    [TestCase("docs/readme.md", false)]
+    [TestCase("assets/logo.png", false)]
+    [TestCase("src/Foo.g.cs", false)]
+    [TestCase("src/Foo.generated.cs", false)]
+    [TestCase(null, false)]
+    [TestCase("", false)]
+    [TestCase("   ", false)]
+    public void IsLikelySourceCodePathReturnsExpectedResult(string path, bool expected)
+    {
+        var actual = InvokeIsLikelySourceCodePath(path);
+        Assert.That(actual, Is.EqualTo(expected));
+    }
+
     private static bool InvokeIsAnalyzableChangedCSharpPath(string path)
     {
         return Support.CodeReviewFileClassification.IsAnalyzableChangedCSharpPath(path);
@@ -130,6 +149,11 @@ public sealed class CodeReviewFileClassificationTests
     private static bool InvokeIsMarkupFilePath(string path)
     {
         return Support.CodeReviewFileClassification.IsMarkupFilePath(path);
+    }
+
+    private static bool InvokeIsLikelySourceCodePath(string path)
+    {
+        return Support.CodeReviewFileClassification.IsLikelySourceCodePath(path);
     }
 
     private static bool InvokeIsLikelyTestCodeFile(CodeReviewChangedFile file)

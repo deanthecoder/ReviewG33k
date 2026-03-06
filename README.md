@@ -15,6 +15,7 @@ ReviewG33k is a lightweight Avalonia desktop app for fast, local code reviews. G
 - Switch scan scope between **changed lines** (faster) and **full modified files** (more thorough) for checks that are normally line-scoped.
 - Prepare an isolated review checkout using `git worktree` so your working tree stays untouched.
 - Run opinionated automated checks on the changed files/lines (async, exceptions, suppressions, test hygiene, and more).
+- Classify findings into concise categories in the results view (for example `Threading`, `Testing`, `UI`, `Resources`).
 - Open findings at `file:line` in VS Code (requires the `code` CLI); apply a few safe auto-fixes in local mode.
 - Export findings to the clipboard and copy a focused Codex prompt for issues that need manual/AI help.
 
@@ -36,6 +37,20 @@ dotnet run --project ReviewG33k.csproj
 ```
 
 ## Supported checks
+### Finding categories (results view)
+ReviewG33k labels each finding with one of these categories:
+- `Correctness`
+- `Threading`
+- `Performance`
+- `Resources`
+- `API/Design`
+- `Readability`
+- `Maintainability`
+- `Testing`
+- `Documentation`
+- `UI`
+- `Repo Hygiene`
+
 ### Async and threading
 | Check | What it flags |
 | --- | --- |
@@ -57,6 +72,7 @@ dotnet run --project ReviewG33k.csproj
 | Constructor event subscription lifecycle | Constructors that subscribe to events without clear unsubscribe/disposal lifecycle. |
 | Multiple enumeration | Re-enumerating deferred `IEnumerable` values unexpectedly. |
 | Public method argument guards | Missing null guards in newly added public methods. |
+| Numeric formatting for file output | `double`/`float`/`decimal` converted to text for file writes without `InvariantCulture`. |
 
 ### Design and maintainability
 | Check | What it flags |
@@ -65,6 +81,7 @@ dotnet run --project ReviewG33k.csproj
 | Private get-only property should be field | Private get-only auto-properties better represented as fields. |
 | Private property should be field | Simple private properties that are effectively field wrappers. |
 | Private field can be readonly | Private fields written only during construction. |
+| Private readonly field only used in constructor | Private readonly fields whose references are confined to constructor setup and can likely become local variables. |
 | Method can be static | Instance methods that do not use instance state. |
 | Local variable can be const | Local values that never change and can safely be `const`. |
 | Unused local variables | Local variables that are declared/assigned but never read. |
@@ -79,6 +96,7 @@ dotnet run --project ReviewG33k.csproj
 | --- | --- |
 | Missing blank lines between methods | Method blocks that run together and reduce readability. |
 | High parameter count | Methods/constructors with too many parameters. |
+| Consecutive positional boolean arguments | Calls with consecutive unnamed `true`/`false` literals (prefer named args for clarity). |
 | Generic type name suffix | Generic type names that do not follow expected suffix conventions. |
 | If/else brace consistency | Mismatched bracing style between `if` and `else` blocks. |
 | Unnecessary if/else braces | Extra braces around simple single-line branches. |
@@ -93,9 +111,11 @@ dotnet run --project ReviewG33k.csproj
 | Check | What it flags |
 | --- | --- |
 | Missing XML docs | New public types without XML documentation. |
+| Empty XML doc content | XML doc tags that exist but contain no meaningful content. |
 | Missing unit test updates | New production changes with no corresponding test changes. |
 | Missing tests for new public methods | Added public methods without test coverage changes. |
 | Missing README for new project | New project additions without an accompanying README. |
+| Missing disclaimer/header for new source files | New source files that likely need a standard file header/disclaimer. |
 
 ### Localization (RESX)
 | Check | What it flags |
@@ -108,6 +128,10 @@ dotnet run --project ReviewG33k.csproj
 | Check | What it flags |
 | --- | --- |
 | Missing typed binding context (Avalonia) | XAML bindings without typed context where expected. |
+| Fixed size on layout containers | Width/height applied to multi-child layout containers where flexibility is expected. |
+| Single-child wrapper containers | Parent containers that only wrap one child and add no meaningful behavior. |
+| Nested same-panel wrappers | Redundant nested containers of the same panel type. |
+| Empty multi-child containers | Multi-child container elements declared with no children. |
 | Warning suppressions | New `#pragma warning disable` or `[SuppressMessage]` suppressions. |
 
 ## License

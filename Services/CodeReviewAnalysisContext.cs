@@ -18,11 +18,13 @@ public sealed class CodeReviewAnalysisContext
     public CodeReviewAnalysisContext(
         IReadOnlyList<CodeReviewChangedFile> files,
         IReadOnlySet<string> addedTestFilesByName,
-        IReadOnlyList<CodeReviewChangedFile> resxFiles = null)
+        IReadOnlyList<CodeReviewChangedFile> resxFiles = null,
+        IReadOnlyList<CodeReviewChangedFile> allChangedFiles = null)
     {
         Files = files ?? throw new ArgumentNullException(nameof(files));
         AddedTestFilesByName = addedTestFilesByName ?? throw new ArgumentNullException(nameof(addedTestFilesByName));
         ResxFiles = resxFiles ?? [];
+        AllChangedFiles = allChangedFiles ?? Files;
     }
 
     public IReadOnlyList<CodeReviewChangedFile> Files { get; }
@@ -30,6 +32,8 @@ public sealed class CodeReviewAnalysisContext
     public IReadOnlySet<string> AddedTestFilesByName { get; }
 
     public IReadOnlyList<CodeReviewChangedFile> ResxFiles { get; }
+
+    public IReadOnlyList<CodeReviewChangedFile> AllChangedFiles { get; }
 
     public bool HasAnyAddedTestFiles => AddedTestFilesByName.Count > 0;
 }

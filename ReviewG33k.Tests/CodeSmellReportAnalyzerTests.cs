@@ -47,10 +47,13 @@ public sealed class CodeSmellReportAnalyzerTests
         var missingBlankLineCheck = analyzer.Checks.OfType<MissingBlankLineBetweenMethodsCodeReviewCheck>().Single();
         var stringConcatCheck = analyzer.Checks.OfType<StringConcatenationToSameTargetCodeReviewCheck>().Single();
         var constructorEventSubscriptionCheck = analyzer.Checks.OfType<ConstructorEventSubscriptionLifecycleCodeReviewCheck>().Single();
+        var consecutiveBooleanArgumentsCheck = analyzer.Checks.OfType<ConsecutiveBooleanArgumentsCodeReviewCheck>().Single();
         var resxMissingLocaleKeysCheck = analyzer.Checks.OfType<ResxMissingLocaleKeysCodeReviewCheck>().Single();
         var resxUnexpectedExtraKeysCheck = analyzer.Checks.OfType<ResxUnexpectedExtraKeysCodeReviewCheck>().Single();
+        var unusedUsingCheck = analyzer.Checks.OfType<UnusedUsingRoslynCodeReviewCheck>().Single();
         var localVariableCanBeConstCheck = analyzer.Checks.OfType<LocalVariableCanBeConstCodeReviewCheck>().Single();
         var unusedLocalVariableCheck = analyzer.Checks.OfType<UnusedLocalVariableCodeReviewCheck>().Single();
+        var privateFieldUsedInSingleMethodCheck = analyzer.Checks.OfType<PrivateFieldUsedInSingleMethodCodeReviewCheck>().Single();
 
         Assert.That(missingXmlDocsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(missingUnitTestsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
@@ -60,10 +63,13 @@ public sealed class CodeSmellReportAnalyzerTests
         Assert.That(missingBlankLineCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(stringConcatCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(constructorEventSubscriptionCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(consecutiveBooleanArgumentsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(resxMissingLocaleKeysCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
         Assert.That(resxUnexpectedExtraKeysCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
+        Assert.That(unusedUsingCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
         Assert.That(localVariableCanBeConstCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(unusedLocalVariableCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(privateFieldUsedInSingleMethodCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
     }
 
     [Test]
@@ -103,6 +109,28 @@ public sealed class CodeSmellReportAnalyzerTests
         Assert.That(
             report.Findings.Any(finding => finding.RuleId == "local-variable-can-be-const"),
             Is.False);
+    }
+
+    [Test]
+    public void AnalyzeFilesWhenUnusedUsingIsOutsideAddedLinesStillReports()
+    {
+        var analyzer = new CodeSmellReportAnalyzer(new GitCommandRunner());
+        var changedFile = CreateChangedFile(
+            """
+            using System.Text;
+
+            public sealed class Sample
+            {
+                public int Add(int a, int b) => a + b;
+            }
+            """,
+            [5]);
+
+        var report = analyzer.AnalyzeFiles([changedFile]);
+
+        Assert.That(
+            report.Findings.Any(finding => finding.RuleId == CodeReviewRuleIds.UnusedUsingsRoslyn),
+            Is.True);
     }
 
     [Test]
@@ -223,5 +251,3 @@ public sealed class CodeSmellReportAnalyzerTests
         }
     }
 }
-
-

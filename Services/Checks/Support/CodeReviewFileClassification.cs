@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 
@@ -16,6 +17,34 @@ namespace ReviewG33k.Services.Checks.Support;
 
 internal static class CodeReviewFileClassification
 {
+    private static readonly HashSet<string> SourceCodeExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".cs",
+        ".c",
+        ".cc",
+        ".cpp",
+        ".cxx",
+        ".h",
+        ".hh",
+        ".hpp",
+        ".hxx",
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs",
+        ".ts",
+        ".tsx",
+        ".java",
+        ".kt",
+        ".kts",
+        ".go",
+        ".rs",
+        ".swift",
+        ".py",
+        ".rb",
+        ".php"
+    };
+
     private static readonly Regex UiUsingRegex = new(
         @"^\s*using\s+(?<ns>(Avalonia\.(Controls|VisualTree)|System\.Windows(?:\.(Controls|Data|Documents|Forms|Input|Interop|Markup|Media|Navigation|Shapes|Threading))?|Windows\.UI\.Xaml(?:\.(Controls|Data|Documents|Input|Interop|Markup|Media|Navigation|Shapes))?))\s*;",
         RegexOptions.Multiline | RegexOptions.Compiled);
@@ -52,6 +81,15 @@ internal static class CodeReviewFileClassification
          path.EndsWith(".g.i.cs", StringComparison.OrdinalIgnoreCase) ||
          path.EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase) ||
          path.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase));
+
+    public static bool IsLikelySourceCodePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || IsGeneratedFilePath(path))
+            return false;
+
+        var extension = Path.GetExtension(path);
+        return !string.IsNullOrWhiteSpace(extension) && SourceCodeExtensions.Contains(extension);
+    }
 
     public static bool IsCodeBehindFilePath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&

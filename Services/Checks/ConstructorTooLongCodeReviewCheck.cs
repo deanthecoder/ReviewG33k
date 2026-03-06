@@ -16,7 +16,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class ConstructorTooLongCodeReviewCheck : CodeReviewCheckBase
 {
-    private const int ConstructorLineThreshold = 15;
+    private const int ConstructorLineThreshold = 20;
 
     public override string RuleId => "constructor-too-long";
 
