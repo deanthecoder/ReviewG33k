@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using ReviewG33k.Services;
+using ReviewG33k.Services.Checks.Support;
 using ReviewG33k.Views;
 
 namespace ReviewG33k.Tests;
@@ -31,6 +32,55 @@ public sealed class ReviewResultRowTests
         row.IsIncluded = false;
 
         Assert.That(row.CanCodexPromptActive, Is.False);
+    }
+
+    [Test]
+    public void TickSameTypeMenuHeaderWhenRuleIdExistsIncludesRuleId()
+    {
+        var row = CreateCodexRow();
+        Assert.That(row.TickSameTypeMenuHeader, Is.EqualTo("Select all `sample-rule` issues"));
+    }
+
+    [Test]
+    public void TickSameTypeMenuHeaderWhenRuleIdMissingUsesGenericText()
+    {
+        var row = new ReviewResultRow(
+            new CodeSmellFinding(
+                CodeReviewFindingSeverity.Hint,
+                null,
+                "Sample.cs",
+                12,
+                "Sample finding"),
+            canOpen: false,
+            commentAvailability: ReviewResultRow.ActionAvailability.Hidden,
+            fixAvailability: ReviewResultRow.ActionAvailability.Hidden,
+            codexPromptAvailability: ReviewResultRow.ActionAvailability.Enabled);
+        Assert.That(row.TickSameTypeMenuHeader, Is.EqualTo("Select issues of this type"));
+    }
+
+    [Test]
+    public void CategoryTextWhenRuleIsMissingTestsUsesTestingCategory()
+    {
+        var row = new ReviewResultRow(
+            new CodeSmellFinding(
+                CodeReviewFindingSeverity.Hint,
+                "missing-tests",
+                "Sample.cs",
+                12,
+                "Sample finding"),
+            canOpen: false,
+            commentAvailability: ReviewResultRow.ActionAvailability.Hidden,
+            fixAvailability: ReviewResultRow.ActionAvailability.Hidden,
+            codexPromptAvailability: ReviewResultRow.ActionAvailability.Enabled);
+
+        Assert.That(row.CategoryText, Is.EqualTo(CodeReviewFindingCategoryResolver.Testing));
+    }
+
+    [Test]
+    public void CategoryTextWhenRuleIsUnknownFallsBackToMaintainability()
+    {
+        var row = CreateCodexRow();
+        Assert.That(row.CategoryText, Is.EqualTo(CodeReviewFindingCategoryResolver.Maintainability));
     }
 
     private static ReviewResultRow CreateCodexRow()

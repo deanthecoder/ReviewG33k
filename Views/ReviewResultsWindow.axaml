@@ -5,6 +5,7 @@
         xmlns:views="using:ReviewG33k.Views"
         xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d"
+        x:Name="ReviewResultsWindowRoot"
         x:Class="ReviewG33k.Views.ReviewResultsWindow"
         Width="980"
         Height="620"
@@ -18,15 +19,15 @@
                    Grid.Row="0"
                    HorizontalAlignment="Right"
                    FontSize="16" FontWeight="SemiBold"
-                   Text="Review issues" />
+                   Text="{Binding SummaryText}" />
 
         <Grid Grid.Row="1"
               Margin="0,12,0,6"
-              ColumnDefinitions="34,118,*,Auto">
+              ColumnDefinitions="34,148,*,Auto">
             <TextBlock Grid.Column="1"
                        Margin="16,0,0,0"
                        FontWeight="SemiBold"
-                       Text="Severity" />
+                       Text="Category" />
             <TextBlock Grid.Column="2"
                        Margin="24,0,0,0"
                        FontWeight="SemiBold"
@@ -43,17 +44,23 @@
                     BorderThickness="1"
                     CornerRadius="8">
                 <ListBox x:Name="ResultsListBox"
+                         ItemsSource="{Binding Rows}"
+                         SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
                          BorderThickness="0"
                          Background="Transparent">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="views:ReviewResultRow">
                         <Grid Margin="0,1"
                               Background="Transparent"
-                              ColumnDefinitions="34,118,*,Auto">
+                              ColumnDefinitions="34,148,*,Auto">
                                 <Grid.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="{Binding UntickSameTypeMenuHeader}"
-                                                  Click="UntickSameTypeMenuItem_OnClick" />
+                                                  Command="{Binding #ReviewResultsWindowRoot.UntickSameTypeCommand}"
+                                                  CommandParameter="{Binding .}" />
+                                        <MenuItem Header="{Binding TickSameTypeMenuHeader}"
+                                                  Command="{Binding #ReviewResultsWindowRoot.TickSameTypeCommand}"
+                                                  CommandParameter="{Binding .}" />
                                     </ContextMenu>
                                 </Grid.ContextMenu>
                                 <CheckBox Grid.Column="0"
@@ -62,12 +69,10 @@
                                           IsChecked="{Binding IsIncluded}" />
                                 <Border Grid.Column="1"
                                         Classes="sevPill"
-                                        Classes.sevImportant="{Binding IsImportantSeverity}"
-                                        Classes.sevSuggestion="{Binding IsSuggestionSeverity}"
                                         VerticalAlignment="Center"
                                         HorizontalAlignment="Left">
                                     <TextBlock VerticalAlignment="Center"
-                                               Text="{Binding SeverityText}" />
+                                               Text="{Binding CategoryText}" />
                                 </Border>
                                 <StackPanel Grid.Column="2"
                                             Margin="8,2,8,2"
@@ -95,7 +100,8 @@
                                             Spacing="6">
                                     <Button Padding="6"
                                             Classes="neon"
-                                            Click="FixFindingButton_OnClick"
+                                            Command="{Binding #ReviewResultsWindowRoot.FixFindingCommand}"
+                                            CommandParameter="{Binding .}"
                                             IsVisible="{Binding ShowFixButton}"
                                             IsEnabled="{Binding CanFixActive}"
                                             ToolTip.Tip="Apply a local quick-fix for this issue">
@@ -105,7 +111,8 @@
                                     </Button>
                                     <Button Padding="6"
                                             Classes="neon"
-                                            Click="CreateCodexPromptButton_OnClick"
+                                            Command="{Binding #ReviewResultsWindowRoot.CreateCodexPromptCommand}"
+                                            CommandParameter="{Binding .}"
                                             IsVisible="{Binding ShowCodexPromptButton}"
                                             IsEnabled="{Binding CanCodexPromptActive}"
                                             Background="Transparent"
@@ -119,7 +126,8 @@
                                     </Button>
                                     <Button
                                             Classes="neon"
-                                            Click="CommentFindingButton_OnClick"
+                                            Command="{Binding #ReviewResultsWindowRoot.CommentFindingCommand}"
+                                            CommandParameter="{Binding .}"
                                             IsVisible="{Binding ShowCommentButton}"
                                             IsEnabled="{Binding CanCommentActive}"
                                             ToolTip.Tip="Post this issue as a Bitbucket PR inline comment"
@@ -137,13 +145,15 @@
                 <Button x:Name="ToggleAllButton"
                         Grid.Column="0"
                         Classes="neon"
-                        Click="ToggleAllButton_OnClick"
+                        IsEnabled="{Binding CanToggleAll}"
+                        Command="{Binding ToggleAllCommand}"
                         Content="Toggle All" />
                 <Button x:Name="ExportToClipboardButton"
                         Grid.Column="1"
                         Classes="neon"
                         Margin="8,0,0,0"
-                        Click="ExportToClipboardButton_OnClick"
+                        IsEnabled="{Binding CanExportToClipboard}"
+                        Command="{Binding ExportToClipboardCommand}"
                         ToolTip.Tip="Copy included findings to clipboard">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <Viewbox Width="18" Height="18">
@@ -159,7 +169,8 @@
                 <Button x:Name="CommentSelectedButton"
                         Grid.Column="3"
                         Classes="neon"
-                        Click="CommentSelectedButton_OnClick"
+                        IsEnabled="{Binding CanCommentSelected}"
+                        Command="{Binding CommentSelectedCommand}"
                         Content="Comment Selected" />
             </Grid>
 
@@ -178,31 +189,33 @@
                                        Margin="0,0,0,6"
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center"
-                                       Text="Preview" />
+                                       Text="{Binding PreviewHeaderText}" />
                             <Button x:Name="CopyPreviewFileNameButton"
                                     Classes="neon"
                                     Margin="8,0,0,6"
                                     Padding="8,0"
                                     FontSize="13"
-                                    Click="CopyPreviewFileNameButton_OnClick"
+                                    IsEnabled="{Binding CanCopyPreviewFileName}"
+                                    Command="{Binding CopyPreviewFileNameCommand}"
                                     VerticalContentAlignment="Center"
-                                    ToolTip.Tip="Copy file name to clipboard"
+                                    ToolTip.Tip="{Binding CopyPreviewFileNameToolTip}"
                                     Content="⧉" />
                         </StackPanel>
                         <Button x:Name="OpenSelectedButton"
                                 Grid.Column="1"
                                 Classes="neon"
                                 Margin="8,0,0,6"
-                                Click="OpenSelectedButton_OnClick"
-                                ToolTip.Tip="Open selected finding using the chosen app">
+                                IsEnabled="{Binding CanOpenSelected}"
+                                Command="{Binding OpenSelectedCommand}"
+                                ToolTip.Tip="{Binding OpenSelectedToolTip}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <materialIcons:MaterialIcon x:Name="OpenSelectedTargetIcon"
                                                             Width="16"
                                                             Height="16"
-                                                            Kind="CodeTags" />
+                                                            Kind="{Binding OpenSelectedTargetIconKind}" />
                                 <TextBlock x:Name="OpenSelectedTargetText"
                                            VerticalAlignment="Center"
-                                           Text="Open" />
+                                           Text="{Binding OpenSelectedTargetText}" />
                             </StackPanel>
                         </Button>
                         <Button x:Name="OpenTargetMenuButton"
@@ -210,7 +223,7 @@
                                 Classes="neon"
                                 Margin="4,0,0,6"
                                 Padding="8,0"
-                                Click="OpenTargetMenuButton_OnClick"
+                                Command="{Binding #ReviewResultsWindowRoot.OpenTargetMenuCommand}"
                                 ToolTip.Tip="Choose how View Code opens files">
                             <Button.ContextMenu>
                                 <ContextMenu x:Name="OpenTargetMenu" />
@@ -225,6 +238,7 @@
                              Height="238"
                              IsReadOnly="True"
                              AcceptsReturn="True"
+                             Text="{Binding PreviewText}"
                              TextWrapping="NoWrap"
                              FontFamily="Consolas, Courier New, monospace"
                              ScrollViewer.VerticalScrollBarVisibility="Visible"

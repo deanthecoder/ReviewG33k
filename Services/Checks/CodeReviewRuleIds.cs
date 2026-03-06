@@ -27,6 +27,7 @@ public static class CodeReviewRuleIds
     public const string PrivatePropertyShouldBeField = "private-property-should-be-field";
     public const string PrivateGetOnlyAutoPropertyShouldBeField = "private-get-only-auto-property-should-be-field";
     public const string PrivateFieldCanBeReadonly = "private-field-can-be-readonly";
+    public const string PrivateFieldUsedInSingleMethod = "private-field-used-in-single-method";
     public const string MissingBlankLineBetweenMethods = "missing-blank-line-between-methods";
     public const string MethodParameterCount = "method-parameter-count";
     public const string GenericTypeNameSuffix = "generic-type-name-suffix";
@@ -60,6 +61,9 @@ public static class CodeReviewRuleIds
     public const string EmptyContainer = "empty-container";
     public const string MultipleClassesPerFile = "multiple-classes-per-file";
     public const string MissingReadmeForNewProject = "missing-readme-for-new-project";
+    public const string MissingDisclaimerForNewSourceFile = "missing-disclaimer-for-new-source-file";
     public const string UnusedLocalVariable = "unused-local-variable";
     public const string UnnecessaryEnumMemberValue = "unnecessary-enum-member-value";
+    public const string ConsecutiveBooleanArguments = "consecutive-boolean-arguments";
+    public const string NumericStringCultureForFileWrite = "numeric-string-culture-for-file-write";
 }

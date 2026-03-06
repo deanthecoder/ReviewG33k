@@ -15,15 +15,17 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Threading;
+using DTC.Core.Commands;
 using DTC.Core.Extensions;
 using Material.Icons;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
 using ReviewG33k.Services.Checks.Support;
+using ReviewG33k.ViewModels;
 
 namespace ReviewG33k.Views;
 
@@ -43,19 +45,29 @@ public partial class ReviewResultsWindow : Window
     private readonly Func<CodeSmellFinding, string> m_resolveFindingPath;
     private readonly Func<string, Task<IReadOnlyList<CodeSmellFinding>>> m_resampleFileFindingsAction;
     private readonly ICodeReviewFindingFixer m_findingFixer;
+    private readonly ReviewResultsStateService m_stateService = new();
     private readonly List<ReviewResultRow> m_rows;
     private readonly bool m_canOpenInVsCode;
     private readonly bool m_canCommentInBitbucket;
     private readonly bool m_canFixLocally;
     private readonly bool m_hasPathResolver;
+    private readonly ReviewResultsWindowViewModel m_viewModel = new();
     private readonly IReadOnlyList<CodeLocationOpenTargetDefinition> m_openTargetDefinitions;
     private readonly IReadOnlyDictionary<CodeLocationOpenTarget, CodeLocationOpenTargetDefinition> m_openTargetDefinitionsByTarget;
     private readonly Dictionary<CodeLocationOpenTarget, MenuItem> m_openTargetMenuItems = [];
+    private readonly CommandBase m_selectOpenTargetCommandImpl;
     private CodeLocationOpenTarget m_selectedOpenTarget;
     private Cursor m_previousCursor;
     private bool m_isBulkCommenting;
     private bool m_isApplyingFix;
     private string m_previewFileName;
+
+    public ICommand OpenTargetMenuCommand { get; }
+    public ICommand FixFindingCommand => m_viewModel.FixFindingCommand;
+    public ICommand CreateCodexPromptCommand => m_viewModel.CreateCodexPromptCommand;
+    public ICommand CommentFindingCommand => m_viewModel.CommentFindingCommand;
+    public ICommand TickSameTypeCommand => m_viewModel.TickSameTypeCommand;
+    public ICommand UntickSameTypeCommand => m_viewModel.UntickSameTypeCommand;
 
     public ReviewResultsWindow(
         IEnumerable<CodeSmellFinding> findings,
@@ -89,19 +101,39 @@ public partial class ReviewResultsWindow : Window
         m_resolveFindingPath = resolveFindingPath;
         m_resampleFileFindingsAction = resampleFileFindingsAction;
         m_findingFixer = findingFixer;
+        CommandBase openTargetMenuCommandImpl = new RelayCommand(_ => ShowOpenTargetMenu());
+        m_selectOpenTargetCommandImpl = new RelayCommand(
+            parameter =>
+            {
+                if (parameter is CodeLocationOpenTarget target)
+                    SelectOpenTarget(target);
+            },
+            parameter => parameter is CodeLocationOpenTarget);
+        OpenTargetMenuCommand = openTargetMenuCommandImpl;
+        m_viewModel.ConfigureCommands(
+            FixFindingAsync,
+            CreateCodexPromptAsync,
+            CommentFindingAsync,
+            ToggleAllIncluded,
+            CommentSelectedAsync,
+            ExportToClipboardAsync,
+            CopyPreviewFileNameAsync,
+            OpenSelectedAsync,
+            row => SetSameTypeIncludedState(row, isIncluded: true),
+            row => SetSameTypeIncludedState(row, isIncluded: false));
         InitializeComponent();
+        DataContext = m_viewModel;
+        m_viewModel.PropertyChanged += ViewModel_OnPropertyChanged;
         InitializeOpenTargetMenuItems();
         if (m_openTargetDefinitions.Count > 0 && !m_openTargetDefinitionsByTarget.ContainsKey(m_selectedOpenTarget))
             m_selectedOpenTarget = m_openTargetDefinitions[0].Target;
         Title = BuildWindowTitle(pullRequestTitle);
-        UpdateCopyPreviewFileNameButtonState();
-        ResultsListBox.SelectionChanged += ResultsListBox_OnSelectionChanged;
         CommentSelectedButton.IsVisible = canCommentInBitbucket;
 
         m_rows = (findings ?? [])
             .Where(finding => finding != null)
             .Where(finding => finding.Severity != CodeReviewFindingSeverity.Ok)
-            .OrderBy(finding => GetSeveritySortOrder(finding.Severity))
+            .OrderBy(finding => GetCategorySortOrder(CodeReviewFindingCategoryResolver.ResolveCategory(finding.RuleId)))
             .ThenBy(finding => finding.RuleId, StringComparer.OrdinalIgnoreCase)
             .ThenBy(finding => finding.FilePath, StringComparer.OrdinalIgnoreCase)
             .ThenBy(finding => finding.LineNumber)
@@ -111,16 +143,14 @@ public partial class ReviewResultsWindow : Window
         foreach (var row in m_rows)
             row.PropertyChanged += ReviewResultRow_OnPropertyChanged;
 
-        ResultsListBox.ItemsSource = m_rows.ToArray();
-        if (m_rows.Count > 0)
-            ResultsListBox.SelectedIndex = 0;
-        else
+        m_viewModel.SetRows(m_rows);
+        m_viewModel.SelectedRow = m_rows.FirstOrDefault();
+        if (m_viewModel.SelectedRow == null)
             SetPreviewText("Select an issue to preview surrounding file content.", "Preview");
 
         UpdateSummaryText();
         UpdateBatchActionButtonStates();
         UpdateOpenTargetUi();
-        UpdateOpenSelectedButtonState();
     }
 
     private static string BuildWindowTitle(string pullRequestTitle) =>
@@ -128,9 +158,9 @@ public partial class ReviewResultsWindow : Window
             ? BaseWindowTitle
             : $"{BaseWindowTitle} - {pullRequestTitle.Trim()}";
 
-    private async void CommentFindingButton_OnClick(object sender, RoutedEventArgs e)
+    private async Task CommentFindingAsync(ReviewResultRow row)
     {
-        if (sender is not Button { DataContext: ReviewResultRow row } || !row.CanCommentActive || m_commentFindingAction == null)
+        if (row == null || !row.CanCommentActive || m_commentFindingAction == null)
             return;
 
         row.IsPostingComment = true;
@@ -150,12 +180,9 @@ public partial class ReviewResultsWindow : Window
         }
     }
 
-    private async void FixFindingButton_OnClick(object sender, RoutedEventArgs e)
+    private async Task FixFindingAsync(ReviewResultRow row)
     {
-        if (m_isApplyingFix || sender is not Button { DataContext: ReviewResultRow row } || !row.CanFixActive)
-            return;
-
-        if (row.Finding == null)
+        if (m_isApplyingFix || row == null || !row.CanFixActive || row.Finding == null)
             return;
 
         if (!TryResolveFindingFile(row.Finding, out var resolvedFile))
@@ -183,7 +210,7 @@ public partial class ReviewResultsWindow : Window
 
             SetPreviewText(fixMessage ?? "Fixed.", "Preview");
 
-            if (!string.IsNullOrWhiteSpace(row.Finding?.FilePath) && m_resampleFileFindingsAction != null)
+            if (!string.IsNullOrWhiteSpace(row.Finding.FilePath) && m_resampleFileFindingsAction != null)
             {
                 var previousRowIndex = m_rows.IndexOf(row);
                 await RefreshFindingsForFileAsync(row.Finding.FilePath, row.Finding.LineNumber, previousRowIndex);
@@ -192,9 +219,8 @@ public partial class ReviewResultsWindow : Window
             {
                 row.HasBeenFixed = true;
                 row.IsIncluded = false;
-                if (ResultsListBox.SelectedItem is ReviewResultRow selectedRow &&
-                    ReferenceEquals(selectedRow, row) &&
-                    row.Finding != null)
+                if (m_viewModel.SelectedRow is { } selectedRow &&
+                    ReferenceEquals(selectedRow, row))
                 {
                     UpdatePreviewForFinding(row.Finding);
                 }
@@ -229,9 +255,9 @@ public partial class ReviewResultsWindow : Window
             WindowContentGrid.IsEnabled = !isBusy;
     }
 
-    private async void CreateCodexPromptButton_OnClick(object sender, RoutedEventArgs e)
+    private async Task CreateCodexPromptAsync(ReviewResultRow row)
     {
-        if (sender is not Button { DataContext: ReviewResultRow row } || !row.CanCodexPromptActive)
+        if (row == null || !row.CanCodexPromptActive)
             return;
 
         var clipboard = Clipboard;
@@ -258,7 +284,7 @@ public partial class ReviewResultsWindow : Window
         }
     }
 
-    private async void CopyPreviewFileNameButton_OnClick(object sender, RoutedEventArgs e)
+    private async Task CopyPreviewFileNameAsync()
     {
         if (string.IsNullOrWhiteSpace(m_previewFileName))
             return;
@@ -280,22 +306,13 @@ public partial class ReviewResultsWindow : Window
         }
     }
 
-    private void ToggleAllButton_OnClick(object sender, RoutedEventArgs e)
+    private void ToggleAllIncluded()
     {
-        if (m_rows.Count == 0)
-            return;
-
-        var includedCount = m_rows.Count(row => row.IsIncluded);
-        var excludedCount = m_rows.Count - includedCount;
-        var nextIncludedState = includedCount <= excludedCount;
-
-        foreach (var row in m_rows)
-            row.IsIncluded = nextIncludedState;
-
+        m_stateService.ToggleAllIncluded(m_rows);
         UpdateBatchActionButtonStates();
     }
 
-    private async void CommentSelectedButton_OnClick(object sender, RoutedEventArgs e)
+    private async Task CommentSelectedAsync()
     {
         if (m_isBulkCommenting || m_commentFindingAction == null)
             return;
@@ -347,7 +364,7 @@ public partial class ReviewResultsWindow : Window
             SetPreviewText($"Posted {successCount} comment(s). {failureCount} failed. See log for details.", "Preview");
     }
 
-    private async void ExportToClipboardButton_OnClick(object sender, RoutedEventArgs e)
+    private async Task ExportToClipboardAsync()
     {
         var clipboard = Clipboard;
         if (clipboard == null)
@@ -356,7 +373,7 @@ public partial class ReviewResultsWindow : Window
             return;
         }
 
-        var exportText = BuildExportText(out var exportedCount);
+        var exportText = m_stateService.BuildExportText(m_rows, out var exportedCount);
         if (exportedCount == 0)
         {
             SetPreviewText("No included findings available to export.", "Preview");
@@ -374,33 +391,18 @@ public partial class ReviewResultsWindow : Window
         }
     }
 
-    private void UntickSameTypeMenuItem_OnClick(object sender, RoutedEventArgs e)
+    private void SetSameTypeIncludedState(ReviewResultRow sourceRow, bool isIncluded)
     {
-        if (sender is not MenuItem { DataContext: ReviewResultRow sourceRow } || string.IsNullOrWhiteSpace(sourceRow.RuleId))
+        if (sourceRow == null || string.IsNullOrWhiteSpace(sourceRow.RuleId))
             return;
 
-        foreach (var row in m_rows.Where(row => string.Equals(row.RuleId, sourceRow.RuleId, StringComparison.OrdinalIgnoreCase)))
-            row.IsIncluded = false;
-
+        m_stateService.SetSameTypeIncludedState(m_rows, sourceRow.RuleId, isIncluded);
         UpdateBatchActionButtonStates();
     }
 
-    private void ResultsListBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async Task OpenSelectedAsync()
     {
-        if (ResultsListBox.SelectedItem is not ReviewResultRow row)
-        {
-            UpdateOpenSelectedButtonState();
-            SetPreviewText("Select an issue to preview surrounding file content.", "Preview");
-            return;
-        }
-
-        UpdateOpenSelectedButtonState();
-        UpdatePreviewForFinding(row.Finding);
-    }
-
-    private async void OpenSelectedButton_OnClick(object sender, RoutedEventArgs e)
-    {
-        if (ResultsListBox.SelectedItem is not ReviewResultRow row || !row.CanOpenActive)
+        if (m_viewModel.SelectedRow is not { } row || !row.CanOpenActive)
             return;
 
         if (m_openFindingWithTargetAction != null)
@@ -414,19 +416,13 @@ public partial class ReviewResultsWindow : Window
         m_openFindingAction?.Invoke(row.Finding);
     }
 
-    private void OpenTargetMenuButton_OnClick(object sender, RoutedEventArgs e)
+    private void ShowOpenTargetMenu()
     {
-        if (OpenTargetMenu == null || sender is not Control control)
+        if (OpenTargetMenu == null || OpenTargetMenuButton == null)
             return;
 
-        OpenTargetMenu.PlacementTarget = control;
+        OpenTargetMenu.PlacementTarget = OpenTargetMenuButton;
         OpenTargetMenu.Open();
-    }
-
-    private void OpenTargetMenuItem_OnClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is MenuItem { Tag: CodeLocationOpenTarget target })
-            SelectOpenTarget(target);
     }
 
     private ReviewResultRow MapToRow(CodeSmellFinding finding) =>
@@ -486,7 +482,7 @@ public partial class ReviewResultsWindow : Window
     {
         if (e.PropertyName is nameof(ReviewResultRow.IsIncluded) or nameof(ReviewResultRow.IsPostingComment) or nameof(ReviewResultRow.HasPostedComment) or nameof(ReviewResultRow.IsFixing) or nameof(ReviewResultRow.HasBeenFixed))
         {
-            UpdateOpenSelectedButtonState();
+            m_viewModel.RefreshOpenSelectedState();
             UpdateBatchActionButtonStates();
         }
     }
@@ -529,13 +525,13 @@ public partial class ReviewResultsWindow : Window
         }
 
         m_rows.Sort(CompareRows);
-        ResultsListBox.ItemsSource = m_rows.ToArray();
+        m_viewModel.SetRows(m_rows);
         UpdateSummaryText();
         UpdateBatchActionButtonStates();
-        UpdateOpenSelectedButtonState();
 
         if (m_rows.Count == 0)
         {
+            m_viewModel.SelectedRow = null;
             SetPreviewText("No review findings.", "Preview");
             return;
         }
@@ -553,9 +549,7 @@ public partial class ReviewResultsWindow : Window
             .ThenBy(row => row.Finding?.LineNumber ?? int.MaxValue)
             .FirstOrDefault() ?? m_rows[0];
 
-        ResultsListBox.SelectedItem = nextRow;
-        if (nextRow.Finding != null)
-            UpdatePreviewForFinding(nextRow.Finding);
+        m_viewModel.SelectedRow = nextRow;
     }
 
     private void UpdatePreviewForFinding(CodeSmellFinding finding)
@@ -611,66 +605,35 @@ public partial class ReviewResultsWindow : Window
     private void SetPreviewText(string text, string header, string previewFileName = null)
     {
         m_previewFileName = string.IsNullOrWhiteSpace(previewFileName) ? null : previewFileName.Trim();
-        PreviewHeaderTextBlock.Text = header ?? "Preview";
-        PreviewTextBox.Text = text ?? string.Empty;
+        m_viewModel.PreviewFileName = m_previewFileName;
+        m_viewModel.PreviewHeaderText = header ?? "Preview";
+        m_viewModel.PreviewText = text ?? string.Empty;
         PreviewTextBox.CaretIndex = 0;
         Dispatcher.UIThread.Post(() =>
         {
-            if (!string.IsNullOrEmpty(PreviewTextBox.Text))
+            if (!string.IsNullOrEmpty(m_viewModel.PreviewText))
                 PreviewTextBox.ScrollToLine(0);
         });
-        UpdateCopyPreviewFileNameButtonState();
-    }
-
-    private void UpdateCopyPreviewFileNameButtonState()
-    {
-        if (CopyPreviewFileNameButton == null)
-            return;
-
-        var hasPreviewFileName = !string.IsNullOrWhiteSpace(m_previewFileName);
-        CopyPreviewFileNameButton.IsEnabled = hasPreviewFileName;
-        ToolTip.SetTip(
-            CopyPreviewFileNameButton,
-            hasPreviewFileName
-                ? $"Copy '{m_previewFileName}' to clipboard"
-                : "Copy file name to clipboard");
     }
 
     private void UpdateBatchActionButtonStates()
     {
-        var hasIncludedFindings = m_rows.Any(row => row.IsIncluded);
-        ToggleAllButton.IsEnabled = m_rows.Count > 0;
-        ExportToClipboardButton.IsEnabled = hasIncludedFindings;
-        CommentSelectedButton.IsEnabled = !m_isBulkCommenting &&
-                                          m_commentFindingAction != null &&
-                                          m_rows.Any(row => row.IsIncluded && row.CanCommentActive);
+        var actionState = m_stateService.BuildBatchActionState(
+            m_rows,
+            m_isBulkCommenting,
+            m_commentFindingAction != null);
+        m_viewModel.ApplyBatchActionState(actionState);
     }
 
     private void UpdateSummaryText()
     {
-        if (m_rows.Count == 0)
-        {
-            SummaryTextBlock.Text = "No review findings";
-            return;
-        }
-
-        var fileCount = m_rows
-            .Select(row => row?.Finding?.FilePath)
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count();
-
-        SummaryTextBlock.Text = $"{m_rows.Count} finding(s) across {fileCount} file(s)";
+        var summaryText = m_stateService.BuildSummaryText(m_rows);
+        m_viewModel.ApplySummaryText(summaryText);
     }
 
     private void UpdateOpenSelectedButtonState()
     {
-        if (OpenSelectedButton == null)
-            return;
-
-        OpenSelectedButton.IsEnabled = ResultsListBox.SelectedItem is ReviewResultRow row &&
-                                      row.CanOpenActive &&
-                                      IsOpenTargetAvailable(m_selectedOpenTarget);
+        m_viewModel.RefreshOpenSelectedState();
     }
 
     private bool IsOpenTargetAvailable(CodeLocationOpenTarget target) =>
@@ -681,7 +644,6 @@ public partial class ReviewResultsWindow : Window
         m_selectedOpenTarget = target;
         m_openTargetChangedAction?.Invoke(target);
         UpdateOpenTargetUi();
-        UpdateOpenSelectedButtonState();
     }
 
     private void UpdateOpenTargetUi()
@@ -695,13 +657,26 @@ public partial class ReviewResultsWindow : Window
         var selectedTargetDefinition = GetOpenTargetDefinition(m_selectedOpenTarget);
         var selectedTargetName = selectedTargetDefinition?.DisplayName ?? m_selectedOpenTarget.ToString();
         var selectedTargetIcon = selectedTargetDefinition?.IconKind ?? MaterialIconKind.CodeTags;
+        m_viewModel.UpdateOpenTargetState(
+            selectedTargetName,
+            selectedTargetIcon,
+            IsOpenTargetAvailable(m_selectedOpenTarget));
+    }
 
-        if (OpenSelectedTargetText != null)
-            OpenSelectedTargetText.Text = $"Open ({selectedTargetName})";
-        if (OpenSelectedTargetIcon != null)
-            OpenSelectedTargetIcon.Kind = selectedTargetIcon;
-        if (OpenSelectedButton != null)
-            ToolTip.SetTip(OpenSelectedButton, $"Open selected finding using {selectedTargetName}");
+    private void ViewModel_OnPropertyChanged(object sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ReviewResultsWindowViewModel.SelectedRow))
+            return;
+
+        UpdateOpenSelectedButtonState();
+
+        if (m_viewModel.SelectedRow?.Finding != null)
+        {
+            UpdatePreviewForFinding(m_viewModel.SelectedRow.Finding);
+            return;
+        }
+
+        SetPreviewText("Select an issue to preview surrounding file content.", "Preview");
     }
 
     private void UpdateOpenTargetMenuItem(MenuItem menuItem, CodeLocationOpenTargetDefinition definition)
@@ -727,9 +702,10 @@ public partial class ReviewResultsWindow : Window
         {
             var menuItem = new MenuItem
             {
-                Tag = definition.Target
+                Tag = definition.Target,
+                Command = m_selectOpenTargetCommandImpl,
+                CommandParameter = definition.Target
             };
-            menuItem.Click += OpenTargetMenuItem_OnClick;
             m_openTargetMenuItems[definition.Target] = menuItem;
             menuItems.Add(menuItem);
         }
@@ -742,46 +718,6 @@ public partial class ReviewResultsWindow : Window
         return m_openTargetDefinitionsByTarget.TryGetValue(target, out var definition)
             ? definition
             : null;
-    }
-
-    private string BuildExportText(out int exportedCount)
-    {
-        var rowsToExport = m_rows.Where(row => row.IsIncluded).ToArray();
-        exportedCount = rowsToExport.Length;
-        if (exportedCount == 0)
-            return string.Empty;
-
-        var builder = new StringBuilder();
-        builder.AppendLine("ReviewG33k Findings");
-        builder.AppendLine("Scope: Included findings");
-        builder.Append("Count: ")
-            .Append(exportedCount)
-            .AppendLine();
-        builder.AppendLine();
-
-        for (var index = 0; index < rowsToExport.Length; index++)
-        {
-            var row = rowsToExport[index];
-            var finding = row.Finding;
-            var location = !string.IsNullOrWhiteSpace(finding.FilePath)
-                ? finding.LineNumber > 0
-                    ? $"{finding.FilePath}:{finding.LineNumber}"
-                    : finding.FilePath
-                : "(no file)";
-
-            builder.Append(index + 1)
-                .Append(". [")
-                .Append(row.SeverityText)
-                .Append("] ")
-                .Append(location)
-                .AppendLine();
-
-            builder.Append("   ")
-                .AppendLine((finding.Message ?? string.Empty).Trim());
-            builder.AppendLine();
-        }
-
-        return builder.ToString().TrimEnd('\r', '\n');
     }
 
     private bool TryBuildCodexPrompt(CodeSmellFinding finding, out string promptText, out string failureReason)
@@ -930,14 +866,21 @@ public partial class ReviewResultsWindow : Window
         return RepositoryUtilities.NormalizeRepoPath(fallbackPath);
     }
 
-    private static int GetSeveritySortOrder(CodeReviewFindingSeverity severity) =>
-        severity switch
+    private static int GetCategorySortOrder(string category) =>
+        category switch
         {
-            CodeReviewFindingSeverity.Important => 0,
-            CodeReviewFindingSeverity.Suggestion => 1,
-            CodeReviewFindingSeverity.Hint => 2,
-            CodeReviewFindingSeverity.Ok => 3,
-            _ => 4
+            CodeReviewFindingCategoryResolver.Correctness => 0,
+            CodeReviewFindingCategoryResolver.Threading => 1,
+            CodeReviewFindingCategoryResolver.Performance => 2,
+            CodeReviewFindingCategoryResolver.Resources => 3,
+            CodeReviewFindingCategoryResolver.ApiDesign => 4,
+            CodeReviewFindingCategoryResolver.Readability => 5,
+            CodeReviewFindingCategoryResolver.Maintainability => 6,
+            CodeReviewFindingCategoryResolver.Testing => 7,
+            CodeReviewFindingCategoryResolver.Documentation => 8,
+            CodeReviewFindingCategoryResolver.Ui => 9,
+            CodeReviewFindingCategoryResolver.RepoHygiene => 10,
+            _ => 11
         };
 
     private static int CompareRows(ReviewResultRow left, ReviewResultRow right)
@@ -951,10 +894,10 @@ public partial class ReviewResultsWindow : Window
 
         var leftFinding = left.Finding;
         var rightFinding = right.Finding;
-        var severityCompare = GetSeveritySortOrder(leftFinding?.Severity ?? CodeReviewFindingSeverity.Ok)
-            .CompareTo(GetSeveritySortOrder(rightFinding?.Severity ?? CodeReviewFindingSeverity.Ok));
-        if (severityCompare != 0)
-            return severityCompare;
+        var categoryCompare = GetCategorySortOrder(left.CategoryText)
+            .CompareTo(GetCategorySortOrder(right.CategoryText));
+        if (categoryCompare != 0)
+            return categoryCompare;
 
         var ruleCompare = string.Compare(leftFinding?.RuleId, rightFinding?.RuleId, StringComparison.OrdinalIgnoreCase);
         if (ruleCompare != 0)

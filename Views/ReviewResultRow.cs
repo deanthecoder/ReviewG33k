@@ -12,6 +12,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia.Media;
 using ReviewG33k.Services;
+using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Views;
 
@@ -49,7 +50,7 @@ public sealed class ReviewResultRow : INotifyPropertyChanged
     {
         Finding = finding;
         RuleId = finding?.RuleId ?? string.Empty;
-        SeverityText = finding == null ? string.Empty : finding.Severity.ToString().ToUpperInvariant();
+        CategoryText = CodeReviewFindingCategoryResolver.ResolveCategory(RuleId);
         IssueSummary = finding?.Message ?? string.Empty;
         IssueFull = IssueSummary;
         IssueLocation = finding == null
@@ -70,17 +71,13 @@ public sealed class ReviewResultRow : INotifyPropertyChanged
 
     public string RuleId { get; }
 
-    public string SeverityText { get; }
+    public string CategoryText { get; }
 
     public string IssueSummary { get; }
 
     public string IssueFull { get; }
 
     public string IssueLocation { get; }
-
-    public bool IsImportantSeverity => Finding?.Severity == CodeReviewFindingSeverity.Important;
-
-    public bool IsSuggestionSeverity => Finding?.Severity == CodeReviewFindingSeverity.Suggestion;
 
     public bool CanOpen { get; }
 
@@ -183,6 +180,11 @@ public sealed class ReviewResultRow : INotifyPropertyChanged
         string.IsNullOrWhiteSpace(RuleId)
             ? "Ignore issues of this type"
             : $"Ignore all `{RuleId}` issues";
+
+    public string TickSameTypeMenuHeader =>
+        string.IsNullOrWhiteSpace(RuleId)
+            ? "Select issues of this type"
+            : $"Select all `{RuleId}` issues";
 
     public IBrush IssueForeground => IsIncluded ? IncludedIssueBrush : ExcludedIssueBrush;
 

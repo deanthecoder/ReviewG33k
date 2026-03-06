@@ -1,0 +1,104 @@
+// Code authored by Dean Edis (DeanTheCoder).
+// Anyone is free to copy, modify, use, compile, or distribute this software,
+// either in source code form or as a compiled binary, for any purpose.
+//
+// If you modify the code, please retain this copyright header,
+// and consider contributing back to the repository or letting us know
+// about your modifications. Your contributions are valued!
+//
+// THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
+
+namespace ReviewG33k.Services.Checks.Support;
+
+internal static class CodeReviewFindingCategoryResolver
+{
+    public const string Correctness = "Correctness";
+    public const string Threading = "Threading";
+    public const string Performance = "Performance";
+    public const string Resources = "Resources";
+    public const string ApiDesign = "API/Design";
+    public const string Readability = "Readability";
+    public const string Maintainability = "Maintainability";
+    public const string Testing = "Testing";
+    public const string Documentation = "Documentation";
+    public const string Ui = "UI";
+    public const string RepoHygiene = "Repo Hygiene";
+
+    public static string ResolveCategory(string ruleId)
+    {
+        var normalizedRuleId = ruleId?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedRuleId))
+            return Maintainability;
+
+        return normalizedRuleId switch
+        {
+            CodeReviewRuleIds.EmptyCatch or
+            CodeReviewRuleIds.SwallowingCatch or
+            CodeReviewRuleIds.ThrowExInCatch or
+            CodeReviewRuleIds.PublicMethodArgumentGuards or
+            CodeReviewRuleIds.ConstructorEventSubscriptionLifecycle or
+            CodeReviewRuleIds.NumericStringCultureForFileWrite => Correctness,
+
+            CodeReviewRuleIds.AsyncVoid or
+            CodeReviewRuleIds.LockThisOrPublic or
+            CodeReviewRuleIds.TaskRunAsync or
+            CodeReviewRuleIds.ThreadSleep or
+            CodeReviewRuleIds.UnobservedTaskResult => Threading,
+
+            CodeReviewRuleIds.StringConcatSameTarget or
+            CodeReviewRuleIds.MultipleEnumeration => Performance,
+
+            CodeReviewRuleIds.DisposableNotDisposed or
+            CodeReviewRuleIds.DisposeWithoutIDisposable or
+            CodeReviewRuleIds.ResxMissingLocaleKeys or
+            CodeReviewRuleIds.ResxUnexpectedExtraKeys or
+            CodeReviewRuleIds.ResxEmptyTranslationValues => Resources,
+
+            CodeReviewRuleIds.PropertyCanBeAutoProperty or
+            CodeReviewRuleIds.PrivateGetOnlyAutoPropertyShouldBeField or
+            CodeReviewRuleIds.PrivatePropertyShouldBeField or
+            CodeReviewRuleIds.PrivateFieldCanBeReadonly or
+            CodeReviewRuleIds.MethodParameterCount or
+            CodeReviewRuleIds.GenericTypeNameSuffix or
+            CodeReviewRuleIds.MethodCanBeStatic or
+            CodeReviewRuleIds.PublicMutableStaticState or
+            CodeReviewRuleIds.MultipleClassesPerFile => ApiDesign,
+
+            CodeReviewRuleIds.AsyncMethodNameSuffix or
+            CodeReviewRuleIds.MissingBlankLineBetweenMethods or
+            CodeReviewRuleIds.IfElseBraceConsistency or
+            CodeReviewRuleIds.IfElseUnnecessaryBraces or
+            CodeReviewRuleIds.BooleanLiteralComparison or
+            CodeReviewRuleIds.UnnecessaryCast or
+            CodeReviewRuleIds.UnnecessaryEnumMemberValue or
+            CodeReviewRuleIds.UnnecessaryVerbatimStringPrefix or
+            CodeReviewRuleIds.RedundantSelfLookup or
+            CodeReviewRuleIds.ConsecutiveBooleanArguments => Readability,
+
+            CodeReviewRuleIds.ConstructorTooLong or
+            "local-variable-can-be-const" or
+            CodeReviewRuleIds.PrivateFieldUsedInSingleMethod or
+            CodeReviewRuleIds.UnusedLocalVariable or
+            CodeReviewRuleIds.UnusedPrivateMember => Maintainability,
+
+            CodeReviewRuleIds.MissingTests or
+            CodeReviewRuleIds.MissingTestsForPublicMethods => Testing,
+
+            CodeReviewRuleIds.MissingXmlDocs or
+            CodeReviewRuleIds.EmptyXmlDocContent or
+            CodeReviewRuleIds.MissingReadmeForNewProject => Documentation,
+
+            CodeReviewRuleIds.MissingTypedBindingContext or
+            CodeReviewRuleIds.FixedSizeLayoutContainer or
+            CodeReviewRuleIds.SingleChildWrapperContainer or
+            CodeReviewRuleIds.NestedSamePanelWrapper or
+            CodeReviewRuleIds.EmptyContainer => Ui,
+
+            CodeReviewRuleIds.WarningSuppression or
+            CodeReviewRuleIds.UnusedUsingsRoslyn or
+            CodeReviewRuleIds.MissingDisclaimerForNewSourceFile => RepoHygiene,
+
+            _ => Maintainability
+        };
+    }
+}
