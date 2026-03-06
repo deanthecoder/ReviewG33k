@@ -11,16 +11,13 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
 using DTC.Core.Commands;
-using DTC.Core.Extensions;
 using Material.Icons;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
@@ -46,6 +43,7 @@ public partial class ReviewResultsWindow : Window
     private readonly Func<string, Task<IReadOnlyList<CodeSmellFinding>>> m_resampleFileFindingsAction;
     private readonly ICodeReviewFindingFixer m_findingFixer;
     private readonly ReviewResultsStateService m_stateService = new();
+    private readonly ReviewResultsFileContextService m_fileContextService = new();
     private readonly List<ReviewResultRow> m_rows;
     private readonly bool m_canOpenInVsCode;
     private readonly bool m_canCommentInBitbucket;
@@ -185,7 +183,7 @@ public partial class ReviewResultsWindow : Window
         if (m_isApplyingFix || row == null || !row.CanFixActive || row.Finding == null)
             return;
 
-        if (!TryResolveFindingFile(row.Finding, out var resolvedFile))
+        if (!m_fileContextService.TryResolveFindingFile(row.Finding, m_resolveFindingPath, out var resolvedFile))
         {
             SetPreviewText("Could not resolve file path for fix.", "Preview");
             return;
@@ -267,7 +265,13 @@ public partial class ReviewResultsWindow : Window
             return;
         }
 
-        if (!TryBuildCodexPrompt(row.Finding, out var promptText, out var failureReason))
+        if (!m_fileContextService.TryBuildCodexPrompt(
+                row.Finding,
+                m_resolveFindingPath,
+                CodexPromptLinesBefore,
+                CodexPromptLinesAfter,
+                out var promptText,
+                out var failureReason))
         {
             SetPreviewText(failureReason ?? "Could not create Codex prompt.", "Preview");
             return;
@@ -554,52 +558,19 @@ public partial class ReviewResultsWindow : Window
 
     private void UpdatePreviewForFinding(CodeSmellFinding finding)
     {
-        if (finding == null)
+        if (!m_fileContextService.TryBuildPreview(
+                finding,
+                m_resolveFindingPath,
+                PreviewLinesBefore,
+                PreviewLinesAfter,
+                out var previewData,
+                out var failureReason))
         {
-            SetPreviewText("No finding selected.", "Preview");
+            SetPreviewText(failureReason ?? "Could not build preview.", "Preview");
             return;
         }
 
-        if (!TryResolveFindingFile(finding, out var resolvedFile))
-        {
-            SetPreviewText($"Could not resolve file for '{finding.FilePath}'.", "Preview");
-            return;
-        }
-
-        var lineNumber = finding.LineNumber > 0 ? finding.LineNumber : 1;
-        string[] lines;
-        try
-        {
-            lines = resolvedFile.ReadAllLines() ?? [];
-        }
-        catch (Exception exception)
-        {
-            SetPreviewText($"Could not read file: {exception.Message}", "Preview");
-            return;
-        }
-
-        if (lines.Length == 0)
-        {
-            SetPreviewText("(File is empty)", $"Preview: {resolvedFile.Name}", resolvedFile.Name);
-            return;
-        }
-
-        var startLine = Math.Max(1, lineNumber - PreviewLinesBefore);
-        var endLine = Math.Min(lines.Length, lineNumber + PreviewLinesAfter);
-        var lineNumberWidth = endLine.ToString().Length;
-
-        var builder = new StringBuilder();
-        for (var line = startLine; line <= endLine; line++)
-        {
-            var marker = line == lineNumber ? ">" : " ";
-            builder.Append(marker)
-                .Append(' ')
-                .Append(line.ToString().PadLeft(lineNumberWidth))
-                .Append(": ")
-                .AppendLine(lines[line - 1]);
-        }
-
-        SetPreviewText(builder.ToString().TrimEnd('\r', '\n'), $"Preview: {resolvedFile.Name}", resolvedFile.Name);
+        SetPreviewText(previewData.Text, previewData.Header, previewData.PreviewFileName);
     }
 
     private void SetPreviewText(string text, string header, string previewFileName = null)
@@ -718,152 +689,6 @@ public partial class ReviewResultsWindow : Window
         return m_openTargetDefinitionsByTarget.TryGetValue(target, out var definition)
             ? definition
             : null;
-    }
-
-    private bool TryBuildCodexPrompt(CodeSmellFinding finding, out string promptText, out string failureReason)
-    {
-        promptText = string.Empty;
-        failureReason = null;
-
-        if (finding == null)
-        {
-            failureReason = "No finding selected.";
-            return false;
-        }
-
-        if (!TryResolveFindingFile(finding, out var resolvedFile))
-        {
-            failureReason = $"Could not resolve file for '{finding.FilePath}'.";
-            return false;
-        }
-
-        if (!TryFindRepositoryRoot(resolvedFile, out var repositoryPath))
-        {
-            failureReason = "Could not detect repository root from the selected file.";
-            return false;
-        }
-
-        var issueLine = finding.LineNumber > 0 ? finding.LineNumber : 1;
-        var issuePath = GetPromptRelativePath(repositoryPath.FullName, resolvedFile.FullName, finding.FilePath);
-        var issueMessage = string.IsNullOrWhiteSpace(finding.Message) ? "(no message)" : finding.Message.Trim();
-        var codeContext = BuildCodexPromptCodeContext(resolvedFile, issueLine);
-
-        var builder = new StringBuilder();
-        builder.AppendLine("You are fixing one local code review issue.");
-        builder.AppendLine();
-        builder.Append("Repository path: ").AppendLine(repositoryPath.FullName);
-        builder.Append("File: ").Append(issuePath).Append(':').Append(issueLine).AppendLine();
-        builder.Append("Issue: ").AppendLine(issueMessage);
-        builder.AppendLine();
-        builder.AppendLine("Code context:");
-        builder.AppendLine("```");
-        builder.AppendLine(codeContext);
-        builder.AppendLine("```");
-        builder.AppendLine();
-        builder.AppendLine("Task:");
-        builder.AppendLine("- Implement a concise fix for this issue in this repository.");
-        builder.AppendLine("- Keep behavior unchanged except for resolving this issue.");
-        builder.AppendLine("- Run relevant build/tests if practical.");
-        builder.AppendLine();
-        builder.AppendLine("Return:");
-        builder.AppendLine("* Summary of the fix");
-        builder.AppendLine("* Test/build commands run (or why none were run)");
-        builder.AppendLine("* Risks or follow-up checks or code improvement suggestions");
-        builder.AppendLine("* Any other relevant information");
-
-        promptText = builder.ToString().TrimEnd('\r', '\n');
-        return true;
-    }
-
-    private static string BuildCodexPromptCodeContext(FileInfo resolvedFile, int lineNumber)
-    {
-        string[] lines;
-        try
-        {
-            lines = resolvedFile.ReadAllLines() ?? [];
-        }
-        catch
-        {
-            return "(Unable to read file contents.)";
-        }
-
-        if (lines.Length == 0)
-            return "(File is empty.)";
-
-        var boundedLineNumber = Math.Clamp(lineNumber, 1, lines.Length);
-        var startLine = Math.Max(1, boundedLineNumber - CodexPromptLinesBefore);
-        var endLine = Math.Min(lines.Length, boundedLineNumber + CodexPromptLinesAfter);
-        var lineNumberWidth = endLine.ToString().Length;
-
-        var builder = new StringBuilder();
-        for (var line = startLine; line <= endLine; line++)
-        {
-            var marker = line == boundedLineNumber ? ">" : " ";
-            builder.Append(marker)
-                .Append(' ')
-                .Append(line.ToString().PadLeft(lineNumberWidth))
-                .Append(": ")
-                .AppendLine(lines[line - 1]);
-        }
-
-        return builder.ToString().TrimEnd('\r', '\n');
-    }
-
-    private bool TryResolveFindingFile(CodeSmellFinding finding, out FileInfo resolvedFile)
-    {
-        resolvedFile = null;
-        if (finding == null)
-            return false;
-
-        var resolvedPath = m_resolveFindingPath?.Invoke(finding);
-        if (string.IsNullOrWhiteSpace(resolvedPath))
-            return false;
-
-        resolvedFile = resolvedPath.ToFile();
-        return resolvedFile.Exists();
-    }
-
-    private static bool TryFindRepositoryRoot(FileInfo resolvedFile, out DirectoryInfo repositoryPath)
-    {
-        repositoryPath = null;
-        if (resolvedFile?.Exists() != true)
-            return false;
-
-        var current = resolvedFile.Directory;
-        while (current != null)
-        {
-            if (current.GetDir(".git").Exists() || current.GetFile(".git").Exists())
-            {
-                repositoryPath = current;
-                return true;
-            }
-
-            current = current.Parent;
-        }
-
-        return false;
-    }
-
-    private static string GetPromptRelativePath(string repositoryPath, string resolvedPath, string fallbackPath)
-    {
-        if (string.IsNullOrWhiteSpace(repositoryPath) || string.IsNullOrWhiteSpace(resolvedPath))
-            return RepositoryUtilities.NormalizeRepoPath(fallbackPath);
-
-        try
-        {
-            var relativePath = Path.GetRelativePath(repositoryPath, resolvedPath);
-            if (!string.IsNullOrWhiteSpace(relativePath) &&
-                !relativePath.StartsWith("..", StringComparison.Ordinal))
-            {
-                return RepositoryUtilities.NormalizeRepoPath(relativePath);
-            }
-        }
-        catch
-        {
-            // Fall back to the finding path below.
-        }
-
-        return RepositoryUtilities.NormalizeRepoPath(fallbackPath);
     }
 
     private static int GetCategorySortOrder(string category) =>
