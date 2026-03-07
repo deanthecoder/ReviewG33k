@@ -15,7 +15,6 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -55,8 +54,6 @@ public partial class MainWindow : Window
     private string m_lastNonOpenPullRequestNoticeKey;
     private bool m_isInitializing;
 
-    public ICommand CopyLogLineCommand => m_viewModel.CopyLogLineCommand;
-
     public MainWindow()
         : this(MainWindowCompositionRoot.CreateDependencies())
     {
@@ -88,9 +85,7 @@ public partial class MainWindow : Window
             ExecutePrepareReviewAsync,
             CancelProcessing,
             OpenPullRequest,
-            OpenSolution,
-            parameter => CopyLogLineToClipboardAsync(parameter as LogLineEntry),
-            parameter => parameter is LogLineEntry);
+            OpenSolution);
         m_isInitializing = true;
         InitializeComponent();
         DataContext = m_viewModel;
@@ -532,32 +527,9 @@ public partial class MainWindow : Window
     private void ShowMessage(string title, string message) =>
         m_uiService.ShowMessage(title, message);
 
-    private async Task CopyLogLineToClipboardAsync(LogLineEntry entry)
-    {
-        if (entry == null)
-            return;
-
-        var clipboard = Clipboard;
-        if (clipboard == null)
-            return;
-
-        try
-        {
-            await clipboard.SetTextAsync(entry.Text ?? string.Empty);
-            SetStatus("Log line copied to clipboard.");
-        }
-        catch (Exception exception)
-        {
-            AppendLog($"WARNING: Could not copy log line. {exception.Message}");
-        }
-    }
-
     private void LogListBox_OnPointerPressed(object sender, PointerPressedEventArgs e)
     {
         if (e.ClickCount < 2 || !TryGetLogEntryFromSource(e.Source, out var entry))
-            return;
-
-        if (IsClickInsideCopyButton(e.Source))
             return;
 
         if (!m_logNavigationService.TryParseLogLocation(entry.Text, out var filePath, out var lineNumber))
@@ -577,15 +549,6 @@ public partial class MainWindow : Window
 
         SetStatus($"Opened in VS Code: {resolvedFile.Name}:{lineNumber}");
         e.Handled = true;
-    }
-
-    private static bool IsClickInsideCopyButton(object source)
-    {
-        if (source is not InputElement sourceElement)
-            return false;
-
-        var button = sourceElement.FindAncestorOfType<Button>() ?? sourceElement as Button;
-        return button?.Classes.Contains("logCopyButton") == true;
     }
 
     private static bool TryGetLogEntryFromSource(object source, out LogLineEntry entry)

@@ -729,46 +729,6 @@ public sealed class MainWindowViewModelTests
         Assert.That(viewModel.CancelProcessingCommand.CanExecute(null), Is.False);
     }
 
-    [Test]
-    public void CopyLogLineCommandWhenNotConfiguredIsDisabled()
-    {
-        var viewModel = new MainWindowViewModel(new Settings());
-
-        Assert.That(viewModel.CopyLogLineCommand.CanExecute(new LogLineEntry("line", null)), Is.False);
-    }
-
-    [Test]
-    public async Task CopyLogLineCommandWhenConfiguredRunsDelegateForLogEntry()
-    {
-        var viewModel = new MainWindowViewModel(new Settings());
-        var copiedEntry = (LogLineEntry)null;
-        var commandInvoked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        viewModel.ConfigureCommands(
-            () => Task.CompletedTask,
-            () => Task.CompletedTask,
-            () => Task.CompletedTask,
-            () => { },
-            () => { },
-            () => { },
-            parameter =>
-            {
-                copiedEntry = parameter as LogLineEntry;
-                commandInvoked.TrySetResult(true);
-                return Task.CompletedTask;
-            },
-            parameter => parameter is LogLineEntry);
-
-        var entryToCopy = new LogLineEntry("copy me", null);
-        Assert.That(viewModel.CopyLogLineCommand.CanExecute(entryToCopy), Is.True);
-        Assert.That(viewModel.CopyLogLineCommand.CanExecute(null), Is.False);
-
-        viewModel.CopyLogLineCommand.Execute(entryToCopy);
-        var completed = await Task.WhenAny(commandInvoked.Task, Task.Delay(1000));
-        Assert.That(completed, Is.EqualTo(commandInvoked.Task));
-        Assert.That(copiedEntry, Is.SameAs(entryToCopy));
-    }
-
     private static BitbucketPullRequestMetadataClient CreateMetadataClient(IEnumerable<HttpResponseMessage> responses)
     {
         var httpClient = new HttpClient(new StubHttpMessageHandler(responses));

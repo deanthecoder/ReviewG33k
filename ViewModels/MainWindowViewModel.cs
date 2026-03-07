@@ -66,7 +66,6 @@ public sealed class MainWindowViewModel : ViewModelBase
     private CommandBase m_cancelProcessingCommandImpl;
     private CommandBase m_openPullRequestCommandImpl;
     private CommandBase m_openSolutionCommandImpl;
-    private CommandBase m_copyLogLineCommandImpl;
 
     public ObservableCollection<string> LocalBaseBranchOptions { get; } = [];
     public ICommand BrowseRepositoryRootCommand { get; private set; }
@@ -75,7 +74,6 @@ public sealed class MainWindowViewModel : ViewModelBase
     public ICommand CancelProcessingCommand { get; private set; }
     public ICommand OpenPullRequestCommand { get; private set; }
     public ICommand OpenSolutionCommand { get; private set; }
-    public ICommand CopyLogLineCommand { get; private set; }
 
     public MainWindowViewModel()
     {
@@ -343,9 +341,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         Func<Task> prepareReviewAsync,
         Action cancelProcessing,
         Action openPullRequest,
-        Action openSolution,
-        Func<object, Task> copyLogLineAsync = null,
-        Func<object, bool> canCopyLogLine = null)
+        Action openSolution)
     {
         ArgumentNullException.ThrowIfNull(browseRepositoryRootAsync);
         ArgumentNullException.ThrowIfNull(browseLocalRepositoryAsync);
@@ -372,14 +368,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         m_openSolutionCommandImpl = new RelayCommand(
             _ => openSolution(),
             _ => CanOpenSolution);
-        if (copyLogLineAsync != null)
-        {
-            m_copyLogLineCommandImpl = new AsyncRelayCommand(
-                parameter => copyLogLineAsync(parameter),
-                parameter => canCopyLogLine?.Invoke(parameter) ?? parameter != null);
-            CopyLogLineCommand = m_copyLogLineCommandImpl;
-            OnPropertyChanged(nameof(CopyLogLineCommand));
-        }
 
         BrowseRepositoryRootCommand = m_browseRepositoryRootCommandImpl;
         BrowseLocalRepositoryCommand = m_browseLocalRepositoryCommandImpl;
@@ -751,7 +739,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         m_cancelProcessingCommandImpl = new RelayCommand(_ => { }, _ => false);
         m_openPullRequestCommandImpl = new RelayCommand(_ => { }, _ => false);
         m_openSolutionCommandImpl = new RelayCommand(_ => { }, _ => false);
-        m_copyLogLineCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
 
         BrowseRepositoryRootCommand = m_browseRepositoryRootCommandImpl;
         BrowseLocalRepositoryCommand = m_browseLocalRepositoryCommandImpl;
@@ -759,7 +746,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         CancelProcessingCommand = m_cancelProcessingCommandImpl;
         OpenPullRequestCommand = m_openPullRequestCommandImpl;
         OpenSolutionCommand = m_openSolutionCommandImpl;
-        CopyLogLineCommand = m_copyLogLineCommandImpl;
     }
 
     private void RaiseCommandCanExecuteChanged()
@@ -770,7 +756,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         m_cancelProcessingCommandImpl?.RaiseCanExecuteChanged();
         m_openPullRequestCommandImpl?.RaiseCanExecuteChanged();
         m_openSolutionCommandImpl?.RaiseCanExecuteChanged();
-        m_copyLogLineCommandImpl?.RaiseCanExecuteChanged();
     }
 
     private static bool SetIfDifferent<T>(ref T field, T value)
