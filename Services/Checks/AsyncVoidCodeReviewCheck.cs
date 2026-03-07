@@ -38,6 +38,8 @@ public sealed class AsyncVoidCodeReviewCheck : CodeReviewCheckBase
                     continue;
                 if (IsLikelyEventHandler(method))
                     continue;
+                if (IsLikelyCommandExecuteOverride(method))
+                    continue;
 
                 var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(method);
                 AddFinding(report, CodeReviewFindingSeverity.Important, file.Path, lineNumber, "Suspicious 'async void' usage (non-event handler).");
@@ -55,6 +57,22 @@ public sealed class AsyncVoidCodeReviewCheck : CodeReviewCheckBase
             return false;
 
         return IsObjectLike(parameters.Value[0].Type) && IsEventArgsLike(parameters.Value[1].Type);
+    }
+
+    private static bool IsLikelyCommandExecuteOverride(MethodDeclarationSyntax method)
+    {
+        if (method == null)
+            return false;
+        if (!string.Equals(method.Identifier.ValueText, "Execute", StringComparison.Ordinal))
+            return false;
+        if (!method.Modifiers.Any(modifier => modifier.RawKind == (int)SyntaxKind.OverrideKeyword))
+            return false;
+
+        var parameters = method.ParameterList?.Parameters;
+        if (parameters == null || parameters.Value.Count != 1)
+            return false;
+
+        return IsObjectLike(parameters.Value[0].Type);
     }
 
     private static bool IsObjectLike(TypeSyntax type)

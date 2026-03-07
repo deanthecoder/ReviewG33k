@@ -885,6 +885,31 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void AsyncVoidCheckWhenMethodLooksLikeCommandExecuteOverrideDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public abstract class CommandBase
+            {
+                public abstract void Execute(object parameter);
+            }
+
+            public sealed class SampleCommand : CommandBase
+            {
+                public override async void Execute(object parameter)
+                {
+                    await Task.Delay(1);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new AsyncVoidCodeReviewCheck(), "A", source, Enumerable.Range(1, 15));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AsyncMethodNameSuffixCheckWhenAsyncMethodMissingSuffixReportsHint()
     {
         const string source = """
