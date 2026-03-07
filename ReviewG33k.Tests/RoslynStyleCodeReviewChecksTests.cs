@@ -308,12 +308,12 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
-    public void MethodParameterCountCheckWhenMethodHasSixParametersReportsHint()
+    public void MethodParameterCountCheckWhenMethodHasEightParametersReportsHint()
     {
         const string source = """
             public sealed class Sample
             {
-                public void DoWork(int a, int b, int c, int d, int e, int f)
+                public void DoWork(int a, int b, int c, int d, int e, int f, int g, int h)
                 {
                 }
             }
@@ -322,16 +322,16 @@ public sealed class RoslynStyleCodeReviewChecksTests
         var report = AnalyzeSource(new MethodParameterCountCodeReviewCheck(), "A", source, Enumerable.Range(1, 7));
 
         Assert.That(report.Findings, Has.Count.EqualTo(1));
-        Assert.That(report.Findings[0].Message, Does.Contain("6 parameters"));
+        Assert.That(report.Findings[0].Message, Does.Contain("8 parameters"));
     }
 
     [Test]
-    public void MethodParameterCountCheckWhenConstructorHasSixParametersReportsHint()
+    public void MethodParameterCountCheckWhenConstructorHasEightParametersReportsHint()
     {
         const string source = """
             public sealed class Sample
             {
-                public Sample(int a, int b, int c, int d, int e, int f)
+                public Sample(int a, int b, int c, int d, int e, int f, int g, int h)
                 {
                 }
             }
@@ -341,7 +341,7 @@ public sealed class RoslynStyleCodeReviewChecksTests
 
         Assert.That(report.Findings, Has.Count.EqualTo(1));
         Assert.That(report.Findings[0].Message, Does.Contain("Constructor `Sample`"));
-        Assert.That(report.Findings[0].Message, Does.Contain("6 parameters"));
+        Assert.That(report.Findings[0].Message, Does.Contain("8 parameters"));
     }
 
     [Test]
@@ -602,7 +602,7 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
-    public void ConstructorTooLongCheckWhenConstructorHasFifteenCodeLinesReportsSuggestion()
+    public void ConstructorTooLongCheckWhenConstructorHasTwentyCodeLinesReportsSuggestion()
     {
         const string source = """
             public sealed class Sample
@@ -624,19 +624,24 @@ public sealed class RoslynStyleCodeReviewChecksTests
                     var a13 = 13;
                     var a14 = 14;
                     var a15 = 15;
+                    var a16 = 16;
+                    var a17 = 17;
+                    var a18 = 18;
+                    var a19 = 19;
+                    var a20 = 20;
                 }
             }
             """;
 
-        var report = AnalyzeSource(new ConstructorTooLongCodeReviewCheck(), "A", source, Enumerable.Range(1, 22));
+        var report = AnalyzeSource(new ConstructorTooLongCodeReviewCheck(), "A", source, Enumerable.Range(1, 27));
 
         Assert.That(report.Findings, Has.Count.EqualTo(1));
         Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
-        Assert.That(report.Findings[0].Message, Does.Contain("15 code lines"));
+        Assert.That(report.Findings[0].Message, Does.Contain("20 code lines"));
     }
 
     [Test]
-    public void ConstructorTooLongCheckWhenConstructorHasFourteenCodeLinesDoesNotReport()
+    public void ConstructorTooLongCheckWhenConstructorHasNineteenCodeLinesDoesNotReport()
     {
         const string source = """
             public sealed class Sample
@@ -657,6 +662,11 @@ public sealed class RoslynStyleCodeReviewChecksTests
                     var a12 = 12;
                     var a13 = 13;
                     var a14 = 14;
+                    var a15 = 15;
+                    var a16 = 16;
+                    var a17 = 17;
+                    var a18 = 18;
+                    var a19 = 19;
                 }
             }
             """;
@@ -941,6 +951,7 @@ public sealed class RoslynStyleCodeReviewChecksTests
 
         Assert.That(report.Findings, Has.Count.EqualTo(1));
         Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("Consider awaiting the async work directly"));
     }
 
     [Test]
@@ -959,6 +970,52 @@ public sealed class RoslynStyleCodeReviewChecksTests
             """;
 
         var report = AnalyzeSource(new TaskRunAsyncCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void TaskRunAsyncCheckWhenTaskRunUsesSyncLambdaForBlockingWorkDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public async Task RunAsync()
+                {
+                    await Task.Run(() => RunSync());
+                }
+
+                private void RunSync()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new TaskRunAsyncCodeReviewCheck(), "A", source, Enumerable.Range(1, 15));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void TaskRunAsyncCheckWhenTaskRunReturnsAsyncMethodWithoutAsyncLambdaDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public Task RunAsync()
+                {
+                    return Task.Run(() => LoadAsync());
+                }
+
+                private Task LoadAsync() => Task.CompletedTask;
+            }
+            """;
+
+        var report = AnalyzeSource(new TaskRunAsyncCodeReviewCheck(), "A", source, Enumerable.Range(1, 12));
 
         Assert.That(report.Findings, Is.Empty);
     }

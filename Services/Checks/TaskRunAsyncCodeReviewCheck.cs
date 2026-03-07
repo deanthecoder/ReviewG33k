@@ -11,6 +11,7 @@
 using System;
 using System.Linq;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ReviewG33k.Services.Checks.Support;
 
@@ -34,6 +35,8 @@ public sealed class TaskRunAsyncCodeReviewCheck : RoslynSemanticCodeReviewCheckB
         {
             if (!RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, invocation.Span))
                 continue;
+            if (!UsesExplicitAsyncDelegate(invocation))
+                continue;
             var invokedMethod = GetInvokedMethodSymbol(semanticModel, invocation);
             if (!IsTaskRunMethod(invokedMethod))
                 continue;
@@ -41,8 +44,20 @@ public sealed class TaskRunAsyncCodeReviewCheck : RoslynSemanticCodeReviewCheckB
                 continue;
 
             var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(invocation);
-            AddFinding(report, CodeReviewFindingSeverity.Suggestion, file.Path, lineNumber, "Task.Run wrapping async code detected (possible fake async).");
+            AddFinding(report, CodeReviewFindingSeverity.Suggestion, file.Path, lineNumber, "Task.Run(async ...) detected. Consider awaiting the async work directly unless background scheduling is genuinely needed.");
         }
+    }
+
+    private static bool UsesExplicitAsyncDelegate(InvocationExpressionSyntax invocation)
+    {
+        var expression = invocation.ArgumentList?.Arguments.FirstOrDefault()?.Expression;
+        return expression switch
+        {
+            ParenthesizedLambdaExpressionSyntax lambda => lambda.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword),
+            SimpleLambdaExpressionSyntax lambda => lambda.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword),
+            AnonymousMethodExpressionSyntax anonymousMethod => anonymousMethod.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword),
+            _ => false
+        };
     }
 
     private static IMethodSymbol GetInvokedMethodSymbol(SemanticModel semanticModel, InvocationExpressionSyntax invocation)

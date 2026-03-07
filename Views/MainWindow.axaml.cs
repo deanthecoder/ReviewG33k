@@ -122,43 +122,14 @@ public partial class MainWindow : Window
 
     private async Task BrowseRepositoryRootAsync()
     {
-        var topLevel = GetTopLevel(this);
-        if (topLevel == null)
-            return;
-
-        var startLocation = await GetStartFolderAsync(topLevel, m_viewModel.RepositoryRootPath);
-
-        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(
-            new FolderPickerOpenOptions
-            {
-                Title = "Choose repository root folder",
-                AllowMultiple = false,
-                SuggestedStartLocation = startLocation
-            });
-
-        var selectedFolder = folders.FirstOrDefault();
-        var path = selectedFolder?.TryGetLocalPath();
+        var path = await BrowseFolderAsync("Choose repository root folder", m_viewModel.RepositoryRootPath);
         if (!string.IsNullOrWhiteSpace(path))
             m_viewModel.RepositoryRootPath = path;
     }
 
     private async Task BrowseLocalRepositoryAsync()
     {
-        var topLevel = GetTopLevel(this);
-        if (topLevel == null)
-            return;
-
-        var startLocation = await GetStartFolderAsync(topLevel, m_viewModel.LocalRepositoryPath);
-        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(
-            new FolderPickerOpenOptions
-            {
-                Title = "Choose local repository folder",
-                AllowMultiple = false,
-                SuggestedStartLocation = startLocation
-            });
-
-        var selectedFolder = folders.FirstOrDefault();
-        var path = selectedFolder?.TryGetLocalPath();
+        var path = await BrowseFolderAsync("Choose local repository folder", m_viewModel.LocalRepositoryPath);
         if (string.IsNullOrWhiteSpace(path))
             return;
 
@@ -338,9 +309,7 @@ public partial class MainWindow : Window
                 if (Clipboard != null)
                     await Clipboard.SetTextAsync(text);
             });
-        if (!string.IsNullOrWhiteSpace(result.LogMessage))
-            AppendLog(result.LogMessage);
-        SetStatus(result.StatusMessage);
+        ApplyInteractionResult(result.StatusMessage, result.LogMessage);
         return (result.Success, result.Success ? null : result.StatusMessage);
     }
 
@@ -378,9 +347,7 @@ public partial class MainWindow : Window
     private void OpenReviewFindingInVsCode(CodeSmellFinding finding)
     {
         var result = m_reviewFindingInteractionService.OpenFindingInVsCode(finding, m_viewModel.LatestReviewWorktreePath);
-        if (!string.IsNullOrWhiteSpace(result.LogMessage))
-            AppendLog(result.LogMessage);
-        SetStatus(result.StatusMessage);
+        ApplyInteractionResult(result.StatusMessage, result.LogMessage);
     }
 
     private string ResolveReviewFindingPath(CodeSmellFinding finding)
@@ -423,9 +390,7 @@ public partial class MainWindow : Window
         var result = await m_reviewFindingInteractionService.CommentOnFindingAsync(
             finding,
             m_viewModel.LatestPullRequest);
-        if (!string.IsNullOrWhiteSpace(result.LogMessage))
-            AppendLog(result.LogMessage);
-        SetStatus(result.StatusMessage);
+        ApplyInteractionResult(result.StatusMessage, result.LogMessage);
         return result.Success;
     }
 
@@ -469,6 +434,24 @@ public partial class MainWindow : Window
             return null;
 
         return await topLevel.StorageProvider.TryGetFolderFromPathAsync(existingPath);
+    }
+
+    private async Task<string> BrowseFolderAsync(string title, string existingPath)
+    {
+        var topLevel = GetTopLevel(this);
+        if (topLevel == null)
+            return null;
+
+        var startLocation = await GetStartFolderAsync(topLevel, existingPath);
+        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(
+            new FolderPickerOpenOptions
+            {
+                Title = title,
+                AllowMultiple = false,
+                SuggestedStartLocation = startLocation
+            });
+
+        return folders.FirstOrDefault()?.TryGetLocalPath();
     }
 
     private void OnPullRequestInputChanged()
@@ -537,6 +520,14 @@ public partial class MainWindow : Window
 
     private void AppendLog(string message)
         => m_uiService.AppendLog(message);
+
+    private void ApplyInteractionResult(string statusMessage, string logMessage)
+    {
+        if (!string.IsNullOrWhiteSpace(logMessage))
+            AppendLog(logMessage);
+        if (!string.IsNullOrWhiteSpace(statusMessage))
+            SetStatus(statusMessage);
+    }
 
     private void ShowMessage(string title, string message) =>
         m_uiService.ShowMessage(title, message);

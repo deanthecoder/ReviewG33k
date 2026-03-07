@@ -17,7 +17,7 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class MethodParameterCountCodeReviewCheck : CodeReviewCheckBase
 {
-    private const int ParameterThreshold = 6;
+    private const int ParameterThreshold = 8;
 
     public override string RuleId => "method-parameter-count";
 

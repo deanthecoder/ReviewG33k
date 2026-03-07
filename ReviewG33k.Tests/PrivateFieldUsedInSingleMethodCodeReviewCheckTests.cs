@@ -216,7 +216,7 @@ public sealed class PrivateFieldUsedInSingleMethodCodeReviewCheckTests : TestsBa
     }
 
     [Test]
-    public void AnalyzeWhenRealReviewResultsWindowFileIsScannedReportsOpenTargetMenuCommandField()
+    public void AnalyzeWhenRealReviewResultsWindowFileIsScannedDoesNotReportStaleOpenTargetMenuCommandField()
     {
         var fullPath = Path.Combine(ProjectDir.Parent.FullName, "Views", "ReviewResultsWindow.axaml.cs");
         var source = File.ReadAllText(fullPath);
@@ -242,7 +242,7 @@ public sealed class PrivateFieldUsedInSingleMethodCodeReviewCheckTests : TestsBa
             report.Findings.Any(finding =>
                 finding.RuleId == CodeReviewRuleIds.PrivateFieldUsedInSingleMethod &&
                 finding.Message.Contains("m_openTargetMenuCommandImpl", StringComparison.Ordinal)),
-            Is.True);
+            Is.False);
     }
 
     private static CodeSmellReport AnalyzeSource(string source, IEnumerable<int> addedLineNumbers, string status = "A")
