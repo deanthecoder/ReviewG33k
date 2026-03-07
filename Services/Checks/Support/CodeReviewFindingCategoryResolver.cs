@@ -52,7 +52,11 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.DisposeWithoutIDisposable or
             CodeReviewRuleIds.ResxMissingLocaleKeys or
             CodeReviewRuleIds.ResxUnexpectedExtraKeys or
-            CodeReviewRuleIds.ResxEmptyTranslationValues => Resources,
+            CodeReviewRuleIds.ResxEmptyTranslationValues or
+            CodeReviewRuleIds.ResxValueBoundaryWhitespace or
+            CodeReviewRuleIds.ResxMixedEnglishDialect or
+            CodeReviewRuleIds.ResxAmericanEnglishInBritishLocale or
+            CodeReviewRuleIds.ResxBritishEnglishInAmericanLocale => Resources,
 
             CodeReviewRuleIds.PropertyCanBeAutoProperty or
             CodeReviewRuleIds.PrivateGetOnlyAutoPropertyShouldBeField or

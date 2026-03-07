@@ -53,6 +53,10 @@ public static class CodeReviewRuleIds
     public const string ResxMissingLocaleKeys = "resx-missing-locale-keys";
     public const string ResxUnexpectedExtraKeys = "resx-unexpected-extra-keys";
     public const string ResxEmptyTranslationValues = "resx-empty-translation-values";
+    public const string ResxValueBoundaryWhitespace = "resx-value-boundary-whitespace";
+    public const string ResxMixedEnglishDialect = "resx-mixed-english-dialect";
+    public const string ResxAmericanEnglishInBritishLocale = "resx-american-english-in-british-locale";
+    public const string ResxBritishEnglishInAmericanLocale = "resx-british-english-in-american-locale";
     public const string UnusedUsingsRoslyn = "unused-usings-roslyn";
     public const string WarningSuppression = "warning-suppression";
     public const string MissingTypedBindingContext = "missing-typed-binding-context";

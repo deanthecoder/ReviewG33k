@@ -20,6 +20,17 @@ namespace ReviewG33k.Services.Checks.Support;
 
 internal static class ResxCodeReviewUtilities
 {
+    private static readonly (string American, string British)[] s_dialectPairs =
+    [
+        ("color", "colour"),
+        ("behavior", "behaviour"),
+        ("analyze", "analyse"),
+        ("normalize", "normalise"),
+        ("organize", "organise"),
+        ("favorites", "favourites"),
+        ("center", "centre")
+    ];
+
     public static bool TryGetLocaleMetadata(
         CodeReviewChangedFile file,
         out string baseRelativePath,
@@ -102,8 +113,85 @@ internal static class ResxCodeReviewUtilities
         return TryParseResxEntries(baseText, out entries);
     }
 
+    public static bool IsLocaleResxFile(CodeReviewChangedFile file, string localeName)
+    {
+        if (string.IsNullOrWhiteSpace(localeName))
+            return false;
+
+        return TryGetLocaleMetadata(file, out _, out _, out var actualLocale) &&
+               string.Equals(actualLocale, localeName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsNeutralResxFile(CodeReviewChangedFile file) =>
+        file != null &&
+        CodeReviewFileClassification.IsAnalyzableResxPath(file.Path) &&
+        !TryGetLocaleMetadata(file, out _, out _, out _);
+
+    public static bool TryGetDialectScanResult(CodeReviewChangedFile file, out ResxDialectScanResult result)
+    {
+        result = null;
+        if (!TryGetResxEntries(file, out var entries))
+            return false;
+
+        var americanMatches = new List<ResxDialectWordMatch>();
+        var britishMatches = new List<ResxDialectWordMatch>();
+        foreach (var entry in entries.Values)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Value))
+                continue;
+
+            foreach (var pair in s_dialectPairs)
+            {
+                AddWordMatches(entry, pair.American, americanMatches);
+                AddWordMatches(entry, pair.British, britishMatches);
+            }
+        }
+
+        result = new ResxDialectScanResult(americanMatches, britishMatches);
+        return true;
+    }
+
     public static string NormalizePath(string path) =>
         (path ?? string.Empty).Replace('\\', '/');
+
+    private static void AddWordMatches(ResxEntry entry, string word, ICollection<ResxDialectWordMatch> matches)
+    {
+        if (entry == null || string.IsNullOrWhiteSpace(word) || matches == null)
+            return;
+
+        var occurrenceCount = CountWholeWordOccurrences(entry.Value, word);
+        for (var i = 0; i < occurrenceCount; i++)
+            matches.Add(new ResxDialectWordMatch(entry.Key, word, entry.LineNumber));
+    }
+
+    private static int CountWholeWordOccurrences(string text, string word)
+    {
+        if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(word))
+            return 0;
+
+        var count = 0;
+        var searchIndex = 0;
+        while (searchIndex < text.Length)
+        {
+            var matchIndex = text.IndexOf(word, searchIndex, StringComparison.OrdinalIgnoreCase);
+            if (matchIndex < 0)
+                break;
+
+            var beforeIndex = matchIndex - 1;
+            var afterIndex = matchIndex + word.Length;
+            var hasLeadingBoundary = beforeIndex < 0 || !IsWordCharacter(text[beforeIndex]);
+            var hasTrailingBoundary = afterIndex >= text.Length || !IsWordCharacter(text[afterIndex]);
+            if (hasLeadingBoundary && hasTrailingBoundary)
+                count++;
+
+            searchIndex = matchIndex + word.Length;
+        }
+
+        return count;
+    }
+
+    private static bool IsWordCharacter(char c) =>
+        char.IsLetter(c);
 
     private static bool TryParseResxEntries(string text, out IReadOnlyDictionary<string, ResxEntry> entries)
     {
@@ -170,3 +258,7 @@ internal static class ResxCodeReviewUtilities
 }
 
 internal sealed record ResxEntry(string Key, string Value, int LineNumber);
+internal sealed record ResxDialectWordMatch(string Key, string Word, int LineNumber);
+internal sealed record ResxDialectScanResult(
+    IReadOnlyList<ResxDialectWordMatch> AmericanMatches,
+    IReadOnlyList<ResxDialectWordMatch> BritishMatches);

@@ -142,6 +142,10 @@ ReviewG33k labels each finding with one of these categories:
 | Missing locale keys | Localized `.resx` files missing keys present in base resources. |
 | Unexpected extra locale keys | Localized `.resx` files containing keys not present in base resources. |
 | Empty translation values | Localized `.resx` entries with empty/blank translation text. |
+| Boundary whitespace in values | Resource values with accidental leading/trailing spaces in changed entries. |
+| Mixed US/UK English | Neutral `.resx` files mixing American and British spellings strongly enough to look inconsistent. |
+| American English in `en-GB` | British locale files containing clear US spellings like `color`/`analyze`. |
+| British English in `en-US` | American locale files containing clear UK spellings like `colour`/`analyse`. |
 
 ### Framework and suppressions
 | Check | What it flags |
