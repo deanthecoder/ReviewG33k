@@ -176,8 +176,15 @@
                             Classes="neon"
                             Margin="8,0,0,0"
                             Command="{Binding ShowCategoryBreakdownCommand}"
-                            Content="Categories"
-                            ToolTip.Tip="Show category chart and hide or show issue categories" />
+                            ToolTip.Tip="Show category chart and hide or show issue categories">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <materialIcons:MaterialIcon Width="18"
+                                                        Height="18"
+                                                        Kind="ChartPie" />
+                            <TextBlock VerticalAlignment="Center"
+                                       Text="Categories" />
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="ExportToClipboardButton"
                             Grid.Column="3"
                             Classes="neon"
