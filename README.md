@@ -5,32 +5,50 @@
 </p>
 
 # ReviewG33k
-ReviewG33k is a lightweight Avalonia desktop app for fast, local code reviews. Give it a Bitbucket PR URL (or a local repo + base branch), run automated checks on the diff, and jump straight to findings in VS Code.
+ReviewG33k is a lightweight desktop app for fast, practical code reviews. It mainly targets C#/.NET projects, with a smaller amount of generic source-file support for things like C/C++ discovery and lighter-weight checks. Give it a Bitbucket pull request or a local repository, let it scan the code, and jump straight to the right file.
 
-![Screenshot](img/ReviewG33k.png)
+![Main window screenshot](img/ReviewG33k.png)
+
+## Other windows
+### Review Results
+The main review workspace: categorized findings, source preview, quick fixes, export, and one-click open actions.
+
+![Review results screenshot](img/ReviewResultsWindow.png)
+
+### Issue Categories
+A compact pie-chart view with live category toggles, so you can hide whole issue types while you review.
+
+![Issue categories screenshot](img/ReviewCategoryBreakdownWindow.png)
 
 ## What it can do
-- Review **Bitbucket pull requests** (paste/drop a PR URL) and optionally post inline PR comments.
-- Review **local committed changes** against a base branch (auto-detected from `origin/HEAD`, for example `main` or `master`) before you raise a PR (no Bitbucket required).
-- Switch scan scope between **changed lines** (faster) and **full modified files** (more thorough) for checks that are normally line-scoped.
-- Prepare an isolated review checkout using `git worktree` so your working tree stays untouched.
-- Run opinionated automated checks on the changed files/lines (async, exceptions, suppressions, test hygiene, and more).
-- Classify findings into concise categories in the results view (for example `Threading`, `Testing`, `UI`, `Resources`).
-- Open findings at `file:line` in VS Code (requires the `code` CLI); apply a few safe auto-fixes in local mode.
-- Export findings to the clipboard and copy a focused Codex prompt for issues that need manual/AI help.
+- Review **Bitbucket pull requests** by pasting or dropping a PR URL.
+- Review **local committed changes**, **local uncommitted changes**, or an **entire local repository**.
+- Switch between **changed lines** and **full modified files** depending on how thorough you want the scan to be.
+- Prepare isolated review worktrees so your normal working tree stays untouched.
+- See findings grouped into clear categories like `Correctness`, `Threading`, `UI`, and `Repo Hygiene`.
+- Open findings in **VS Code**, **Visual Studio**, **Rider**, your **file browser**, or copy the location to the **clipboard**.
+- Apply supported quick fixes, export findings, generate Codex prompts, and optionally post Bitbucket PR comments.
+- Filter the results live by category using the category breakdown window.
 
 ## How it works (high level)
-1. You give it either a Bitbucket PR URL or a local repo folder + base branch.
-2. It reuses an existing local clone when possible (or clones into your repo root), then creates an isolated review worktree under `CodeReview/...`.
-3. It computes the diff (PR source → target, or `origin/<base>...HEAD`) and runs checks against the changed code.
-4. It shows findings with context plus actions to open, fix/export, and (for PRs) comment.
+1. Pick a review mode.
+2. ReviewG33k gathers the relevant files or diff.
+3. It runs focused checks over that code.
+4. You review, filter, fix, export, open, or comment on the results.
 
 ## Quick start
-- **PR review**: set repo root → paste/drop PR URL → **Prepare Review Checkout** → review findings/open in VS Code → optionally comment back to the PR.
-- **Local review**: choose **Local committed review** → pick repo + base branch → run review → fix/export before opening a PR.
+- **Pull request review**: choose a repo root, paste or drop a PR URL, then click **Review PR**.
+- **Local committed review**: choose **Local committed changes**, pick a repo and base branch, then click **Review Local**.
+- **Local uncommitted review**: choose **Local uncommitted changes**, pick a repo, then click **Review Local**.
+- **Whole-repository review**: choose **Entire local repository**, pick a repo, then click **Review Local**.
 
 ## Build and run
-Prereqs: .NET 8 SDK and `git`. Optional: VS Code `code` CLI.
+Prereqs: .NET 8 SDK and `git`.
+
+Optional tools:
+- VS Code `code` CLI for opening findings in VS Code
+- Visual Studio, Rider, or a desktop file browser for alternative open targets
+
 ```bash
 dotnet build ReviewG33k.sln
 dotnet run --project ReviewG33k.csproj
