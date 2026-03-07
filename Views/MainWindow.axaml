@@ -9,7 +9,7 @@
         x:Name="MainWindowRoot"
         x:Class="ReviewG33k.Views.MainWindow"
         Width="980" Height="700"
-        MinWidth="880" MinHeight="520"
+        MinWidth="965" MinHeight="520"
         Icon="/Assets/app.ico"
         Title="ReviewG33k">
     <Design.DataContext>
