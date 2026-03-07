@@ -49,6 +49,10 @@ public sealed class AsyncMethodNameSuffixCodeReviewCheck : CodeReviewCheckBase
                 {
                     continue;
                 }
+                if (method.Modifiers.Any(modifier => modifier.RawKind == (int)SyntaxKind.OverrideKeyword))
+                    continue;
+                if (method.ExplicitInterfaceSpecifier != null)
+                    continue;
 
                 var methodName = method.Identifier.ValueText;
                 if (string.IsNullOrWhiteSpace(methodName) || methodName.EndsWith("Async", StringComparison.Ordinal))
