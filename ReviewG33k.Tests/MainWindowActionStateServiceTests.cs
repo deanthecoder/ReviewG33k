@@ -36,17 +36,17 @@ public sealed class MainWindowActionStateServiceTests
 
         var service = new MainWindowActionStateService(new MainWindowInputValidationService());
         var snapshot = service.BuildSnapshot(
-            repositoryRootPath: repositoryRoot.FullName,
-            localRepositoryPath: localRepository.FullName,
-            localBaseBranch: string.Empty,
-            pullRequestUrl: "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/19",
-            isAnyLocalReviewMode: true,
-            isLocalUncommittedReviewMode: true,
-            previewPullRequestIsOpen: true,
-            previewPullRequestState: "OPEN",
-            latestSolutionPath: null,
-            latestReviewWorktreePath: null,
-            canCancelCurrentOperation: true,
+                repositoryRootPath: repositoryRoot.FullName,
+                localRepositoryPath: localRepository.FullName,
+                localBaseBranch: string.Empty,
+                pullRequestUrl: "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/19",
+                isAnyLocalReviewMode: true,
+                requiresLocalBaseBranch: false,
+                previewPullRequestIsOpen: true,
+                previewPullRequestState: "OPEN",
+                latestSolutionPath: null,
+                latestReviewWorktreePath: null,
+                canCancelCurrentOperation: true,
             isCancellationRequested: false);
 
         Assert.Multiple(() =>
@@ -76,7 +76,7 @@ public sealed class MainWindowActionStateServiceTests
             localBaseBranch: " ",
             pullRequestUrl: " ",
             isAnyLocalReviewMode: true,
-            isLocalUncommittedReviewMode: false,
+            requiresLocalBaseBranch: true,
             previewPullRequestIsOpen: false,
             previewPullRequestState: "DECLINED",
             latestSolutionPath: null,
@@ -101,7 +101,7 @@ public sealed class MainWindowActionStateServiceTests
             localBaseBranch: "main",
             pullRequestUrl: "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/19",
             isAnyLocalReviewMode: false,
-            isLocalUncommittedReviewMode: false,
+            requiresLocalBaseBranch: false,
             previewPullRequestIsOpen: false,
             previewPullRequestState: "MERGED",
             latestSolutionPath: null,

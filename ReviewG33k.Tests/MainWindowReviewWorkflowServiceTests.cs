@@ -30,9 +30,10 @@ public sealed class MainWindowReviewWorkflowServiceTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: true, isLocalCommittedReviewMode: false), Is.EqualTo("Reviewing pull request..."));
-            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: false, isLocalCommittedReviewMode: true), Is.EqualTo("Reviewing local committed changes..."));
-            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: false, isLocalCommittedReviewMode: false), Is.EqualTo("Reviewing local uncommitted changes..."));
+            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: true, isLocalCommittedReviewMode: false, isLocalRepositoryReviewMode: false), Is.EqualTo("Reviewing pull request..."));
+            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: false, isLocalCommittedReviewMode: true, isLocalRepositoryReviewMode: false), Is.EqualTo("Reviewing local committed changes..."));
+            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: false, isLocalCommittedReviewMode: false, isLocalRepositoryReviewMode: false), Is.EqualTo("Reviewing local uncommitted changes..."));
+            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: false, isLocalCommittedReviewMode: false, isLocalRepositoryReviewMode: true), Is.EqualTo("Reviewing local repository files..."));
         });
     }
 
@@ -110,6 +111,35 @@ public sealed class MainWindowReviewWorkflowServiceTests
             Assert.That(applyResult.LocalFindingCacheUpdate?.Mode, Is.EqualTo(LocalReviewResampleMode.Committed));
             Assert.That(applyResult.LocalFindingCacheUpdate?.Files, Is.Not.Null);
             Assert.That(applyResult.LocalFindingCacheUpdate?.Files.Count, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void BuildApplyResultWhenLocalRepositoryLeavesCacheUpdateEmpty()
+    {
+        var service = CreateService();
+        var report = new CodeSmellReport();
+        var sourceResult = new CodeReviewChangedFileSourceResult([], []);
+        var localExecutionResult = new LocalReviewExecutionResult(
+            @"C:\repo",
+            @"C:\repo\Repo.sln",
+            sourceResult,
+            report);
+        var preparationResult = MainWindowReviewPreparationResult.Success(
+            MainWindowReviewPreparationMode.LocalRepository,
+            pullRequest: null,
+            resolvedBaseBranch: null,
+            pullRequestExecutionResult: null,
+            localExecutionResult);
+
+        var applyResult = service.BuildApplyResult(preparationResult, @"C:\repo");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applyResult.Mode, Is.EqualTo(MainWindowReviewPreparationMode.LocalRepository));
+            Assert.That(applyResult.StatusMessage, Is.EqualTo("Repository review complete."));
+            Assert.That(applyResult.LocalFindingCacheUpdate, Is.Null);
+            Assert.That(applyResult.ResolvedLocalBaseBranch, Is.Null);
         });
     }
 

@@ -25,12 +25,17 @@ internal sealed class MainWindowReviewWorkflowService
         m_reviewPreparationService = reviewPreparationService ?? throw new ArgumentNullException(nameof(reviewPreparationService));
     }
 
-    public string GetPrepareReviewStatusText(bool isPullRequestReviewMode, bool isLocalCommittedReviewMode)
+    public string GetPrepareReviewStatusText(
+        bool isPullRequestReviewMode,
+        bool isLocalCommittedReviewMode,
+        bool isLocalRepositoryReviewMode)
     {
         if (isPullRequestReviewMode)
             return "Reviewing pull request...";
         if (isLocalCommittedReviewMode)
             return "Reviewing local committed changes...";
+        if (isLocalRepositoryReviewMode)
+            return "Reviewing local repository files...";
 
         return "Reviewing local uncommitted changes...";
     }
@@ -38,6 +43,7 @@ internal sealed class MainWindowReviewWorkflowService
     public Task<MainWindowReviewPreparationResult> PrepareReviewByModeAsync(
         bool isPullRequestReviewMode,
         bool isLocalCommittedReviewMode,
+        bool isLocalRepositoryReviewMode,
         string repositoryRootPath,
         string pullRequestUrl,
         string localRepositoryPath,
@@ -69,6 +75,16 @@ internal sealed class MainWindowReviewWorkflowService
                 cancellationToken);
         }
 
+        if (isLocalRepositoryReviewMode)
+        {
+            return m_reviewPreparationService.PrepareLocalRepositoryReviewAsync(
+                localRepositoryPath,
+                includeFullModifiedFiles,
+                appendLog,
+                updateBusyProgress,
+                cancellationToken);
+        }
+
         return m_reviewPreparationService.PrepareLocalUncommittedReviewAsync(
             localRepositoryPath,
             includeFullModifiedFiles,
@@ -89,6 +105,7 @@ internal sealed class MainWindowReviewWorkflowService
             MainWindowReviewPreparationMode.PullRequest => BuildPullRequestApplyResult(preparationResult),
             MainWindowReviewPreparationMode.LocalCommitted => BuildLocalCommittedApplyResult(preparationResult, localRepositoryPath),
             MainWindowReviewPreparationMode.LocalUncommitted => BuildLocalUncommittedApplyResult(preparationResult, localRepositoryPath),
+            MainWindowReviewPreparationMode.LocalRepository => BuildLocalRepositoryApplyResult(preparationResult),
             _ => throw new ArgumentOutOfRangeException()
         };
     }
@@ -166,6 +183,22 @@ internal sealed class MainWindowReviewWorkflowService
             cacheUpdate,
             null);
     }
+
+    private static MainWindowReviewWorkflowApplyResult BuildLocalRepositoryApplyResult(
+        MainWindowReviewPreparationResult preparationResult) =>
+        new(
+            preparationResult.Mode,
+            null,
+            null,
+            null,
+            preparationResult.ReviewWorktreePath,
+            preparationResult.SolutionPath,
+            "Repository review complete.",
+            null,
+            false,
+            preparationResult.Report,
+            null,
+            null);
 }
 
 internal sealed record MainWindowReviewWorkflowApplyResult(

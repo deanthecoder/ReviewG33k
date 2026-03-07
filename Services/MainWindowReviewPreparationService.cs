@@ -147,6 +147,33 @@ internal sealed class MainWindowReviewPreparationService
             localExecutionResult: executionResult);
     }
 
+    public async Task<MainWindowReviewPreparationResult> PrepareLocalRepositoryReviewAsync(
+        string localRepositoryPath,
+        bool includeFullModifiedFiles,
+        Action<string> appendLog,
+        Action<int, int, string> updateBusyProgress,
+        CancellationToken cancellationToken)
+    {
+        var validation = m_inputValidationService.ValidateLocalRepositoryInput(localRepositoryPath?.Trim());
+        if (!validation.IsValid)
+            return MainWindowReviewPreparationResult.Failed(FromValidation(validation));
+
+        var executionResult = await m_reviewExecutionService.ExecuteLocalRepositoryReviewAsync(
+            localRepositoryPath,
+            includeFullModifiedFiles,
+            appendLog,
+            updateBusyProgress,
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return MainWindowReviewPreparationResult.Success(
+            MainWindowReviewPreparationMode.LocalRepository,
+            pullRequest: null,
+            resolvedBaseBranch: null,
+            pullRequestExecutionResult: null,
+            localExecutionResult: executionResult);
+    }
+
     private static MainWindowReviewPreparationError FromValidation(InputValidationResult validation) =>
         new(validation.StatusMessage, validation.DialogTitle, validation.DialogMessage, null);
 }
@@ -155,7 +182,8 @@ internal enum MainWindowReviewPreparationMode
 {
     PullRequest,
     LocalCommitted,
-    LocalUncommitted
+    LocalUncommitted,
+    LocalRepository
 }
 
 internal readonly record struct MainWindowReviewPreparationError(

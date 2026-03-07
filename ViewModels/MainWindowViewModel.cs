@@ -31,6 +31,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     private const int PullRequestReviewModeIndex = 0;
     private const int LocalCommittedReviewModeIndex = 1;
     private const int LocalUncommittedReviewModeIndex = 2;
+    private const int LocalRepositoryReviewModeIndex = 3;
 
     private readonly Settings m_settings;
     private string m_repositoryRootPath;
@@ -138,7 +139,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         get => m_reviewModeIndex;
         set
         {
-            var normalizedValue = value is >= 0 and <= 2 ? value : 0;
+            var normalizedValue = value is >= 0 and <= 3 ? value : 0;
             if (!SetField(ref m_reviewModeIndex, normalizedValue))
                 return;
 
@@ -252,6 +253,8 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public bool IsLocalUncommittedReviewMode => m_reviewModeIndex == LocalUncommittedReviewModeIndex;
 
+    public bool IsLocalRepositoryReviewMode => m_reviewModeIndex == LocalRepositoryReviewModeIndex;
+
     public bool IsAnyLocalReviewMode => !IsPullRequestReviewMode;
 
     public bool ShowPullRequestMetadata =>
@@ -269,6 +272,8 @@ public sealed class MainWindowViewModel : ViewModelBase
             "Reviews committed changes in your local repo against the selected base branch (for example origin/main).",
         LocalUncommittedReviewModeIndex =>
             "Reviews your uncommitted working tree changes, without requiring commits.",
+        LocalRepositoryReviewModeIndex =>
+            "Reviews all analyzable files in your local repository folder, regardless of Git change state.",
         _ =>
             "Reviews a Bitbucket pull request by preparing an isolated local worktree for that PR."
     };
@@ -515,7 +520,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             LocalBaseBranchService.NormalizeBranchName(LocalBaseBranch),
             PullRequestUrl,
             IsAnyLocalReviewMode,
-            IsLocalUncommittedReviewMode,
+            IsLocalCommittedReviewMode,
             PreviewPullRequestIsOpen,
             PreviewPullRequestState,
             latestSolutionPath,
@@ -618,7 +623,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     private static int ResolveInitialReviewModeIndex(Settings settings)
     {
         var configuredIndex = settings.ReviewModeIndex;
-        if (configuredIndex is >= PullRequestReviewModeIndex and <= LocalUncommittedReviewModeIndex)
+        if (configuredIndex is >= PullRequestReviewModeIndex and <= LocalRepositoryReviewModeIndex)
             return configuredIndex;
 
         return settings.UseLocalCommittedReview ? 1 : 0;
@@ -683,6 +688,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsPullRequestReviewMode));
         OnPropertyChanged(nameof(IsLocalCommittedReviewMode));
         OnPropertyChanged(nameof(IsLocalUncommittedReviewMode));
+        OnPropertyChanged(nameof(IsLocalRepositoryReviewMode));
         OnPropertyChanged(nameof(IsAnyLocalReviewMode));
         OnPropertyChanged(nameof(ShowPullRequestMetadata));
         OnPropertyChanged(nameof(ShowLocalBaseBranch));

@@ -181,6 +181,25 @@ public sealed class MainWindowViewModelTests
     }
 
     [Test]
+    public void ReviewModeFlagsWhenLocalRepositorySelectedReflectState()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 3
+        };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.IsPullRequestReviewMode, Is.False);
+            Assert.That(viewModel.IsLocalCommittedReviewMode, Is.False);
+            Assert.That(viewModel.IsLocalUncommittedReviewMode, Is.False);
+            Assert.That(viewModel.IsLocalRepositoryReviewMode, Is.True);
+            Assert.That(viewModel.IsAnyLocalReviewMode, Is.True);
+            Assert.That(viewModel.ShowLocalBaseBranch, Is.False);
+        });
+    }
+
+    [Test]
     public void ShowPullRequestMetadataDependsOnModeAndMetadataText()
     {
         var viewModel = new MainWindowViewModel(new Settings())

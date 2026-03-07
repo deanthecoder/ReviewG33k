@@ -213,7 +213,8 @@ public partial class MainWindow : Window
         await ExecuteBusyActionAsync(
             m_reviewWorkflowService.GetPrepareReviewStatusText(
                 m_viewModel.IsPullRequestReviewMode,
-                m_viewModel.IsLocalCommittedReviewMode),
+                m_viewModel.IsLocalCommittedReviewMode,
+                m_viewModel.IsLocalRepositoryReviewMode),
             async cancellationToken =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -221,6 +222,7 @@ public partial class MainWindow : Window
                 preparationResult = await m_reviewWorkflowService.PrepareReviewByModeAsync(
                     m_viewModel.IsPullRequestReviewMode,
                     m_viewModel.IsLocalCommittedReviewMode,
+                    m_viewModel.IsLocalRepositoryReviewMode,
                     m_viewModel.RepositoryRootPath?.Trim(),
                     m_viewModel.PullRequestUrl?.Trim(),
                     m_viewModel.LocalRepositoryPath?.Trim(),

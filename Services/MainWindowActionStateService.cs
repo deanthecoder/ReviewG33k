@@ -28,7 +28,7 @@ internal sealed class MainWindowActionStateService
         string localBaseBranch,
         string pullRequestUrl,
         bool isAnyLocalReviewMode,
-        bool isLocalUncommittedReviewMode,
+        bool requiresLocalBaseBranch,
         bool? previewPullRequestIsOpen,
         string previewPullRequestState,
         string latestSolutionPath,
@@ -46,7 +46,7 @@ internal sealed class MainWindowActionStateService
         var hasValidPullRequestPrepareInputs =
             m_inputValidationService.ValidatePullRequestPrepareInputs(repositoryRootPath?.Trim(), pullRequestUrl?.Trim()).IsValid &&
             hasValidPullRequestInput;
-        var hasValidLocalPrepareInputs = IsValidLocalPrepareInputs(localRepositoryPath, localBaseBranch, isLocalUncommittedReviewMode);
+        var hasValidLocalPrepareInputs = IsValidLocalPrepareInputs(localRepositoryPath, localBaseBranch, requiresLocalBaseBranch);
         var hasAvailableSolution = !string.IsNullOrWhiteSpace(resolvedSolutionPath) && resolvedSolutionPath.ToFile().Exists();
         var canReviewCurrentPullRequest = previewPullRequestIsOpen != false || IsMergedState(previewPullRequestState);
 
@@ -62,12 +62,12 @@ internal sealed class MainWindowActionStateService
             isCancellationRequested);
     }
 
-    private bool IsValidLocalPrepareInputs(string localRepositoryPath, string localBaseBranch, bool isLocalUncommittedReviewMode)
+    private bool IsValidLocalPrepareInputs(string localRepositoryPath, string localBaseBranch, bool requiresLocalBaseBranch)
     {
         if (!m_inputValidationService.ValidateLocalRepositoryInput(localRepositoryPath?.Trim()).IsValid)
             return false;
 
-        return isLocalUncommittedReviewMode || !string.IsNullOrWhiteSpace(localBaseBranch);
+        return !requiresLocalBaseBranch || !string.IsNullOrWhiteSpace(localBaseBranch);
     }
 
     private static bool IsMergedState(string pullRequestState) =>

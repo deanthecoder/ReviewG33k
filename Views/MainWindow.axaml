@@ -103,6 +103,7 @@
                             <ComboBoxItem Content="Pull Request" />
                             <ComboBoxItem Content="Local committed changes" />
                             <ComboBoxItem Content="Local uncommitted changes" />
+                            <ComboBoxItem Content="Entire local repository" />
                         </ComboBox>
                         <Button x:Name="ReviewModeInfoButton"
                                 Margin="4,0"
