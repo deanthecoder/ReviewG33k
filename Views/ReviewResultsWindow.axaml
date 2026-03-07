@@ -141,15 +141,21 @@
 
             <Grid Grid.Row="1"
                   Margin="0,12,0,4"
-                  ColumnDefinitions="Auto,Auto,*,Auto">
+                  ColumnDefinitions="Auto,Auto,*,Auto,Auto">
                 <Button x:Name="ToggleAllButton"
                         Grid.Column="0"
                         Classes="neon"
                         IsEnabled="{Binding CanToggleAll}"
                         Command="{Binding ToggleAllCommand}"
                         Content="Toggle All" />
+                <Button Grid.Column="1"
+                        Classes="neon"
+                        Margin="8,0,0,0"
+                        Command="{Binding ShowCategoryBreakdownCommand}"
+                        Content="Categories"
+                        ToolTip.Tip="Show category chart and hide or show issue categories" />
                 <Button x:Name="ExportToClipboardButton"
-                        Grid.Column="1"
+                        Grid.Column="3"
                         Classes="neon"
                         Margin="8,0,0,0"
                         IsEnabled="{Binding CanExportToClipboard}"
@@ -167,7 +173,7 @@
                     </StackPanel>
                 </Button>
                 <Button x:Name="CommentSelectedButton"
-                        Grid.Column="3"
+                        Grid.Column="4"
                         Classes="neon"
                         IsEnabled="{Binding CanCommentSelected}"
                         Command="{Binding CommentSelectedCommand}"

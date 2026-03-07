@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using ReviewG33k.Services.Checks.Support;
 using ReviewG33k.Views;
 
 namespace ReviewG33k.Services;
@@ -25,18 +26,29 @@ namespace ReviewG33k.Services;
 /// </remarks>
 internal sealed class ReviewResultsStateService
 {
-    public string BuildSummaryText(IEnumerable<ReviewResultRow> rows)
+    public string BuildSummaryText(IEnumerable<ReviewResultRow> rows, int totalRowCount = -1)
     {
         var rowList = rows?.Where(row => row != null).ToArray() ?? [];
         if (rowList.Length == 0)
+        {
+            if (totalRowCount > 0)
+                return $"0 finding(s) across 0 file(s) ({totalRowCount} hidden)";
+
             return "No review findings";
+        }
 
         var fileCount = rowList
             .Select(row => row.Finding?.FilePath)
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();
-        return $"{rowList.Length} finding(s) across {fileCount} file(s)";
+        var visibleCount = rowList.Length;
+        var hiddenCount = totalRowCount > visibleCount
+            ? totalRowCount - visibleCount
+            : 0;
+        return hiddenCount > 0
+            ? $"{visibleCount} finding(s) across {fileCount} file(s) ({hiddenCount} hidden)"
+            : $"{visibleCount} finding(s) across {fileCount} file(s)";
     }
 
     public ReviewResultsBatchActionState BuildBatchActionState(
@@ -77,6 +89,96 @@ internal sealed class ReviewResultsStateService
         foreach (var row in rows.Where(row => string.Equals(row.RuleId, ruleId, StringComparison.OrdinalIgnoreCase)))
             row.IsIncluded = isIncluded;
     }
+
+    public IReadOnlyList<ReviewCategorySummary> BuildCategorySummaries(IEnumerable<ReviewResultRow> rows)
+    {
+        return (rows ?? [])
+            .Where(row => row != null)
+            .GroupBy(row => row.CategoryText ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new ReviewCategorySummary(
+                group.First().CategoryText ?? string.Empty,
+                group.Count(),
+                GetCategoryColorHex(group.First().CategoryText)))
+            .OrderByDescending(summary => summary.Count)
+            .ThenBy(summary => GetCategorySortOrder(summary.CategoryName))
+            .ThenBy(summary => summary.CategoryName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    public IReadOnlyList<ReviewResultRow> FilterRowsByVisibleCategories(
+        IEnumerable<ReviewResultRow> rows,
+        IEnumerable<string> visibleCategories)
+    {
+        var visibleCategorySet = new HashSet<string>(
+            visibleCategories ?? [],
+            StringComparer.OrdinalIgnoreCase);
+
+        return (rows ?? [])
+            .Where(row => row != null)
+            .Where(row => visibleCategorySet.Contains(row.CategoryText))
+            .ToArray();
+    }
+
+    public int CompareRows(ReviewResultRow left, ReviewResultRow right)
+    {
+        if (ReferenceEquals(left, right))
+            return 0;
+        if (left == null)
+            return 1;
+        if (right == null)
+            return -1;
+
+        var leftFinding = left.Finding;
+        var rightFinding = right.Finding;
+        var categoryCompare = GetCategorySortOrder(left.CategoryText)
+            .CompareTo(GetCategorySortOrder(right.CategoryText));
+        if (categoryCompare != 0)
+            return categoryCompare;
+
+        var ruleCompare = string.Compare(leftFinding?.RuleId, rightFinding?.RuleId, StringComparison.OrdinalIgnoreCase);
+        if (ruleCompare != 0)
+            return ruleCompare;
+
+        var fileCompare = string.Compare(leftFinding?.FilePath, rightFinding?.FilePath, StringComparison.OrdinalIgnoreCase);
+        if (fileCompare != 0)
+            return fileCompare;
+
+        return (leftFinding?.LineNumber ?? int.MaxValue).CompareTo(rightFinding?.LineNumber ?? int.MaxValue);
+    }
+
+    public int GetCategorySortOrder(string category) =>
+        category switch
+        {
+            CodeReviewFindingCategoryResolver.Correctness => 0,
+            CodeReviewFindingCategoryResolver.Threading => 1,
+            CodeReviewFindingCategoryResolver.Performance => 2,
+            CodeReviewFindingCategoryResolver.Resources => 3,
+            CodeReviewFindingCategoryResolver.ApiDesign => 4,
+            CodeReviewFindingCategoryResolver.Readability => 5,
+            CodeReviewFindingCategoryResolver.Maintainability => 6,
+            CodeReviewFindingCategoryResolver.Testing => 7,
+            CodeReviewFindingCategoryResolver.Documentation => 8,
+            CodeReviewFindingCategoryResolver.Ui => 9,
+            CodeReviewFindingCategoryResolver.RepoHygiene => 10,
+            _ => 11
+        };
+
+    public string GetCategoryColorHex(string category) =>
+        category switch
+        {
+            CodeReviewFindingCategoryResolver.Correctness => "#FF6B6B",
+            CodeReviewFindingCategoryResolver.Threading => "#5EEAD4",
+            CodeReviewFindingCategoryResolver.Performance => "#FFD166",
+            CodeReviewFindingCategoryResolver.Resources => "#7DD3FC",
+            CodeReviewFindingCategoryResolver.ApiDesign => "#60A5FA",
+            CodeReviewFindingCategoryResolver.Readability => "#34D399",
+            CodeReviewFindingCategoryResolver.Maintainability => "#F472B6",
+            CodeReviewFindingCategoryResolver.Testing => "#FBBF24",
+            CodeReviewFindingCategoryResolver.Documentation => "#C084FC",
+            CodeReviewFindingCategoryResolver.Ui => "#22D3EE",
+            CodeReviewFindingCategoryResolver.RepoHygiene => "#94A3B8",
+            _ => "#9FB0D0"
+        };
 
     public string BuildExportText(IEnumerable<ReviewResultRow> rows, out int exportedCount)
     {
@@ -120,6 +222,11 @@ internal sealed class ReviewResultsStateService
         return builder.ToString().TrimEnd('\r', '\n');
     }
 }
+
+internal readonly record struct ReviewCategorySummary(
+    string CategoryName,
+    int Count,
+    string ColorHex);
 
 internal readonly record struct ReviewResultsBatchActionState(
     bool CanToggleAll,

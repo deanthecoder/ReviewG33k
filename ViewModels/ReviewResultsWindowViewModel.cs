@@ -11,6 +11,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using DTC.Core.Commands;
@@ -23,7 +25,10 @@ namespace ReviewG33k.ViewModels;
 
 internal sealed class ReviewResultsWindowViewModel : ViewModelBase
 {
+    private readonly ReviewResultsStateService m_stateService;
+    private readonly List<ReviewResultRow> m_allRows = [];
     private string m_summaryText = "No review findings";
+    private string m_categoryBreakdownText = "No issue categories available.";
     private string m_previewHeaderText = "Preview";
     private string m_previewText = "Select an issue to preview surrounding file content.";
     private string m_previewFileName;
@@ -46,10 +51,12 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
     private CommandBase m_exportToClipboardCommandImpl;
     private CommandBase m_copyPreviewFileNameCommandImpl;
     private CommandBase m_openSelectedCommandImpl;
+    private CommandBase m_showCategoryBreakdownCommandImpl;
     private CommandBase m_tickSameTypeCommandImpl;
     private CommandBase m_untickSameTypeCommandImpl;
 
     public ObservableCollection<ReviewResultRow> Rows { get; } = [];
+    public ObservableCollection<ReviewCategoryFilterItemViewModel> CategoryFilters { get; } = [];
     public ICommand FixFindingCommand { get; private set; }
     public ICommand CreateCodexPromptCommand { get; private set; }
     public ICommand CommentFindingCommand { get; private set; }
@@ -58,11 +65,15 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
     public ICommand ExportToClipboardCommand { get; private set; }
     public ICommand CopyPreviewFileNameCommand { get; private set; }
     public ICommand OpenSelectedCommand { get; private set; }
+    public ICommand ShowCategoryBreakdownCommand { get; private set; }
     public ICommand TickSameTypeCommand { get; private set; }
     public ICommand UntickSameTypeCommand { get; private set; }
 
-    public ReviewResultsWindowViewModel()
+    public event EventHandler VisibleRowsChanged;
+
+    public ReviewResultsWindowViewModel(ReviewResultsStateService stateService = null)
     {
+        m_stateService = stateService ?? new ReviewResultsStateService();
         InitializeDisabledCommands();
     }
 
@@ -77,6 +88,14 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
         get => m_previewHeaderText;
         set => SetField(ref m_previewHeaderText, value ?? "Preview");
     }
+
+    public string CategoryBreakdownText
+    {
+        get => m_categoryBreakdownText;
+        private set => SetField(ref m_categoryBreakdownText, value ?? "No issue categories available.");
+    }
+
+    public string CategoryBreakdownTotalText => m_allRows.Count.ToString();
 
     public string PreviewText
     {
@@ -200,11 +219,14 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
         set => SetField(ref m_openSelectedToolTip, value ?? "Open selected finding using the chosen app");
     }
 
+    public bool CanShowCategoryBreakdown => CategoryFilters.Count > 0;
+
     public void SetRows(IEnumerable<ReviewResultRow> rows)
     {
-        Rows.Clear();
-        foreach (var row in rows ?? [])
-            Rows.Add(row);
+        m_allRows.Clear();
+        m_allRows.AddRange((rows ?? []).Where(row => row != null));
+        SyncCategoryFilters();
+        RefreshVisibleRows();
     }
 
     public void ApplySummaryText(string summaryText) =>
@@ -228,6 +250,7 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
         Func<Task> exportToClipboardAsync,
         Func<Task> copyPreviewFileNameAsync,
         Func<Task> openSelectedAsync,
+        Action showCategoryBreakdown,
         Action<ReviewResultRow> tickSameType,
         Action<ReviewResultRow> untickSameType)
     {
@@ -239,6 +262,7 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(exportToClipboardAsync);
         ArgumentNullException.ThrowIfNull(copyPreviewFileNameAsync);
         ArgumentNullException.ThrowIfNull(openSelectedAsync);
+        ArgumentNullException.ThrowIfNull(showCategoryBreakdown);
         ArgumentNullException.ThrowIfNull(tickSameType);
         ArgumentNullException.ThrowIfNull(untickSameType);
 
@@ -266,6 +290,9 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
         m_openSelectedCommandImpl = new AsyncRelayCommand(
             _ => openSelectedAsync(),
             _ => CanOpenSelected);
+        m_showCategoryBreakdownCommandImpl = new RelayCommand(
+            _ => showCategoryBreakdown(),
+            _ => CanShowCategoryBreakdown);
         m_tickSameTypeCommandImpl = new RelayCommand(
             parameter => tickSameType(parameter as ReviewResultRow),
             parameter => parameter is ReviewResultRow row && !string.IsNullOrWhiteSpace(row.RuleId));
@@ -281,6 +308,7 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
         ExportToClipboardCommand = m_exportToClipboardCommandImpl;
         CopyPreviewFileNameCommand = m_copyPreviewFileNameCommandImpl;
         OpenSelectedCommand = m_openSelectedCommandImpl;
+        ShowCategoryBreakdownCommand = m_showCategoryBreakdownCommandImpl;
         TickSameTypeCommand = m_tickSameTypeCommandImpl;
         UntickSameTypeCommand = m_untickSameTypeCommandImpl;
 
@@ -292,6 +320,7 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ExportToClipboardCommand));
         OnPropertyChanged(nameof(CopyPreviewFileNameCommand));
         OnPropertyChanged(nameof(OpenSelectedCommand));
+        OnPropertyChanged(nameof(ShowCategoryBreakdownCommand));
         OnPropertyChanged(nameof(TickSameTypeCommand));
         OnPropertyChanged(nameof(UntickSameTypeCommand));
         RaiseCommandCanExecuteChanged();
@@ -318,6 +347,10 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
                           m_isSelectedOpenTargetAvailable;
     }
 
+    public IReadOnlyList<ReviewResultRow> GetVisibleRows() => Rows;
+
+    public int GetTotalRowCount() => m_allRows.Count;
+
     private void InitializeDisabledCommands()
     {
         m_fixFindingCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
@@ -328,6 +361,7 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
         m_exportToClipboardCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
         m_copyPreviewFileNameCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
         m_openSelectedCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
+        m_showCategoryBreakdownCommandImpl = new RelayCommand(_ => { }, _ => false);
         m_tickSameTypeCommandImpl = new RelayCommand(_ => { }, _ => false);
         m_untickSameTypeCommandImpl = new RelayCommand(_ => { }, _ => false);
 
@@ -339,6 +373,7 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
         ExportToClipboardCommand = m_exportToClipboardCommandImpl;
         CopyPreviewFileNameCommand = m_copyPreviewFileNameCommandImpl;
         OpenSelectedCommand = m_openSelectedCommandImpl;
+        ShowCategoryBreakdownCommand = m_showCategoryBreakdownCommandImpl;
         TickSameTypeCommand = m_tickSameTypeCommandImpl;
         UntickSameTypeCommand = m_untickSameTypeCommandImpl;
     }
@@ -353,8 +388,83 @@ internal sealed class ReviewResultsWindowViewModel : ViewModelBase
         m_exportToClipboardCommandImpl?.RaiseCanExecuteChanged();
         m_copyPreviewFileNameCommandImpl?.RaiseCanExecuteChanged();
         m_openSelectedCommandImpl?.RaiseCanExecuteChanged();
+        m_showCategoryBreakdownCommandImpl?.RaiseCanExecuteChanged();
         m_tickSameTypeCommandImpl?.RaiseCanExecuteChanged();
         m_untickSameTypeCommandImpl?.RaiseCanExecuteChanged();
+    }
+
+    private void SyncCategoryFilters()
+    {
+        var existingVisibility = CategoryFilters.ToDictionary(
+            filter => filter.CategoryName,
+            filter => filter.IsVisible,
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var filter in CategoryFilters)
+            filter.PropertyChanged -= CategoryFilter_OnPropertyChanged;
+
+        CategoryFilters.Clear();
+        foreach (var summary in m_stateService.BuildCategorySummaries(m_allRows))
+        {
+            var filter = new ReviewCategoryFilterItemViewModel(
+                summary.CategoryName,
+                summary.Count,
+                summary.ColorHex,
+                existingVisibility.TryGetValue(summary.CategoryName, out var isVisible)
+                    ? isVisible
+                    : true);
+            filter.PropertyChanged += CategoryFilter_OnPropertyChanged;
+            CategoryFilters.Add(filter);
+        }
+
+        UpdateCategoryBreakdownText();
+        OnPropertyChanged(nameof(CategoryBreakdownTotalText));
+        OnPropertyChanged(nameof(CanShowCategoryBreakdown));
+        RaiseCommandCanExecuteChanged();
+    }
+
+    private void RefreshVisibleRows()
+    {
+        var visibleRows = m_stateService.FilterRowsByVisibleCategories(
+            m_allRows,
+            CategoryFilters.Where(filter => filter.IsVisible).Select(filter => filter.CategoryName));
+
+        Rows.Clear();
+        foreach (var row in visibleRows)
+            Rows.Add(row);
+
+        if (SelectedRow != null && !Rows.Contains(SelectedRow))
+            SelectedRow = Rows.FirstOrDefault();
+        else if (SelectedRow == null && Rows.Count > 0)
+            SelectedRow = Rows[0];
+
+        ApplySummaryText(m_stateService.BuildSummaryText(Rows, m_allRows.Count));
+        UpdateCategoryBreakdownText();
+        OnPropertyChanged(nameof(CategoryBreakdownTotalText));
+        VisibleRowsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void UpdateCategoryBreakdownText()
+    {
+        var totalCount = CategoryFilters.Sum(filter => filter.Count);
+        if (totalCount == 0)
+        {
+            CategoryBreakdownText = "No issue categories available.";
+            return;
+        }
+
+        var hiddenCount = CategoryFilters.Count(filter => !filter.IsVisible);
+        CategoryBreakdownText = hiddenCount == 0
+            ? $"{totalCount} finding(s) across {CategoryFilters.Count} categor{(CategoryFilters.Count == 1 ? "y" : "ies")}."
+            : $"{totalCount} finding(s) across {CategoryFilters.Count} categor{(CategoryFilters.Count == 1 ? "y" : "ies")}. {hiddenCount} hidden.";
+    }
+
+    private void CategoryFilter_OnPropertyChanged(object sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ReviewCategoryFilterItemViewModel.IsVisible))
+            return;
+
+        RefreshVisibleRows();
     }
 
     private static bool SetIfDifferent<T>(ref T field, T value)

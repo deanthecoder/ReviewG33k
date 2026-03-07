@@ -10,6 +10,7 @@
 
 using Material.Icons;
 using ReviewG33k.Services;
+using ReviewG33k.Services.Checks;
 using ReviewG33k.ViewModels;
 using ReviewG33k.Views;
 
@@ -143,6 +144,7 @@ public sealed class ReviewResultsWindowViewModelTests
             () => Task.CompletedTask,
             () => Task.CompletedTask,
             () => Task.CompletedTask,
+            () => { },
             _ => { },
             _ => { });
 
@@ -192,12 +194,14 @@ public sealed class ReviewResultsWindowViewModelTests
             CanExportToClipboard: true,
             CanCommentSelected: true));
         viewModel.PreviewFileName = "File.cs";
+        viewModel.SetRows([actionableRow]);
         Assert.Multiple(() =>
         {
             Assert.That(viewModel.ToggleAllCommand.CanExecute(null), Is.True);
             Assert.That(viewModel.ExportToClipboardCommand.CanExecute(null), Is.True);
             Assert.That(viewModel.CommentSelectedCommand.CanExecute(null), Is.True);
             Assert.That(viewModel.CopyPreviewFileNameCommand.CanExecute(null), Is.True);
+            Assert.That(viewModel.ShowCategoryBreakdownCommand.CanExecute(null), Is.True);
         });
 
         viewModel.ApplyBatchActionState(new ReviewResultsBatchActionState(
@@ -214,11 +218,65 @@ public sealed class ReviewResultsWindowViewModelTests
         });
     }
 
-    private static ReviewResultRow CreateRow(string filePath, int lineNumber, bool canComment = true)
+    [Test]
+    public void SetRowsCreatesCategoryFiltersAndHidesRowsForUntickedCategories()
+    {
+        var viewModel = new ReviewResultsWindowViewModel();
+        var threadingRow = CreateRow("src/A.cs", 5, CodeReviewRuleIds.AsyncVoid);
+        var correctnessRow = CreateRow("src/B.cs", 9, CodeReviewRuleIds.EmptyCatch);
+
+        viewModel.SetRows([threadingRow, correctnessRow]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.Rows.Count, Is.EqualTo(2));
+            Assert.That(viewModel.CategoryFilters.Select(filter => filter.CategoryName),
+                Is.EqualTo(new[]
+                {
+                    Services.Checks.Support.CodeReviewFindingCategoryResolver.Correctness,
+                    Services.Checks.Support.CodeReviewFindingCategoryResolver.Threading
+                }));
+            Assert.That(viewModel.CanShowCategoryBreakdown, Is.True);
+        });
+
+        var threadingFilter = viewModel.CategoryFilters.Single(filter =>
+            filter.CategoryName == Services.Checks.Support.CodeReviewFindingCategoryResolver.Threading);
+        threadingFilter.IsVisible = false;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.Rows.Count, Is.EqualTo(1));
+            Assert.That(viewModel.Rows[0], Is.SameAs(correctnessRow));
+            Assert.That(viewModel.SummaryText, Is.EqualTo("1 finding(s) across 1 file(s) (1 hidden)"));
+            Assert.That(viewModel.CategoryBreakdownText, Does.Contain("1 hidden"));
+        });
+    }
+
+    [Test]
+    public void HidingSelectedCategoryMovesSelectionToNextVisibleRow()
+    {
+        var viewModel = new ReviewResultsWindowViewModel();
+        var readabilityRow = CreateRow("src/A.cs", 5, CodeReviewRuleIds.ConsecutiveBooleanArguments);
+        var testingRow = CreateRow("src/B.cs", 9, CodeReviewRuleIds.MissingTests);
+        viewModel.SetRows([readabilityRow, testingRow]);
+        viewModel.SelectedRow = readabilityRow;
+
+        var readabilityFilter = viewModel.CategoryFilters.Single(filter =>
+            filter.CategoryName == Services.Checks.Support.CodeReviewFindingCategoryResolver.Readability);
+        readabilityFilter.IsVisible = false;
+
+        Assert.That(viewModel.SelectedRow, Is.SameAs(testingRow));
+    }
+
+    private static ReviewResultRow CreateRow(
+        string filePath,
+        int lineNumber,
+        string ruleId = "sample-rule",
+        bool canComment = true)
     {
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Important,
-            "sample-rule",
+            ruleId,
             filePath,
             lineNumber,
             "Sample finding");

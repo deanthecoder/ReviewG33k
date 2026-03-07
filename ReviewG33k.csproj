@@ -56,5 +56,8 @@
     <Compile Update="Views\ReviewResultsWindow.axaml.cs">
       <DependentUpon>%(Filename)</DependentUpon>
     </Compile>
+    <Compile Update="Views\ReviewCategoryBreakdownWindow.axaml.cs">
+      <DependentUpon>%(Filename)</DependentUpon>
+    </Compile>
   </ItemGroup>
 </Project>

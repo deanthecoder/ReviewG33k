@@ -55,6 +55,7 @@ public partial class ReviewResultsWindow : Window
     private readonly Dictionary<CodeLocationOpenTarget, MenuItem> m_openTargetMenuItems = [];
     private readonly CommandBase m_selectOpenTargetCommandImpl;
     private CodeLocationOpenTarget m_selectedOpenTarget;
+    private ReviewCategoryBreakdownWindow m_categoryBreakdownWindow;
     private Cursor m_previousCursor;
     private bool m_isBulkCommenting;
     private bool m_isApplyingFix;
@@ -117,11 +118,13 @@ public partial class ReviewResultsWindow : Window
             ExportToClipboardAsync,
             CopyPreviewFileNameAsync,
             OpenSelectedAsync,
+            ShowCategoryBreakdown,
             row => SetSameTypeIncludedState(row, isIncluded: true),
             row => SetSameTypeIncludedState(row, isIncluded: false));
         InitializeComponent();
         DataContext = m_viewModel;
         m_viewModel.PropertyChanged += ViewModel_OnPropertyChanged;
+        m_viewModel.VisibleRowsChanged += ViewModel_OnVisibleRowsChanged;
         InitializeOpenTargetMenuItems();
         if (m_openTargetDefinitions.Count > 0 && !m_openTargetDefinitionsByTarget.ContainsKey(m_selectedOpenTarget))
             m_selectedOpenTarget = m_openTargetDefinitions[0].Target;
@@ -131,7 +134,7 @@ public partial class ReviewResultsWindow : Window
         m_rows = (findings ?? [])
             .Where(finding => finding != null)
             .Where(finding => finding.Severity != CodeReviewFindingSeverity.Ok)
-            .OrderBy(finding => GetCategorySortOrder(CodeReviewFindingCategoryResolver.ResolveCategory(finding.RuleId)))
+            .OrderBy(finding => m_stateService.GetCategorySortOrder(CodeReviewFindingCategoryResolver.ResolveCategory(finding.RuleId)))
             .ThenBy(finding => finding.RuleId, StringComparer.OrdinalIgnoreCase)
             .ThenBy(finding => finding.FilePath, StringComparer.OrdinalIgnoreCase)
             .ThenBy(finding => finding.LineNumber)
@@ -146,7 +149,6 @@ public partial class ReviewResultsWindow : Window
         if (m_viewModel.SelectedRow == null)
             SetPreviewText("Select an issue to preview surrounding file content.", "Preview");
 
-        UpdateSummaryText();
         UpdateBatchActionButtonStates();
         UpdateOpenTargetUi();
     }
@@ -312,7 +314,7 @@ public partial class ReviewResultsWindow : Window
 
     private void ToggleAllIncluded()
     {
-        m_stateService.ToggleAllIncluded(m_rows);
+        m_stateService.ToggleAllIncluded(m_viewModel.GetVisibleRows().ToList());
         UpdateBatchActionButtonStates();
     }
 
@@ -321,7 +323,7 @@ public partial class ReviewResultsWindow : Window
         if (m_isBulkCommenting || m_commentFindingAction == null)
             return;
 
-        var rowsToComment = m_rows
+        var rowsToComment = m_viewModel.GetVisibleRows()
             .Where(row => row.IsIncluded && row.CanCommentActive)
             .ToArray();
         if (rowsToComment.Length == 0)
@@ -377,7 +379,7 @@ public partial class ReviewResultsWindow : Window
             return;
         }
 
-        var exportText = m_stateService.BuildExportText(m_rows, out var exportedCount);
+        var exportText = m_stateService.BuildExportText(m_viewModel.GetVisibleRows(), out var exportedCount);
         if (exportedCount == 0)
         {
             SetPreviewText("No included findings available to export.", "Preview");
@@ -400,7 +402,7 @@ public partial class ReviewResultsWindow : Window
         if (sourceRow == null || string.IsNullOrWhiteSpace(sourceRow.RuleId))
             return;
 
-        m_stateService.SetSameTypeIncludedState(m_rows, sourceRow.RuleId, isIncluded);
+        m_stateService.SetSameTypeIncludedState(m_viewModel.GetVisibleRows(), sourceRow.RuleId, isIncluded);
         UpdateBatchActionButtonStates();
     }
 
@@ -528,12 +530,11 @@ public partial class ReviewResultsWindow : Window
             m_rows.Add(row);
         }
 
-        m_rows.Sort(CompareRows);
+        m_rows.Sort(m_stateService.CompareRows);
         m_viewModel.SetRows(m_rows);
-        UpdateSummaryText();
         UpdateBatchActionButtonStates();
 
-        if (m_rows.Count == 0)
+        if (m_viewModel.Rows.Count == 0)
         {
             m_viewModel.SelectedRow = null;
             SetPreviewText("No review findings.", "Preview");
@@ -543,15 +544,15 @@ public partial class ReviewResultsWindow : Window
         ReviewResultRow nextRow = null;
         if (preferredRowIndex >= 0)
         {
-            var boundedIndex = Math.Clamp(preferredRowIndex, 0, m_rows.Count - 1);
-            nextRow = m_rows[boundedIndex];
+            var boundedIndex = Math.Clamp(preferredRowIndex, 0, m_viewModel.Rows.Count - 1);
+            nextRow = m_viewModel.Rows[boundedIndex];
         }
 
-        nextRow ??= m_rows
+        nextRow ??= m_viewModel.Rows
             .Where(row => RepositoryUtilities.AreSameRepoPath(row.Finding?.FilePath, filePath))
             .OrderBy(row => Math.Abs((row.Finding?.LineNumber ?? 0) - preferredLineNumber))
             .ThenBy(row => row.Finding?.LineNumber ?? int.MaxValue)
-            .FirstOrDefault() ?? m_rows[0];
+            .FirstOrDefault() ?? m_viewModel.Rows[0];
 
         m_viewModel.SelectedRow = nextRow;
     }
@@ -590,16 +591,10 @@ public partial class ReviewResultsWindow : Window
     private void UpdateBatchActionButtonStates()
     {
         var actionState = m_stateService.BuildBatchActionState(
-            m_rows,
+            m_viewModel.GetVisibleRows(),
             m_isBulkCommenting,
             m_commentFindingAction != null);
         m_viewModel.ApplyBatchActionState(actionState);
-    }
-
-    private void UpdateSummaryText()
-    {
-        var summaryText = m_stateService.BuildSummaryText(m_rows);
-        m_viewModel.ApplySummaryText(summaryText);
     }
 
     private void UpdateOpenSelectedButtonState()
@@ -650,6 +645,16 @@ public partial class ReviewResultsWindow : Window
         SetPreviewText("Select an issue to preview surrounding file content.", "Preview");
     }
 
+    private void ViewModel_OnVisibleRowsChanged(object sender, EventArgs e)
+    {
+        UpdateBatchActionButtonStates();
+
+        if (m_viewModel.SelectedRow != null)
+            return;
+
+        SetPreviewText("Select an issue to preview surrounding file content.", "Preview");
+    }
+
     private void UpdateOpenTargetMenuItem(MenuItem menuItem, CodeLocationOpenTargetDefinition definition)
     {
         if (menuItem == null || definition == null)
@@ -691,48 +696,20 @@ public partial class ReviewResultsWindow : Window
             : null;
     }
 
-    private static int GetCategorySortOrder(string category) =>
-        category switch
-        {
-            CodeReviewFindingCategoryResolver.Correctness => 0,
-            CodeReviewFindingCategoryResolver.Threading => 1,
-            CodeReviewFindingCategoryResolver.Performance => 2,
-            CodeReviewFindingCategoryResolver.Resources => 3,
-            CodeReviewFindingCategoryResolver.ApiDesign => 4,
-            CodeReviewFindingCategoryResolver.Readability => 5,
-            CodeReviewFindingCategoryResolver.Maintainability => 6,
-            CodeReviewFindingCategoryResolver.Testing => 7,
-            CodeReviewFindingCategoryResolver.Documentation => 8,
-            CodeReviewFindingCategoryResolver.Ui => 9,
-            CodeReviewFindingCategoryResolver.RepoHygiene => 10,
-            _ => 11
-        };
-
-    private static int CompareRows(ReviewResultRow left, ReviewResultRow right)
+    private void ShowCategoryBreakdown()
     {
-        if (ReferenceEquals(left, right))
-            return 0;
-        if (left == null)
-            return 1;
-        if (right == null)
-            return -1;
+        if (!m_viewModel.CanShowCategoryBreakdown)
+            return;
 
-        var leftFinding = left.Finding;
-        var rightFinding = right.Finding;
-        var categoryCompare = GetCategorySortOrder(left.CategoryText)
-            .CompareTo(GetCategorySortOrder(right.CategoryText));
-        if (categoryCompare != 0)
-            return categoryCompare;
+        if (m_categoryBreakdownWindow != null)
+        {
+            m_categoryBreakdownWindow.Activate();
+            return;
+        }
 
-        var ruleCompare = string.Compare(leftFinding?.RuleId, rightFinding?.RuleId, StringComparison.OrdinalIgnoreCase);
-        if (ruleCompare != 0)
-            return ruleCompare;
-
-        var fileCompare = string.Compare(leftFinding?.FilePath, rightFinding?.FilePath, StringComparison.OrdinalIgnoreCase);
-        if (fileCompare != 0)
-            return fileCompare;
-
-        return (leftFinding?.LineNumber ?? int.MaxValue).CompareTo(rightFinding?.LineNumber ?? int.MaxValue);
+        m_categoryBreakdownWindow = new ReviewCategoryBreakdownWindow(m_viewModel);
+        m_categoryBreakdownWindow.Closed += (_, _) => m_categoryBreakdownWindow = null;
+        m_categoryBreakdownWindow.Show(this);
     }
 
 }

@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using ReviewG33k.Services;
+using ReviewG33k.Services.Checks;
 using ReviewG33k.Views;
 
 namespace ReviewG33k.Tests;
@@ -40,6 +41,20 @@ public sealed class ReviewResultsStateServiceTests
         var summaryText = service.BuildSummaryText(rows);
 
         Assert.That(summaryText, Is.EqualTo("3 finding(s) across 2 file(s)"));
+    }
+
+    [Test]
+    public void BuildSummaryTextWhenRowsAreFilteredIncludesHiddenCount()
+    {
+        var service = new ReviewResultsStateService();
+        var visibleRows = new[]
+        {
+            CreateRow("RuleA", "src/A.cs", 3)
+        };
+
+        var summaryText = service.BuildSummaryText(visibleRows, totalRowCount: 4);
+
+        Assert.That(summaryText, Is.EqualTo("1 finding(s) across 1 file(s) (3 hidden)"));
     }
 
     [Test]
@@ -145,6 +160,42 @@ public sealed class ReviewResultsStateServiceTests
             Assert.That(exportedCount, Is.EqualTo(0));
             Assert.That(exportText, Is.EqualTo(string.Empty));
         });
+    }
+
+    [Test]
+    public void BuildCategorySummariesReturnsOrderedCategoryCounts()
+    {
+        var service = new ReviewResultsStateService();
+        var rows = new[]
+        {
+            CreateRow(CodeReviewRuleIds.ConsecutiveBooleanArguments, "src/A.cs", 3),
+            CreateRow(CodeReviewRuleIds.EmptyCatch, "src/B.cs", 4),
+            CreateRow(CodeReviewRuleIds.EmptyCatch, "src/C.cs", 5)
+        };
+
+        var summaries = service.BuildCategorySummaries(rows);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(summaries.Select(summary => summary.CategoryName),
+                Is.EqualTo(new[] { "Correctness", "Readability" }));
+            Assert.That(summaries[0].Count, Is.EqualTo(2));
+            Assert.That(summaries[1].Count, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void FilterRowsByVisibleCategoriesReturnsOnlyMatchingRows()
+    {
+        var service = new ReviewResultsStateService();
+        var correctnessRow = CreateRow(CodeReviewRuleIds.EmptyCatch, "src/A.cs", 3);
+        var testingRow = CreateRow(CodeReviewRuleIds.MissingTests, "src/B.cs", 4);
+
+        var filteredRows = service.FilterRowsByVisibleCategories(
+            [correctnessRow, testingRow],
+            ["Correctness"]);
+
+        Assert.That(filteredRows, Is.EqualTo(new[] { correctnessRow }));
     }
 
     private static ReviewResultRow CreateRow(
