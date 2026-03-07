@@ -1486,6 +1486,22 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void UnnecessaryEnumMemberValueCheckWhenFlagStyleShiftExpressionIsUsedDoesNotReport()
+    {
+        const string source = """
+            public enum TextStyle
+            {
+                Bold = 1 << 0,
+                Italic = 1 << 1
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryEnumMemberValueCodeReviewCheck(), "A", source, Enumerable.Range(1, 7));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void UnnecessaryVerbatimStringPrefixCheckWhenSimpleVerbatimLiteralReportsHint()
     {
         const string source = """

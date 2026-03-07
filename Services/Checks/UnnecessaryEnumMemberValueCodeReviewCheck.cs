@@ -94,6 +94,7 @@ public sealed class UnnecessaryEnumMemberValueCodeReviewCheck : RoslynSemanticCo
                 if (TryGetConstantNumericValue(semanticModel, member, out var currentValue))
                 {
                     if (member.EqualsValue != null &&
+                        !ContainsLeftShiftExpression(member.EqualsValue.Value) &&
                         currentValue == expectedValue &&
                         RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, member.Span))
                     {
@@ -115,6 +116,13 @@ public sealed class UnnecessaryEnumMemberValueCodeReviewCheck : RoslynSemanticCo
             }
         }
     }
+
+    private static bool ContainsLeftShiftExpression(ExpressionSyntax expression) =>
+        expression != null &&
+        expression
+            .DescendantNodesAndSelf()
+            .OfType<BinaryExpressionSyntax>()
+            .Any(node => node.IsKind(SyntaxKind.LeftShiftExpression));
 
     private static bool TryGetConstantNumericValue(SemanticModel semanticModel, EnumMemberDeclarationSyntax member, out decimal value)
     {
