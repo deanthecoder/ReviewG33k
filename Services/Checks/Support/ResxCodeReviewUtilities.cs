@@ -20,7 +20,7 @@ namespace ReviewG33k.Services.Checks.Support;
 
 internal static class ResxCodeReviewUtilities
 {
-    private static readonly (string American, string British)[] s_dialectPairs =
+    private static readonly (string American, string British)[] DialectPairs =
     [
         ("color", "colour"),
         ("behavior", "behaviour"),
@@ -140,7 +140,7 @@ internal static class ResxCodeReviewUtilities
             if (string.IsNullOrWhiteSpace(entry.Value))
                 continue;
 
-            foreach (var pair in s_dialectPairs)
+            foreach (var pair in DialectPairs)
             {
                 AddWordMatches(entry, pair.American, americanMatches);
                 AddWordMatches(entry, pair.British, britishMatches);

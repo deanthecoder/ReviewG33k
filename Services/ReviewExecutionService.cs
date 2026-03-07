@@ -111,7 +111,6 @@ internal sealed class ReviewExecutionService
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-
         var solutionPath = RepositoryUtilities.FindTopLevelSolutionFile(localRepositoryPath);
         appendLog?.Invoke($"Local review repository: {localRepositoryPath}");
         appendLog?.Invoke($"Comparing current branch changes against: origin/{baseBranch}");
@@ -151,7 +150,6 @@ internal sealed class ReviewExecutionService
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-
         var solutionPath = RepositoryUtilities.FindTopLevelSolutionFile(localRepositoryPath);
         appendLog?.Invoke($"Local review repository: {localRepositoryPath}");
         appendLog?.Invoke("Comparing local uncommitted/untracked changes against: HEAD");
@@ -186,7 +184,6 @@ internal sealed class ReviewExecutionService
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-
         var solutionPath = RepositoryUtilities.FindTopLevelSolutionFile(localRepositoryPath);
         appendLog?.Invoke($"Local review repository: {localRepositoryPath}");
         appendLog?.Invoke("Reviewing all analyzable files in the local repository.");
@@ -194,7 +191,7 @@ internal sealed class ReviewExecutionService
             ? "No .sln file found in local repository."
             : $"Solution selected: {solutionPath}");
 
-        var changedFileSource = new LocalRepositoryChangedFileSource(localRepositoryPath);
+        var changedFileSource = new LocalRepositoryChangedFileSource(localRepositoryPath, m_gitCommandRunner);
         var sourceResult = await changedFileSource.LoadAsync(appendLog);
         cancellationToken.ThrowIfCancellationRequested();
 

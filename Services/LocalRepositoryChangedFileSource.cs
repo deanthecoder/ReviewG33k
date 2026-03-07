@@ -27,11 +27,14 @@ namespace ReviewG33k.Services;
 /// </remarks>
 public sealed class LocalRepositoryChangedFileSource : ICodeReviewChangedFileSource
 {
+    private static readonly string[] SearchPatterns = ["*.cs", "*.csproj", "*.axaml", "*.xaml", "*.resx"];
+    private readonly GitCommandRunner m_gitCommandRunner;
     private readonly string m_repositoryPath;
 
-    public LocalRepositoryChangedFileSource(string repositoryPath)
+    public LocalRepositoryChangedFileSource(string repositoryPath, GitCommandRunner gitCommandRunner = null)
     {
         m_repositoryPath = repositoryPath ?? string.Empty;
+        m_gitCommandRunner = gitCommandRunner;
     }
 
     public async Task<CodeReviewChangedFileSourceResult> LoadAsync(Action<string> progressLogger = null)
@@ -46,16 +49,7 @@ public sealed class LocalRepositoryChangedFileSource : ICodeReviewChangedFileSou
         }
 
         progressLogger?.Invoke("Code review scan: Enumerating repository files...");
-        var analyzableFiles = repositoryPathInfo
-            .TryGetFiles(searchOption: SearchOption.AllDirectories)
-            .Where(file => file != null && file.Exists())
-            .Where(file =>
-            {
-                var relativePath = Path.GetRelativePath(repositoryPathInfo.FullName, file.FullName);
-                return Support.CodeReviewFileClassification.IsAnalyzableChangedPath(relativePath);
-            })
-            .OrderBy(file => file.FullName, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var analyzableFiles = await EnumerateAnalyzableFilesAsync(repositoryPathInfo);
 
         if (analyzableFiles.Length == 0)
         {
@@ -88,6 +82,105 @@ public sealed class LocalRepositoryChangedFileSource : ICodeReviewChangedFileSou
 
     private static IReadOnlyList<string> SplitLines(string text) =>
         (text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+
+    private async Task<FileInfo[]> EnumerateAnalyzableFilesAsync(DirectoryInfo repositoryPathInfo)
+    {
+        if (m_gitCommandRunner != null && RepositoryUtilities.IsGitRepository(repositoryPathInfo.FullName))
+        {
+            var gitFiles = await TryEnumerateAnalyzableGitFilesAsync(repositoryPathInfo.FullName);
+            if (gitFiles != null)
+                return gitFiles;
+        }
+
+        return await Task.Run(() => EnumerateAnalyzableFiles(repositoryPathInfo));
+    }
+
+    private async Task<FileInfo[]> TryEnumerateAnalyzableGitFilesAsync(string repositoryPath)
+    {
+        var result = await m_gitCommandRunner.RunAsync(
+            repositoryPath,
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard");
+        if (!result.IsSuccess)
+            return null;
+
+        var repositoryPathInfo = repositoryPath.ToDir();
+        return (result.StandardOutput ?? string.Empty)
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(RepositoryUtilities.NormalizeRepoPath)
+            .Where(Support.CodeReviewFileClassification.IsAnalyzableChangedPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(relativePath => repositoryPathInfo.GetFile(relativePath.Replace('/', Path.DirectorySeparatorChar)))
+            .Where(file => file.Exists())
+            .OrderBy(file => file.FullName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static FileInfo[] EnumerateAnalyzableFiles(DirectoryInfo repositoryPathInfo)
+    {
+        var pendingDirectories = new Stack<DirectoryInfo>();
+        pendingDirectories.Push(repositoryPathInfo);
+
+        var files = new Dictionary<string, FileInfo>(StringComparer.OrdinalIgnoreCase);
+        while (pendingDirectories.Count > 0)
+        {
+            var directory = pendingDirectories.Pop();
+            foreach (var file in EnumerateMatchingFiles(directory))
+                files[file.FullName] = file;
+
+            foreach (var childDirectory in EnumerateChildDirectories(repositoryPathInfo, directory))
+                pendingDirectories.Push(childDirectory);
+        }
+
+        return files.Values
+            .OrderBy(file => file.FullName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static IEnumerable<FileInfo> EnumerateMatchingFiles(DirectoryInfo directory)
+    {
+        foreach (var searchPattern in SearchPatterns)
+        {
+            IEnumerable<FileInfo> matches;
+            try
+            {
+                matches = directory.EnumerateFiles(searchPattern, SearchOption.TopDirectoryOnly);
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var file in matches)
+            {
+                if (file.Exists())
+                    yield return file;
+            }
+        }
+    }
+
+    private static IEnumerable<DirectoryInfo> EnumerateChildDirectories(DirectoryInfo repositoryRoot, DirectoryInfo directory)
+    {
+        IEnumerable<DirectoryInfo> children;
+        try
+        {
+            children = directory.EnumerateDirectories("*", SearchOption.TopDirectoryOnly);
+        }
+        catch
+        {
+            yield break;
+        }
+
+        foreach (var childDirectory in children)
+        {
+            var relativeDirectoryPath = RepositoryUtilities.NormalizeRepoPath(
+                Path.GetRelativePath(repositoryRoot.FullName, childDirectory.FullName));
+            if (!Support.CodeReviewFileClassification.IsIgnoredPath(relativeDirectoryPath))
+                yield return childDirectory;
+        }
+    }
 
     private static bool ShouldLogFileProgress(int filesProcessed, int totalFiles) =>
         filesProcessed == totalFiles ||

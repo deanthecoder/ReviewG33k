@@ -17,6 +17,17 @@ namespace ReviewG33k.Services.Checks.Support;
 
 internal static class CodeReviewFileClassification
 {
+    private static readonly string[] IgnoredDirectoryNames =
+    [
+        ".git",
+        ".vs",
+        ".idea",
+        "bin",
+        "obj",
+        "dist",
+        "node_modules"
+    ];
+
     private static readonly HashSet<string> SourceCodeExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".cs",
@@ -85,9 +96,7 @@ internal static class CodeReviewFileClassification
 
     public static bool IsIgnoredPath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&
-        (IsGeneratedFilePath(path) ||
-         path.Contains("/obj/", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("\\obj\\", StringComparison.OrdinalIgnoreCase));
+        (IsGeneratedFilePath(path) || IsUnderIgnoredDirectory(path));
 
     public static bool IsLikelySourceCodePath(string path)
     {
@@ -131,4 +140,16 @@ internal static class CodeReviewFileClassification
         file != null &&
         (IsTestFilePath(file.Path) ||
          (!string.IsNullOrWhiteSpace(file.Text) && TestAttributeRegex.IsMatch(file.Text)));
+
+    private static bool IsUnderIgnoredDirectory(string path)
+    {
+        var normalizedPath = "/" + (path ?? string.Empty).Replace('\\', '/').Trim('/') + "/";
+        foreach (var directoryName in IgnoredDirectoryNames)
+        {
+            if (normalizedPath.Contains($"/{directoryName}/", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
 }

@@ -56,6 +56,17 @@ public sealed class CodeReviewFileClassificationTests
         Assert.That(result, Is.False);
     }
 
+    [TestCase("src/bin/Debug/Foo.cs")]
+    [TestCase("src/dist/generated/Foo.cs")]
+    [TestCase("src/node_modules/pkg/index.js")]
+    [TestCase(".git/hooks/pre-commit.cs")]
+    public void IsAnalyzableChangedCSharpPathWhenPathIsUnderIgnoredDirectoryReturnsFalse(string path)
+    {
+        var result = InvokeIsAnalyzableChangedCSharpPath(path);
+
+        Assert.That(result, Is.False);
+    }
+
     [Test]
     public void IsAnalyzableChangedCSharpPathWhenPathIsProjectFileReturnsTrue()
     {
