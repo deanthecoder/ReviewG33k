@@ -2043,6 +2043,30 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void UnusedPrivateMemberCheckWhenMethodIsExplicitInterfaceImplementationDoesNotReport()
+    {
+        const string source = """
+            using System.Collections;
+            using System.Collections.Generic;
+
+            public sealed class Sample : IEnumerable<int>
+            {
+                public IEnumerator<int> GetEnumerator()
+                {
+                    yield break;
+                }
+
+                IEnumerator IEnumerable.GetEnumerator() =>
+                    GetEnumerator();
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedPrivateMemberCodeReviewCheck(), "A", source, Enumerable.Range(1, 14));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void DisposableNotDisposedCheckWhenPassedToConstructorDoesNotReport()
     {
         const string source = """

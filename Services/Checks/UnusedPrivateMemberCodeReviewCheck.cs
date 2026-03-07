@@ -124,6 +124,8 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
                 continue;
             if (symbol.DeclaredAccessibility != Accessibility.Private)
                 continue;
+            if (symbol.MethodKind != MethodKind.Ordinary)
+                continue;
             if (symbol.IsOverride || symbol.IsAbstract)
                 continue;
             if (IsProgramMainEntryPoint(symbol))
