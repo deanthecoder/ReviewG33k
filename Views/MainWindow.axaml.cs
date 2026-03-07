@@ -754,5 +754,4 @@ public partial class MainWindow : Window
         SetStatus("Opened solution in default application.");
         AppendLog($"Opened solution: {m_viewModel.LatestSolutionPath}");
     }
-
 }

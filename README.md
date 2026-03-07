@@ -95,6 +95,7 @@ ReviewG33k labels each finding with one of these categories:
 | Check | What it flags |
 | --- | --- |
 | Missing blank lines between methods | Method blocks that run together and reduce readability. |
+| Blank lines between brace pairs | Empty spacer lines between consecutive brace-only lines like `}` ... `}` or `{` ... `{`. |
 | High parameter count | Methods/constructors with too many parameters. |
 | Consecutive positional boolean arguments | Calls with consecutive unnamed `true`/`false` literals (prefer named args for clarity). |
 | Generic type name suffix | Generic type names that do not follow expected suffix conventions. |

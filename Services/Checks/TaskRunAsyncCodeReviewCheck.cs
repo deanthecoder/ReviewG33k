@@ -103,5 +103,4 @@ public sealed class TaskRunAsyncCodeReviewCheck : RoslynSemanticCodeReviewCheckB
         return string.Equals(namedType.Name, "Task", StringComparison.Ordinal) ||
                string.Equals(namedType.Name, "ValueTask", StringComparison.Ordinal);
     }
-
 }

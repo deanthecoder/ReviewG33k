@@ -268,5 +268,4 @@ public sealed class MultipleEnumerationCodeReviewCheck : RoslynSemanticCodeRevie
             @interface.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IList_T ||
             @interface.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IReadOnlyList_T);
     }
-
 }

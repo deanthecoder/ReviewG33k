@@ -282,6 +282,7 @@ public sealed class CodeSmellReportAnalyzer
         new PrivateFieldCanBeReadonlyCodeReviewCheck(),
         new PrivateFieldUsedInSingleMethodCodeReviewCheck(),
         new MissingBlankLineBetweenMethodsCodeReviewCheck(),
+        new BlankLineBetweenBracePairsCodeReviewCheck(),
         new MethodParameterCountCodeReviewCheck(),
         new GenericTypeNameSuffixCodeReviewCheck(),
         new IfElseBraceConsistencyCodeReviewCheck(),

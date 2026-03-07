@@ -66,6 +66,7 @@ internal static class CodeReviewFindingCategoryResolver
 
             CodeReviewRuleIds.AsyncMethodNameSuffix or
             CodeReviewRuleIds.MissingBlankLineBetweenMethods or
+            CodeReviewRuleIds.BlankLineBetweenBracePairs or
             CodeReviewRuleIds.IfElseBraceConsistency or
             CodeReviewRuleIds.IfElseUnnecessaryBraces or
             CodeReviewRuleIds.BooleanLiteralComparison or

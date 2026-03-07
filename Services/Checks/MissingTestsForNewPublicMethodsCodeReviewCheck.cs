@@ -76,24 +76,12 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
                     ? CodeReviewFindingSeverity.Hint
                     : CodeReviewFindingSeverity.Suggestion;
 
-                if (hasAnyChangedTests)
-                {
-                    AddFinding(
-                        report,
-                        severity,
-                        file.Path,
-                        lineNumber,
-                        $"New public method '{methodName}' has no likely matching unit test(s).");
-                }
-                else
-                {
-                    AddFinding(
-                        report,
-                        severity,
-                        file.Path,
-                        lineNumber,
-                        $"New public method '{methodName}' has no unit test changes in this PR.");
-                }
+                AddFinding(
+                    report,
+                    severity,
+                    file.Path,
+                    lineNumber,
+                    hasAnyChangedTests ? $"New public method '{methodName}' has no likely matching unit test(s)." : $"Public method '{methodName}' has no unit test changes.");
             }
         }
     }
@@ -102,7 +90,7 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
     {
         if (method == null)
             return false;
-        if (!method.Modifiers.Any(modifier => modifier.RawKind == (int)SyntaxKind.PublicKeyword))
+        if (method.Modifiers.All(modifier => modifier.RawKind != (int)SyntaxKind.PublicKeyword))
             return false;
         if (method.Modifiers.Any(modifier =>
             modifier.RawKind == (int)SyntaxKind.AbstractKeyword ||
@@ -139,7 +127,7 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
         {
             foreach (var attribute in attributeList.Attributes)
             {
-                var attributeName = attribute?.Name?.ToString()?.Trim();
+                var attributeName = attribute?.Name?.ToString().Trim();
                 if (string.IsNullOrWhiteSpace(attributeName))
                     continue;
 
@@ -150,5 +138,4 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
 
         return false;
     }
-
 }

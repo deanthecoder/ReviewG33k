@@ -711,5 +711,4 @@ public partial class ReviewResultsWindow : Window
         m_categoryBreakdownWindow.Closed += (_, _) => m_categoryBreakdownWindow = null;
         m_categoryBreakdownWindow.Show(this);
     }
-
 }

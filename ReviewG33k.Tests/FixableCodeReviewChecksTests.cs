@@ -439,6 +439,43 @@ public sealed class FixableCodeReviewChecksTests
     }
 
     [Test]
+    public void BlankLineBetweenBracePairsCheckTryFixRemovesBlankLineBetweenClosingBraces()
+    {
+        using var tempFile = new TempFile(".cs");
+        const string source = """
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    if (true)
+                    {
+                    }
+
+                }
+            }
+            """;
+
+        tempFile.WriteAllText(source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.BlankLineBetweenBracePairs,
+            "Sample.cs",
+            9,
+            "Remove blank line between consecutive closing braces.");
+
+        var check = new BlankLineBetweenBracePairsCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Is.EqualTo("Removed blank line between consecutive braces."));
+
+        var updated = tempFile.ReadAllText().Replace("\r\n", "\n");
+        Assert.That(updated, Does.Contain("        }\n    }\n}"));
+        Assert.That(updated, Does.Not.Contain("        }\n\n    }"));
+    }
+
+    [Test]
     public void UnusedPrivateMemberCheckCanFixWhenFindingTargetsPrivateMethod()
     {
         var finding = new CodeSmellFinding(

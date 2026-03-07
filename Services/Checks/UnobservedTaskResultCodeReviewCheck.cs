@@ -67,5 +67,4 @@ public sealed class UnobservedTaskResultCodeReviewCheck : RoslynSemanticCodeRevi
                (string.Equals(typeName, "Task", StringComparison.Ordinal) ||
                 string.Equals(typeName, "ValueTask", StringComparison.Ordinal));
     }
-
 }

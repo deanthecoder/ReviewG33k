@@ -162,5 +162,4 @@ public sealed class DisposableNotDisposedCodeReviewCheck : RoslynSemanticCodeRev
             string.Equals(@interface.ToDisplayString(), "System.IDisposable", StringComparison.Ordinal) ||
             string.Equals(@interface.ToDisplayString(), "System.IAsyncDisposable", StringComparison.Ordinal));
     }
-
 }

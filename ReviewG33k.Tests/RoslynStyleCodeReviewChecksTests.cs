@@ -308,6 +308,72 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void BlankLineBetweenBracePairsCheckWhenClosingBracesAreSeparatedByBlankLineReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    if (true)
+                    {
+                    }
+
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new BlankLineBetweenBracePairsCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+        Assert.That(report.Findings[0].Message, Does.Contain("closing braces"));
+    }
+
+    [Test]
+    public void BlankLineBetweenBracePairsCheckWhenOpeningBracesAreSeparatedByBlankLineReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public void Run()
+                {
+
+                    {
+                        System.Console.WriteLine("Hi");
+                    }
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new BlankLineBetweenBracePairsCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("opening braces"));
+    }
+
+    [Test]
+    public void BlankLineBetweenBracePairsCheckWhenBraceGapIsOutsideAddedLinesDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    if (true)
+                    {
+                    }
+
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new BlankLineBetweenBracePairsCodeReviewCheck(), "M", source, [1, 2]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void MethodParameterCountCheckWhenMethodHasEightParametersReportsHint()
     {
         const string source = """
