@@ -147,6 +147,25 @@ public sealed class CodeSmellReportAnalyzerTests
     }
 
     [Test]
+    public void AnalyzeFilesWhenFileIsUnderObjFolderSkipsAllChecks()
+    {
+        var analyzer = new CodeSmellReportAnalyzer(
+            new GitCommandRunner(),
+            [new FindingTestCheck()]);
+        var changedFile = new CodeReviewChangedFile(
+            "M",
+            "DTC.Core/CSharp.Core/obj/Debug/net7.0/CSharp.Core.AssemblyInfo.cs",
+            "DTC.Core/CSharp.Core/obj/Debug/net7.0/CSharp.Core.AssemblyInfo.cs",
+            "using System;",
+            ["using System;"],
+            new HashSet<int> { 1 });
+
+        var report = analyzer.AnalyzeFiles([changedFile]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AnalyzeFilesWhenOneCheckThrowsContinuesRunningRemainingChecks()
     {
         var analyzer = new CodeSmellReportAnalyzer(

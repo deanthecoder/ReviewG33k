@@ -221,9 +221,12 @@ public sealed class CodeSmellReportAnalyzer
 
     private static CodeReviewAnalysisContext BuildContext(IReadOnlyList<CodeReviewChangedFile> changedFiles, bool includeAllFileLines)
     {
+        var relevantChangedFiles = changedFiles
+            .Where(file => file != null && !Support.CodeReviewFileClassification.IsIgnoredPath(file.Path))
+            .ToArray();
         var sourceFiles = includeAllFileLines
-            ? changedFiles.Select(CreateWholeFileClone).ToArray()
-            : changedFiles.ToArray();
+            ? relevantChangedFiles.Select(CreateWholeFileClone).ToArray()
+            : relevantChangedFiles.ToArray();
 
         var csharpFiles = sourceFiles
             .Where(file => Support.CodeReviewFileClassification.IsAnalyzableChangedCSharpPath(file.Path))

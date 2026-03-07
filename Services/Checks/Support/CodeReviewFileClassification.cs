@@ -54,7 +54,7 @@ internal static class CodeReviewFileClassification
 
     public static bool IsAnalyzableChangedCSharpPath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&
-        !IsGeneratedFilePath(path) &&
+        !IsIgnoredPath(path) &&
         (path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
          path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
          path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase) ||
@@ -62,6 +62,7 @@ internal static class CodeReviewFileClassification
 
     public static bool IsAnalyzableResxPath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&
+        !IsIgnoredPath(path) &&
         path.EndsWith(".resx", StringComparison.OrdinalIgnoreCase);
 
     public static bool IsAnalyzableChangedPath(string path) =>
@@ -82,9 +83,15 @@ internal static class CodeReviewFileClassification
          path.EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase) ||
          path.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase));
 
+    public static bool IsIgnoredPath(string path) =>
+        !string.IsNullOrWhiteSpace(path) &&
+        (IsGeneratedFilePath(path) ||
+         path.Contains("/obj/", StringComparison.OrdinalIgnoreCase) ||
+         path.Contains("\\obj\\", StringComparison.OrdinalIgnoreCase));
+
     public static bool IsLikelySourceCodePath(string path)
     {
-        if (string.IsNullOrWhiteSpace(path) || IsGeneratedFilePath(path))
+        if (string.IsNullOrWhiteSpace(path) || IsIgnoredPath(path))
             return false;
 
         var extension = Path.GetExtension(path);

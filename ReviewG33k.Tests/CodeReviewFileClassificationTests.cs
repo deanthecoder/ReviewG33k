@@ -49,6 +49,14 @@ public sealed class CodeReviewFileClassificationTests
     }
 
     [Test]
+    public void IsAnalyzableChangedCSharpPathWhenPathIsUnderObjReturnsFalse()
+    {
+        var result = InvokeIsAnalyzableChangedCSharpPath("DTC.Core/CSharp.Core/obj/Debug/net7.0/CSharp.Core.AssemblyInfo.cs");
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
     public void IsAnalyzableChangedCSharpPathWhenPathIsProjectFileReturnsTrue()
     {
         var result = InvokeIsAnalyzableChangedCSharpPath("Packages/CSharp.Core/CSharp.Core.csproj");
@@ -127,6 +135,7 @@ public sealed class CodeReviewFileClassificationTests
     [TestCase("assets/logo.png", false)]
     [TestCase("src/Foo.g.cs", false)]
     [TestCase("src/Foo.generated.cs", false)]
+    [TestCase("src/obj/Debug/net8.0/Foo.cs", false)]
     [TestCase(null, false)]
     [TestCase("", false)]
     [TestCase("   ", false)]
