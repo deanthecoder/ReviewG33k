@@ -9,6 +9,8 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System.Net;
+using DTC.Core;
+using DTC.Core.Extensions;
 using ReviewG33k.Services;
 
 namespace ReviewG33k.Tests;
@@ -30,39 +32,33 @@ public sealed class MainWindowReviewPreparationServiceTests
     [Test]
     public async Task PreparePullRequestReviewAsyncWhenUrlCannotBeParsedReturnsFailure()
     {
-        var tempRoot = CreateTempRoot();
-        try
-        {
-            var service = CreateService();
-            var result = await service.PreparePullRequestReviewAsync(
-                tempRoot,
-                "not-a-valid-pr-url",
-                includeFullModifiedFiles: false,
-                appendLog: _ => { },
-                updateBusyProgress: (_, _, _) => { },
-                cancellationToken: default);
+        using var tempRoot = new TempDirectory();
+        var service = CreateService();
+        var result = await service.PreparePullRequestReviewAsync(
+            tempRoot.FullName,
+            "not-a-valid-pr-url",
+            includeFullModifiedFiles: false,
+            appendLog: _ => { },
+            updateBusyProgress: (_, _, _) => { },
+            cancellationToken: default);
 
-            Assert.Multiple(() =>
-            {
-                Assert.That(result.IsSuccess, Is.False);
-                Assert.That(result.Error, Is.Not.Null);
-                Assert.That(result.Error?.DialogTitle, Is.EqualTo("Invalid pull request URL"));
-                Assert.That(result.PullRequestExecutionResult, Is.Null);
-            });
-        }
-        finally
+        Assert.Multiple(() =>
         {
-            DeleteTempRoot(tempRoot);
-        }
+            Assert.That(result.IsSuccess, Is.False);
+            Assert.That(result.Error, Is.Not.Null);
+            Assert.That(result.Error?.DialogTitle, Is.EqualTo("Invalid pull request URL"));
+            Assert.That(result.PullRequestExecutionResult, Is.Null);
+        });
     }
 
     [Test]
     public async Task PrepareLocalUncommittedReviewAsyncWhenRepositoryDoesNotExistReturnsFailure()
     {
         var service = CreateService();
-        var missingPath = Path.Combine(Path.GetTempPath(), $"ReviewG33k-MissingRepo-{Guid.NewGuid():N}");
+        using var tempRoot = new TempDirectory();
+        var missingPath = tempRoot.GetDir("ReviewG33k-MissingRepo");
         var result = await service.PrepareLocalUncommittedReviewAsync(
-            missingPath,
+            missingPath.FullName,
             includeFullModifiedFiles: false,
             appendLog: _ => { },
             updateBusyProgress: (_, _, _) => { },
@@ -93,20 +89,6 @@ public sealed class MainWindowReviewPreparationServiceTests
             new CodeSmellReportAnalyzer(gitRunner),
             metadataClient);
     }
-
-    private static string CreateTempRoot()
-    {
-        var path = Path.Combine(Path.GetTempPath(), $"ReviewG33kPrepTests-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(path);
-        return path;
-    }
-
-    private static void DeleteTempRoot(string tempRoot)
-    {
-        if (Directory.Exists(tempRoot))
-            Directory.Delete(tempRoot, recursive: true);
-    }
-
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         private readonly Queue<HttpResponseMessage> m_responses;

@@ -8,6 +8,8 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using DTC.Core;
+using DTC.Core.Extensions;
 using ReviewG33k.Services;
 
 namespace ReviewG33k.Tests;
@@ -18,43 +20,36 @@ public sealed class ReviewResultsFileContextServiceTests
     [Test]
     public void TryBuildPreviewWhenFindingCanBeResolvedBuildsExpectedText()
     {
-        var tempRoot = CreateTempRoot();
-        try
-        {
-            var filePath = Path.Combine(tempRoot, "src", "Sample.cs");
-            Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-            File.WriteAllText(filePath, "line1\nline2\nline3\nline4\nline5\n");
-            var finding = new CodeSmellFinding(
-                CodeReviewFindingSeverity.Important,
-                "sample-rule",
-                "src/Sample.cs",
-                3,
-                "Issue");
-            var service = new ReviewResultsFileContextService();
+        using var tempRoot = new TempDirectory();
+        var filePath = tempRoot.GetDir("src");
+        filePath.Create();
+        var sourceFile = filePath.GetFile("Sample.cs").WriteAllText("line1\nline2\nline3\nline4\nline5\n");
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Important,
+            "sample-rule",
+            "src/Sample.cs",
+            3,
+            "Issue");
+        var service = new ReviewResultsFileContextService();
 
-            var success = service.TryBuildPreview(
-                finding,
-                _ => filePath,
-                previewLinesBefore: 1,
-                previewLinesAfter: 1,
-                out var previewData,
-                out var failureReason);
+        var success = service.TryBuildPreview(
+            finding,
+            _ => sourceFile.FullName,
+            previewLinesBefore: 1,
+            previewLinesAfter: 1,
+            out var previewData,
+            out var failureReason);
 
-            Assert.Multiple(() =>
-            {
-                Assert.That(success, Is.True);
-                Assert.That(failureReason, Is.Null);
-                Assert.That(previewData.Header, Is.EqualTo("Preview: Sample.cs"));
-                Assert.That(previewData.PreviewFileName, Is.EqualTo("Sample.cs"));
-                Assert.That(previewData.Text, Does.Contain("  2: line2"));
-                Assert.That(previewData.Text, Does.Contain("> 3: line3"));
-                Assert.That(previewData.Text, Does.Contain("  4: line4"));
-            });
-        }
-        finally
+        Assert.Multiple(() =>
         {
-            DeleteTempRoot(tempRoot);
-        }
+            Assert.That(success, Is.True);
+            Assert.That(failureReason, Is.Null);
+            Assert.That(previewData.Header, Is.EqualTo("Preview: Sample.cs"));
+            Assert.That(previewData.PreviewFileName, Is.EqualTo("Sample.cs"));
+            Assert.That(previewData.Text, Does.Contain("  2: line2"));
+            Assert.That(previewData.Text, Does.Contain("> 3: line3"));
+            Assert.That(previewData.Text, Does.Contain("  4: line4"));
+        });
     }
 
     [Test]
@@ -86,93 +81,67 @@ public sealed class ReviewResultsFileContextServiceTests
     [Test]
     public void TryBuildCodexPromptWhenRepoCanBeResolvedBuildsPrompt()
     {
-        var tempRoot = CreateTempRoot();
-        try
-        {
-            var repoRoot = Path.Combine(tempRoot, "Repo");
-            var sourcePath = Path.Combine(repoRoot, "src", "Sample.cs");
-            Directory.CreateDirectory(Path.GetDirectoryName(sourcePath));
-            Directory.CreateDirectory(Path.Combine(repoRoot, ".git"));
-            File.WriteAllText(sourcePath, "alpha\nbeta\ngamma\n");
-            var finding = new CodeSmellFinding(
-                CodeReviewFindingSeverity.Important,
-                "sample-rule",
-                "src/Sample.cs",
-                2,
-                "Fix this.");
-            var service = new ReviewResultsFileContextService();
+        using var tempRoot = new TempDirectory();
+        var repoRoot = tempRoot.GetDir("Repo");
+        var sourceDir = repoRoot.GetDir("src");
+        repoRoot.Create();
+        sourceDir.Create();
+        repoRoot.GetDir(".git").Create();
+        var sourceFile = sourceDir.GetFile("Sample.cs").WriteAllText("alpha\nbeta\ngamma\n");
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Important,
+            "sample-rule",
+            "src/Sample.cs",
+            2,
+            "Fix this.");
+        var service = new ReviewResultsFileContextService();
 
-            var success = service.TryBuildCodexPrompt(
-                finding,
-                _ => sourcePath,
-                promptLinesBefore: 1,
-                promptLinesAfter: 1,
-                out var promptText,
-                out var failureReason);
+        var success = service.TryBuildCodexPrompt(
+            finding,
+            _ => sourceFile.FullName,
+            promptLinesBefore: 1,
+            promptLinesAfter: 1,
+            out var promptText,
+            out var failureReason);
 
-            Assert.Multiple(() =>
-            {
-                Assert.That(success, Is.True);
-                Assert.That(failureReason, Is.Null);
-                Assert.That(promptText, Does.Contain($"Repository path: {repoRoot}"));
-                Assert.That(promptText, Does.Contain("File: src/Sample.cs:2"));
-                Assert.That(promptText, Does.Contain("Issue: Fix this."));
-                Assert.That(promptText, Does.Contain("> 2: beta"));
-            });
-        }
-        finally
+        Assert.Multiple(() =>
         {
-            DeleteTempRoot(tempRoot);
-        }
+            Assert.That(success, Is.True);
+            Assert.That(failureReason, Is.Null);
+            Assert.That(promptText, Does.Contain($"Repository path: {repoRoot.FullName}"));
+            Assert.That(promptText, Does.Contain("File: src/Sample.cs:2"));
+            Assert.That(promptText, Does.Contain("Issue: Fix this."));
+            Assert.That(promptText, Does.Contain("> 2: beta"));
+        });
     }
 
     [Test]
     public void TryBuildCodexPromptWhenRepoCannotBeResolvedReturnsFailure()
     {
-        var tempRoot = CreateTempRoot();
-        try
+        using var tempRoot = new TempDirectory();
+        var sourceDir = tempRoot.GetDir("src");
+        sourceDir.Create();
+        var sourceFile = sourceDir.GetFile("Sample.cs").WriteAllText("alpha\n");
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Important,
+            "sample-rule",
+            "src/Sample.cs",
+            1,
+            "Issue");
+        var service = new ReviewResultsFileContextService();
+
+        var success = service.TryBuildCodexPrompt(
+            finding,
+            _ => sourceFile.FullName,
+            promptLinesBefore: 1,
+            promptLinesAfter: 1,
+            out _,
+            out var failureReason);
+
+        Assert.Multiple(() =>
         {
-            var sourcePath = Path.Combine(tempRoot, "src", "Sample.cs");
-            Directory.CreateDirectory(Path.GetDirectoryName(sourcePath));
-            File.WriteAllText(sourcePath, "alpha\n");
-            var finding = new CodeSmellFinding(
-                CodeReviewFindingSeverity.Important,
-                "sample-rule",
-                "src/Sample.cs",
-                1,
-                "Issue");
-            var service = new ReviewResultsFileContextService();
-
-            var success = service.TryBuildCodexPrompt(
-                finding,
-                _ => sourcePath,
-                promptLinesBefore: 1,
-                promptLinesAfter: 1,
-                out _,
-                out var failureReason);
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(success, Is.False);
-                Assert.That(failureReason, Is.EqualTo("Could not detect repository root from the selected file."));
-            });
-        }
-        finally
-        {
-            DeleteTempRoot(tempRoot);
-        }
-    }
-
-    private static string CreateTempRoot()
-    {
-        var path = Path.Combine(Path.GetTempPath(), $"ReviewG33kPreview-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(path);
-        return path;
-    }
-
-    private static void DeleteTempRoot(string tempRoot)
-    {
-        if (Directory.Exists(tempRoot))
-            Directory.Delete(tempRoot, recursive: true);
+            Assert.That(success, Is.False);
+            Assert.That(failureReason, Is.EqualTo("Could not detect repository root from the selected file."));
+        });
     }
 }

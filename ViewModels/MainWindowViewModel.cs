@@ -87,7 +87,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         m_localBaseBranch = NormalizeBaseBranch(m_settings.LocalReviewBaseBranch);
         m_reviewModeIndex = ResolveInitialReviewModeIndex(m_settings);
         m_scanScopeIndex = m_settings.IncludeFullModifiedFiles ? 1 : 0;
-        LocalBaseBranchOptions.Add(m_localBaseBranch);
+        SetLocalBaseBranchOptions([m_localBaseBranch], m_localBaseBranch);
         InitializeDisabledCommands();
     }
 
@@ -416,15 +416,11 @@ public sealed class MainWindowViewModel : ViewModelBase
         foreach (var branchOption in normalizedOptions)
             LocalBaseBranchOptions.Add(branchOption);
 
-        var selectedBranch = normalizedSelection ??
+        var selectedBranch = LocalBaseBranchOptions.FirstOrDefault(
+                                 branch => branch.Equals(normalizedSelection, StringComparison.OrdinalIgnoreCase)) ??
                              LocalBaseBranchOptions.FirstOrDefault(branch => !string.IsNullOrWhiteSpace(branch)) ??
                              "main";
-        var previousBranch = m_localBaseBranch;
-        LocalBaseBranch = selectedBranch;
-
-        // Re-raise selection binding after options are repopulated, even when the selected value text is unchanged.
-        if (string.Equals(previousBranch, m_localBaseBranch, StringComparison.Ordinal))
-            OnPropertyChanged(nameof(LocalBaseBranch));
+        ApplyLocalBaseBranchSelection(selectedBranch);
     }
 
     public void UpdateActionStateInputs(
@@ -648,6 +644,25 @@ public sealed class MainWindowViewModel : ViewModelBase
             return normalizedValue;
 
         return pullRequest.SourceUrl;
+    }
+
+    private void ApplyLocalBaseBranchSelection(string selectedBranch)
+    {
+        var normalizedSelection = NormalizeBaseBranch(selectedBranch);
+        var matchingOption = LocalBaseBranchOptions.FirstOrDefault(
+            branch => branch.Equals(normalizedSelection, StringComparison.OrdinalIgnoreCase));
+        var effectiveSelection = matchingOption ?? normalizedSelection;
+
+        if (!SetField(ref m_localBaseBranch, effectiveSelection))
+        {
+            // Keep the selection tied to the current items source instance so ComboBox selection stays visible.
+            m_localBaseBranch = effectiveSelection;
+            OnPropertyChanged(nameof(LocalBaseBranch));
+            return;
+        }
+
+        m_settings.LocalReviewBaseBranch = effectiveSelection;
+        SaveSettingsSafely();
     }
 
     private void SaveSettingsSafely()

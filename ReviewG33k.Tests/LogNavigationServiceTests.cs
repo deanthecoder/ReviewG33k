@@ -8,6 +8,8 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using DTC.Core;
+using DTC.Core.Extensions;
 using ReviewG33k.Services;
 
 namespace ReviewG33k.Tests;
@@ -45,46 +47,33 @@ public sealed class LogNavigationServiceTests
     public void TryResolveLogFileWhenAbsolutePathExistsReturnsFile()
     {
         var service = new LogNavigationService();
-        var tempPath = Path.GetTempFileName();
+        using var tempFile = new TempFile(".txt");
+        tempFile.WriteAllText("sample");
 
-        try
+        var resolved = service.TryResolveLogFile(tempFile.FullName, null, out var fileInfo);
+        Assert.Multiple(() =>
         {
-            var resolved = service.TryResolveLogFile(tempPath, null, out var fileInfo);
-            Assert.Multiple(() =>
-            {
-                Assert.That(resolved, Is.True);
-                Assert.That(fileInfo, Is.Not.Null);
-                Assert.That(fileInfo.FullName, Is.EqualTo(tempPath));
-            });
-        }
-        finally
-        {
-            File.Delete(tempPath);
-        }
+            Assert.That(resolved, Is.True);
+            Assert.That(fileInfo, Is.Not.Null);
+            Assert.That(fileInfo.FullName, Is.EqualTo(tempFile.FullName));
+        });
     }
 
     [Test]
     public void TryResolveLogFileWhenRelativePathUsesReviewWorktree()
     {
         var service = new LogNavigationService();
-        var tempDirectory = Path.Combine(Path.GetTempPath(), $"reviewg33k-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(Path.Combine(tempDirectory, "src"));
-        var filePath = Path.Combine(tempDirectory, "src", "Bar.cs");
-        File.WriteAllText(filePath, "class Bar {}");
+        using var tempDirectory = new TempDirectory();
+        var sourceDirectory = tempDirectory.GetDir("src");
+        sourceDirectory.Create();
+        var sourceFile = sourceDirectory.GetFile("Bar.cs").WriteAllText("class Bar {}");
 
-        try
+        var resolved = service.TryResolveLogFile("src/Bar.cs", tempDirectory.FullName, out var fileInfo);
+        Assert.Multiple(() =>
         {
-            var resolved = service.TryResolveLogFile("src/Bar.cs", tempDirectory, out var fileInfo);
-            Assert.Multiple(() =>
-            {
-                Assert.That(resolved, Is.True);
-                Assert.That(fileInfo, Is.Not.Null);
-                Assert.That(fileInfo.FullName, Is.EqualTo(filePath));
-            });
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+            Assert.That(resolved, Is.True);
+            Assert.That(fileInfo, Is.Not.Null);
+            Assert.That(fileInfo.FullName, Is.EqualTo(sourceFile.FullName));
+        });
     }
 }

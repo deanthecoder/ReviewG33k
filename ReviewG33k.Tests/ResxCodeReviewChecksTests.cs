@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using DTC.Core.Extensions;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
 
@@ -120,7 +121,7 @@ public sealed class ResxCodeReviewChecksTests
         var normalizedText = (text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
         var lines = normalizedText.Split('\n');
         var addedLines = new HashSet<int>(Enumerable.Range(1, lines.Length));
-        var fullPath = Path.Combine(Path.GetTempPath(), relativePath.Replace('/', Path.DirectorySeparatorChar));
-        return new CodeReviewChangedFile(status, relativePath, fullPath, normalizedText, lines, addedLines);
+        var fullPath = Path.GetTempPath().ToDir().GetFile(relativePath.Replace('/', Path.DirectorySeparatorChar));
+        return new CodeReviewChangedFile(status, relativePath, fullPath.FullName, normalizedText, lines, addedLines);
     }
 }

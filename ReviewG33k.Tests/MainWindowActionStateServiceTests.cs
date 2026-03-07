@@ -8,6 +8,8 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using DTC.Core;
+using DTC.Core.Extensions;
 using ReviewG33k.Services;
 
 namespace ReviewG33k.Tests;
@@ -24,84 +26,69 @@ public sealed class MainWindowActionStateServiceTests
     [Test]
     public void BuildSnapshotWhenInputsAreValidIncludesExpectedActionFlags()
     {
-        var tempRoot = CreateTempRoot();
-        try
-        {
-            var repositoryRoot = Path.Combine(tempRoot, "repo-root");
-            var localRepository = Path.Combine(tempRoot, "local-repo");
-            Directory.CreateDirectory(repositoryRoot);
-            Directory.CreateDirectory(localRepository);
-            Directory.CreateDirectory(Path.Combine(localRepository, ".git"));
-            var solutionPath = Path.Combine(repositoryRoot, "App.sln");
-            File.WriteAllText(solutionPath, "Microsoft Visual Studio Solution File");
+        using var tempRoot = new TempDirectory();
+        var repositoryRoot = tempRoot.GetDir("repo-root");
+        var localRepository = tempRoot.GetDir("local-repo");
+        repositoryRoot.Create();
+        localRepository.Create();
+        localRepository.GetDir(".git").Create();
+        var solutionFile = repositoryRoot.GetFile("App.sln").WriteAllText("Microsoft Visual Studio Solution File");
 
-            var service = new MainWindowActionStateService(new MainWindowInputValidationService());
-            var snapshot = service.BuildSnapshot(
-                repositoryRootPath: repositoryRoot,
-                localRepositoryPath: localRepository,
-                localBaseBranch: string.Empty,
-                pullRequestUrl: "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/19",
-                isAnyLocalReviewMode: true,
-                isLocalUncommittedReviewMode: true,
-                previewPullRequestIsOpen: true,
-                previewPullRequestState: "OPEN",
-                latestSolutionPath: null,
-                latestReviewWorktreePath: null,
-                canCancelCurrentOperation: true,
-                isCancellationRequested: false);
+        var service = new MainWindowActionStateService(new MainWindowInputValidationService());
+        var snapshot = service.BuildSnapshot(
+            repositoryRootPath: repositoryRoot.FullName,
+            localRepositoryPath: localRepository.FullName,
+            localBaseBranch: string.Empty,
+            pullRequestUrl: "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/19",
+            isAnyLocalReviewMode: true,
+            isLocalUncommittedReviewMode: true,
+            previewPullRequestIsOpen: true,
+            previewPullRequestState: "OPEN",
+            latestSolutionPath: null,
+            latestReviewWorktreePath: null,
+            canCancelCurrentOperation: true,
+            isCancellationRequested: false);
 
-            Assert.Multiple(() =>
-            {
-                Assert.That(snapshot.HasValidPullRequestInput, Is.True);
-                Assert.That(snapshot.HasValidPullRequestPrepareInputs, Is.True);
-                Assert.That(snapshot.HasValidLocalPrepareInputs, Is.True);
-                Assert.That(snapshot.HasAvailableSolution, Is.True);
-                Assert.That(snapshot.ResolvedSolutionPath, Is.EqualTo(solutionPath));
-                Assert.That(snapshot.CanReviewCurrentPullRequest, Is.True);
-                Assert.That(snapshot.CanCancelCurrentOperation, Is.True);
-            });
-        }
-        finally
+        Assert.Multiple(() =>
         {
-            DeleteTempRoot(tempRoot);
-        }
+            Assert.That(snapshot.HasValidPullRequestInput, Is.True);
+            Assert.That(snapshot.HasValidPullRequestPrepareInputs, Is.True);
+            Assert.That(snapshot.HasValidLocalPrepareInputs, Is.True);
+            Assert.That(snapshot.HasAvailableSolution, Is.True);
+            Assert.That(snapshot.ResolvedSolutionPath, Is.EqualTo(solutionFile.FullName));
+            Assert.That(snapshot.CanReviewCurrentPullRequest, Is.True);
+            Assert.That(snapshot.CanCancelCurrentOperation, Is.True);
+        });
     }
 
     [Test]
     public void BuildSnapshotWhenCommittedModeHasNoBaseBranchMarksLocalInputsInvalid()
     {
-        var tempRoot = CreateTempRoot();
-        try
-        {
-            var localRepository = Path.Combine(tempRoot, "local-repo");
-            Directory.CreateDirectory(localRepository);
-            Directory.CreateDirectory(Path.Combine(localRepository, ".git"));
+        using var tempRoot = new TempDirectory();
+        var localRepository = tempRoot.GetDir("local-repo");
+        localRepository.Create();
+        localRepository.GetDir(".git").Create();
 
-            var service = new MainWindowActionStateService(new MainWindowInputValidationService());
-            var snapshot = service.BuildSnapshot(
-                repositoryRootPath: tempRoot,
-                localRepositoryPath: localRepository,
-                localBaseBranch: " ",
-                pullRequestUrl: " ",
-                isAnyLocalReviewMode: true,
-                isLocalUncommittedReviewMode: false,
-                previewPullRequestIsOpen: false,
-                previewPullRequestState: "DECLINED",
-                latestSolutionPath: null,
-                latestReviewWorktreePath: null,
-                canCancelCurrentOperation: false,
-                isCancellationRequested: false);
+        var service = new MainWindowActionStateService(new MainWindowInputValidationService());
+        var snapshot = service.BuildSnapshot(
+            repositoryRootPath: tempRoot.FullName,
+            localRepositoryPath: localRepository.FullName,
+            localBaseBranch: " ",
+            pullRequestUrl: " ",
+            isAnyLocalReviewMode: true,
+            isLocalUncommittedReviewMode: false,
+            previewPullRequestIsOpen: false,
+            previewPullRequestState: "DECLINED",
+            latestSolutionPath: null,
+            latestReviewWorktreePath: null,
+            canCancelCurrentOperation: false,
+            isCancellationRequested: false);
 
-            Assert.Multiple(() =>
-            {
-                Assert.That(snapshot.HasValidLocalPrepareInputs, Is.False);
-                Assert.That(snapshot.CanReviewCurrentPullRequest, Is.False);
-            });
-        }
-        finally
+        Assert.Multiple(() =>
         {
-            DeleteTempRoot(tempRoot);
-        }
+            Assert.That(snapshot.HasValidLocalPrepareInputs, Is.False);
+            Assert.That(snapshot.CanReviewCurrentPullRequest, Is.False);
+        });
     }
 
     [Test]
@@ -123,18 +110,5 @@ public sealed class MainWindowActionStateServiceTests
             isCancellationRequested: false);
 
         Assert.That(snapshot.CanReviewCurrentPullRequest, Is.True);
-    }
-
-    private static string CreateTempRoot()
-    {
-        var path = Path.Combine(Path.GetTempPath(), $"ReviewG33kTests-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(path);
-        return path;
-    }
-
-    private static void DeleteTempRoot(string tempRoot)
-    {
-        if (Directory.Exists(tempRoot))
-            Directory.Delete(tempRoot, recursive: true);
     }
 }

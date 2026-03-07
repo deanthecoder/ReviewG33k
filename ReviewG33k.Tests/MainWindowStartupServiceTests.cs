@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using DTC.Core;
 using ReviewG33k.Services;
 
 namespace ReviewG33k.Tests;
@@ -85,17 +86,8 @@ public sealed class MainWindowStartupServiceTests
             _ => Task.FromResult(new GitAvailabilityCheckResult(true, null)),
             (_, _, _) => Task.CompletedTask);
 
-        var tempPath = Path.Combine(Path.GetTempPath(), $"ReviewG33k_{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempPath);
-
-        try
-        {
-            Assert.That(service.CanRunStartupCleanup(tempPath), Is.True);
-        }
-        finally
-        {
-            Directory.Delete(tempPath, recursive: true);
-        }
+        using var tempDirectory = new TempDirectory();
+        Assert.That(service.CanRunStartupCleanup(tempDirectory.FullName), Is.True);
     }
 
     [Test]

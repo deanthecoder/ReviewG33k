@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using DTC.Core;
 using ReviewG33k.Services;
 
 namespace ReviewG33k.Tests;
@@ -46,22 +47,14 @@ public sealed class LocalBaseBranchServiceTests
     public async Task ResolveLocalBaseBranchAsyncWhenNotGitRepositoryReturnsTrimmedRequestedBranch()
     {
         var service = new LocalBaseBranchService(new GitCommandRunner());
-        var tempDirectory = Path.Combine(Path.GetTempPath(), $"reviewg33k-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDirectory);
+        using var tempDirectory = new TempDirectory();
 
-        try
-        {
-            var resolved = await service.ResolveLocalBaseBranchAsync(
-                tempDirectory,
-                " main ",
-                logWhenChanged: true,
-                _ => { });
+        var resolved = await service.ResolveLocalBaseBranchAsync(
+            tempDirectory.FullName,
+            " main ",
+            logWhenChanged: true,
+            _ => { });
 
-            Assert.That(resolved, Is.EqualTo("main"));
-        }
-        finally
-        {
-            Directory.Delete(tempDirectory, recursive: true);
-        }
+        Assert.That(resolved, Is.EqualTo("main"));
     }
 }

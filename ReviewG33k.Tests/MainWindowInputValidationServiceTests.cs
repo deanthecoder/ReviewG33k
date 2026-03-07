@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using DTC.Core.Extensions;
 using ReviewG33k.Services;
 
 namespace ReviewG33k.Tests;
@@ -67,7 +68,7 @@ public sealed class MainWindowInputValidationServiceTests
         var current = new DirectoryInfo(Environment.CurrentDirectory);
         while (current != null)
         {
-            if (Directory.Exists(Path.Combine(current.FullName, ".git")))
+            if (current.GetDir(".git").Exists())
                 return current.FullName;
 
             current = current.Parent;

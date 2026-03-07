@@ -1,4 +1,5 @@
 using DTC.Core;
+using DTC.Core.Extensions;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ReviewG33k.Services;
@@ -23,7 +24,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -38,7 +39,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Not.Contain("using System;"));
         Assert.That(updated, Does.Contain("using System.Text;"));
         Assert.That(updated, Does.Not.Contain("\n\n\n"));
@@ -57,7 +58,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -71,7 +72,7 @@ public sealed class FixableCodeReviewChecksTests
 
         Assert.That(success, Is.False);
         Assert.That(message, Is.EqualTo("Global using directives are excluded from this check."));
-        Assert.That(File.ReadAllText(tempFile.FullName), Is.EqualTo(source.Replace("\r\n", "\n")));
+        Assert.That(tempFile.ReadAllText(), Is.EqualTo(source.Replace("\r\n", "\n")));
     }
 
     [Test]
@@ -97,7 +98,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Important,
@@ -112,7 +113,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Not.Contain("throw ex;"));
         Assert.That(updated, Does.Contain("throw;"));
         Assert.That(updated, Does.Not.Contain("\n\n\n"));
@@ -137,7 +138,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Suggestion,
@@ -152,7 +153,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Not.Contain("\n\n\n"));
 
         var root = CSharpSyntaxTree.ParseText(updated).GetCompilationUnitRoot();
@@ -181,7 +182,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Suggestion,
@@ -196,7 +197,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Not.Contain("\n\n\n"));
         var normalized = updated.Replace("\r\n", "\n");
         Assert.That(normalized, Does.Not.Contain("else\n\n{"));
@@ -229,7 +230,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -244,7 +245,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Not.Contain("\n\n\n"));
 
         var root = CSharpSyntaxTree.ParseText(updated).GetCompilationUnitRoot();
@@ -276,7 +277,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -290,7 +291,7 @@ public sealed class FixableCodeReviewChecksTests
 
         Assert.That(success, Is.False);
         Assert.That(message, Is.EqualTo("Target line does not contain an if/else with unnecessary braces."));
-        Assert.That(File.ReadAllText(tempFile.FullName), Is.EqualTo(source.Replace("\r\n", "\n")));
+        Assert.That(tempFile.ReadAllText(), Is.EqualTo(source.Replace("\r\n", "\n")));
     }
 
     [Test]
@@ -315,7 +316,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -329,7 +330,7 @@ public sealed class FixableCodeReviewChecksTests
 
         Assert.That(success, Is.False);
         Assert.That(message, Is.EqualTo("Target line does not contain an if/else with unnecessary braces."));
-        Assert.That(File.ReadAllText(tempFile.FullName), Is.EqualTo(source.Replace("\r\n", "\n")));
+        Assert.That(tempFile.ReadAllText(), Is.EqualTo(source.Replace("\r\n", "\n")));
     }
 
     [Test]
@@ -346,7 +347,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Important,
@@ -361,7 +362,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Not.Contain("#pragma warning disable"));
         Assert.That(updated, Does.Not.Contain("\n\n\n"));
     }
@@ -380,7 +381,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Important,
@@ -395,7 +396,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Not.Contain("SuppressMessage"));
         Assert.That(updated, Does.Not.Contain("\n\n\n"));
     }
@@ -418,7 +419,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -433,7 +434,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated.Replace("\r\n", "\n"), Does.Contain("}\n\n    private int Bar()"));
     }
 
@@ -466,7 +467,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -481,7 +482,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Does.Contain("Add"));
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Contain("private static int Add"));
 
         var root = CSharpSyntaxTree.ParseText(updated).GetCompilationUnitRoot();
@@ -508,7 +509,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -523,7 +524,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Does.Contain("this"));
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Not.Contain("Owner.GetOwner(this)"));
         Assert.That(updated, Does.Contain("return this.ToString();"));
     }
@@ -547,7 +548,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -562,7 +563,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Does.Contain("RunMachineForDuration"));
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Not.Contain("RunMachineForDuration"));
         Assert.That(updated, Does.Contain("public int Run()"));
         Assert.That(updated, Does.Not.Contain("\n\n\n"));
@@ -586,7 +587,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -601,7 +602,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Contain("var foo = \"hello\";"));
         Assert.That(updated, Does.Not.Contain("@\"hello\""));
     }
@@ -620,7 +621,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -635,7 +636,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Contain("return $\"hello {name}\";"));
         Assert.That(updated, Does.Not.Contain("$@\""));
         Assert.That(updated, Does.Not.Contain("@$\""));
@@ -656,7 +657,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -671,7 +672,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Is.Not.Empty);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Contain("const string name = \"World\";"));
     }
 
@@ -691,7 +692,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var context = new CodeReviewAnalysisContext(
             new[] { new CodeReviewChangedFile("M", "Sample.cs", tempFile.FullName, source, source.Split('\n'), new HashSet<int> { 5 }) },
@@ -718,7 +719,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var context = new CodeReviewAnalysisContext(
             new[] { new CodeReviewChangedFile("M", "Sample.cs", tempFile.FullName, source, source.Split('\n'), new HashSet<int> { 5 }) },
@@ -747,7 +748,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var context = new CodeReviewAnalysisContext(
             new[] { new CodeReviewChangedFile("M", "Sample.cs", tempFile.FullName, source, source.Split('\n'), new HashSet<int> { 2 }) },
@@ -772,7 +773,7 @@ public sealed class FixableCodeReviewChecksTests
             }
             """;
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -789,7 +790,7 @@ public sealed class FixableCodeReviewChecksTests
         Assert.That(success, Is.True);
         Assert.That(message, Does.Contain("AddedLinesOnly"));
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Contain("AddedLinesOnly,"));
         Assert.That(updated, Does.Not.Contain("AddedLinesOnly = 0"));
         Assert.That(updated, Does.Contain("ChangedFileSet = 1"));
@@ -808,7 +809,7 @@ public sealed class FixableCodeReviewChecksTests
             "    LocalUncommittedChanges = 2",
             "}");
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -822,7 +823,7 @@ public sealed class FixableCodeReviewChecksTests
 
         Assert.That(success, Is.True);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Contain("LocalUncommittedChanges\r\n}"));
         Assert.That(updated, Does.Not.Contain("LocalUncommittedChanges = 2"));
     }
@@ -840,7 +841,7 @@ public sealed class FixableCodeReviewChecksTests
             "    LocalUncommittedChanges = 2",
             "}");
 
-        File.WriteAllText(tempFile.FullName, source);
+        tempFile.WriteAllText(source);
 
         var finding = new CodeSmellFinding(
             CodeReviewFindingSeverity.Hint,
@@ -854,7 +855,7 @@ public sealed class FixableCodeReviewChecksTests
 
         Assert.That(success, Is.True);
 
-        var updated = File.ReadAllText(tempFile.FullName);
+        var updated = tempFile.ReadAllText();
         Assert.That(updated, Does.Contain("LocalUncommittedChanges\r\n}"));
         Assert.That(updated, Does.Not.Contain("LocalUncommittedChanges = 2"));
     }

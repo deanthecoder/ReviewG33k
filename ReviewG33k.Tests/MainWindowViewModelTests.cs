@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System.Net;
+using DTC.Core;
 using ReviewG33k.Services;
 using ReviewG33k.ViewModels;
 
@@ -102,6 +103,27 @@ public sealed class MainWindowViewModelTests
             Assert.That(viewModel.LocalBaseBranchOptions, Does.Contain("develop"));
             Assert.That(viewModel.LocalBaseBranchOptions, Does.Contain("release/1.0"));
             Assert.That(viewModel.LocalBaseBranch, Is.EqualTo("release/1.0"));
+        });
+    }
+
+    [Test]
+    public void SetLocalBaseBranchOptionsWhenSelectionTextMatchesOptionUsesOptionInstance()
+    {
+        var initialBranch = new string("main".ToCharArray());
+        var refreshedBranch = new string("main".ToCharArray());
+        var viewModel = new MainWindowViewModel(
+            new Settings
+            {
+                LocalReviewBaseBranch = initialBranch
+            });
+
+        viewModel.SetLocalBaseBranchOptions([refreshedBranch], refreshedBranch);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.LocalBaseBranch, Is.EqualTo("main"));
+            Assert.That(viewModel.LocalBaseBranchOptions, Is.EqualTo(new[] { "main" }));
+            Assert.That(ReferenceEquals(viewModel.LocalBaseBranch, viewModel.LocalBaseBranchOptions[0]), Is.True);
         });
     }
 
@@ -456,37 +478,30 @@ public sealed class MainWindowViewModelTests
     [Test]
     public void RefreshActionStateWhenPullRequestIsMergedKeepsPrepareEnabled()
     {
-        var tempRoot = CreateTempRoot();
-        try
+        using var tempRoot = new TempDirectory();
+        var settings = new Settings
         {
-            var settings = new Settings
-            {
-                RepositoryRootPath = tempRoot
-            };
-            var viewModel = new MainWindowViewModel(settings)
-            {
-                ReviewModeIndex = 0,
-                PullRequestUrl = "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/19"
-            };
-            viewModel.UpdatePullRequestReviewState("Merged PR", "MERGED");
-
-            var resolvedSolutionPath = viewModel.RefreshActionState(
-                new MainWindowActionStateService(new MainWindowInputValidationService()),
-                latestSolutionPath: null,
-                latestReviewWorktreePath: null,
-                canCancelCurrentOperation: false,
-                isCancellationRequested: false);
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(resolvedSolutionPath, Is.Null);
-                Assert.That(viewModel.CanPrepareReview, Is.True);
-            });
-        }
-        finally
+            RepositoryRootPath = tempRoot.FullName
+        };
+        var viewModel = new MainWindowViewModel(settings)
         {
-            DeleteTempRoot(tempRoot);
-        }
+            ReviewModeIndex = 0,
+            PullRequestUrl = "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/19"
+        };
+        viewModel.UpdatePullRequestReviewState("Merged PR", "MERGED");
+
+        var resolvedSolutionPath = viewModel.RefreshActionState(
+            new MainWindowActionStateService(new MainWindowInputValidationService()),
+            latestSolutionPath: null,
+            latestReviewWorktreePath: null,
+            canCancelCurrentOperation: false,
+            isCancellationRequested: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(resolvedSolutionPath, Is.Null);
+            Assert.That(viewModel.CanPrepareReview, Is.True);
+        });
     }
 
     [Test]
@@ -705,20 +720,6 @@ public sealed class MainWindowViewModelTests
         var httpClient = new HttpClient(new StubHttpMessageHandler(responses));
         return new BitbucketPullRequestMetadataClient(httpClient);
     }
-
-    private static string CreateTempRoot()
-    {
-        var path = Path.Combine(Path.GetTempPath(), $"ReviewG33kViewModelTests-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(path);
-        return path;
-    }
-
-    private static void DeleteTempRoot(string tempRoot)
-    {
-        if (Directory.Exists(tempRoot))
-            Directory.Delete(tempRoot, recursive: true);
-    }
-
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         private readonly Queue<HttpResponseMessage> m_responses;
