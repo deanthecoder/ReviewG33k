@@ -10,6 +10,7 @@
 
 using System.Net;
 using DTC.Core;
+using ReviewG33k.Models;
 using ReviewG33k.Services;
 using ReviewG33k.ViewModels;
 
@@ -509,17 +510,51 @@ public sealed class MainWindowViewModelTests
         };
         viewModel.UpdatePullRequestReviewState("Merged PR", "MERGED");
 
-        var resolvedSolutionPath = viewModel.RefreshActionState(
+        viewModel.RefreshActionState(
             new MainWindowActionStateService(new MainWindowInputValidationService()),
-            latestSolutionPath: null,
-            latestReviewWorktreePath: null,
             canCancelCurrentOperation: false,
             isCancellationRequested: false);
 
         Assert.Multiple(() =>
         {
-            Assert.That(resolvedSolutionPath, Is.Null);
+            Assert.That(viewModel.LatestSolutionPath, Is.Null);
             Assert.That(viewModel.CanPrepareReview, Is.True);
+        });
+    }
+
+    [Test]
+    public void ApplyReviewWorkflowResultUpdatesLatestSessionState()
+    {
+        var viewModel = new MainWindowViewModel(new Settings());
+        var pullRequest = new BitbucketPullRequestReference(
+            "bitbucket.example.com",
+            "PROJ",
+            "repo",
+            42,
+            "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/42");
+        var applyResult = new MainWindowReviewWorkflowApplyResult(
+            MainWindowReviewPreparationMode.PullRequest,
+            pullRequest,
+            "Example PR",
+            "OPEN",
+            @"C:\repo\CodeReview\PR42",
+            @"C:\repo\CodeReview\PR42\Repo.sln",
+            "Review complete.",
+            null,
+            false,
+            new CodeSmellReport(),
+            null,
+            null);
+
+        viewModel.ApplyReviewWorkflowResult(applyResult);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.LatestPullRequest, Is.SameAs(pullRequest));
+            Assert.That(viewModel.LatestReviewWorktreePath, Is.EqualTo(@"C:\repo\CodeReview\PR42"));
+            Assert.That(viewModel.LatestSolutionPath, Is.EqualTo(@"C:\repo\CodeReview\PR42\Repo.sln"));
+            Assert.That(viewModel.PreviewPullRequestTitle, Is.EqualTo("Example PR"));
+            Assert.That(viewModel.PreviewPullRequestStateDisplay, Is.EqualTo("OPEN"));
         });
     }
 

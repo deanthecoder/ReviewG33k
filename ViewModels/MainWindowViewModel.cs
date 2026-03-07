@@ -42,6 +42,8 @@ public sealed class MainWindowViewModel : ViewModelBase
     private string m_statusText = "Ready.";
     private string m_previewPullRequestState;
     private string m_previewPullRequestTitle;
+    private string m_latestReviewWorktreePath;
+    private string m_latestSolutionPath;
     private int m_reviewModeIndex;
     private int m_scanScopeIndex;
     private bool m_isBusy;
@@ -220,6 +222,12 @@ public sealed class MainWindowViewModel : ViewModelBase
         string.IsNullOrWhiteSpace(m_previewPullRequestState)
             ? "N/A"
             : m_previewPullRequestState.Trim().ToUpperInvariant();
+
+    internal BitbucketPullRequestReference LatestPullRequest { get; private set; }
+
+    internal string LatestReviewWorktreePath => m_latestReviewWorktreePath;
+
+    internal string LatestSolutionPath => m_latestSolutionPath;
 
     public bool IsBusy
     {
@@ -481,6 +489,36 @@ public sealed class MainWindowViewModel : ViewModelBase
     public void ClearPullRequestPreview() =>
         UpdatePullRequestMetadataPreview(null, null, null);
 
+    internal void ClearPullRequestReviewContext()
+    {
+        LatestPullRequest = null;
+        ClearPullRequestPreview();
+    }
+
+    internal void ApplyReviewWorkflowResult(MainWindowReviewWorkflowApplyResult applyResult)
+    {
+        if (applyResult == null)
+            throw new ArgumentNullException(nameof(applyResult));
+
+        LatestPullRequest = applyResult.PullRequest;
+        if (applyResult.Mode == MainWindowReviewPreparationMode.PullRequest)
+        {
+            UpdatePullRequestReviewState(
+                applyResult.PullRequestTitle,
+                applyResult.PullRequestState);
+        }
+
+        var normalizedResolvedBaseBranch = LocalBaseBranchService.NormalizeBranchName(applyResult.ResolvedLocalBaseBranch);
+        if (!string.IsNullOrWhiteSpace(normalizedResolvedBaseBranch))
+        {
+            AddLocalBaseBranchOption(normalizedResolvedBaseBranch);
+            LocalBaseBranch = normalizedResolvedBaseBranch;
+        }
+
+        m_latestReviewWorktreePath = applyResult.ReviewWorktreePath;
+        m_latestSolutionPath = applyResult.SolutionPath;
+    }
+
     internal async Task<PullRequestPreviewResult> RefreshPullRequestPreviewAsync(
         PullRequestPreviewService pullRequestPreviewService,
         CancellationToken cancellationToken)
@@ -504,10 +542,8 @@ public sealed class MainWindowViewModel : ViewModelBase
         return previewResult;
     }
 
-    internal string RefreshActionState(
+    internal void RefreshActionState(
         MainWindowActionStateService actionStateService,
-        string latestSolutionPath,
-        string latestReviewWorktreePath,
         bool canCancelCurrentOperation,
         bool isCancellationRequested)
     {
@@ -523,8 +559,8 @@ public sealed class MainWindowViewModel : ViewModelBase
             IsLocalCommittedReviewMode,
             PreviewPullRequestIsOpen,
             PreviewPullRequestState,
-            latestSolutionPath,
-            latestReviewWorktreePath,
+            m_latestSolutionPath,
+            m_latestReviewWorktreePath,
             canCancelCurrentOperation,
             isCancellationRequested);
 
@@ -536,7 +572,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             hasAvailableSolution: actionState.HasAvailableSolution,
             canCancelCurrentOperation: actionState.CanCancelCurrentOperation,
             isCancellationRequested: actionState.IsCancellationRequested);
-        return actionState.ResolvedSolutionPath;
+        m_latestSolutionPath = actionState.ResolvedSolutionPath;
     }
 
     internal async Task<bool> TryAutoDetectLocalBaseBranchAsync(

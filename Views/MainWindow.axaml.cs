@@ -52,9 +52,6 @@ public partial class MainWindow : Window
     private readonly MainWindowViewModel m_viewModel;
     private CancellationTokenSource m_previewUpdateCancellation;
     private CancellationTokenSource m_busyActionCancellation;
-    private BitbucketPullRequestReference m_latestPullRequest;
-    private string m_latestReviewWorktreePath;
-    private string m_latestSolutionPath;
     private string m_lastNonOpenPullRequestNoticeKey;
     private bool m_isInitializing;
 
@@ -205,8 +202,7 @@ public partial class MainWindow : Window
         if (m_viewModel.IsAnyLocalReviewMode)
         {
             InvalidateLocalReviewChangedFilesCache();
-            m_latestPullRequest = null;
-            m_viewModel.ClearPullRequestPreview();
+            m_viewModel.ClearPullRequestReviewContext();
         }
 
         MainWindowReviewPreparationResult preparationResult = null;
@@ -251,23 +247,7 @@ public partial class MainWindow : Window
 
     private async Task ApplyReviewWorkflowResultAsync(MainWindowReviewWorkflowApplyResult applyResult)
     {
-        m_latestPullRequest = applyResult.PullRequest;
-        if (applyResult.Mode == MainWindowReviewPreparationMode.PullRequest)
-        {
-            m_viewModel.UpdatePullRequestReviewState(
-                applyResult.PullRequestTitle,
-                applyResult.PullRequestState);
-        }
-
-        var normalizedResolvedBaseBranch = LocalBaseBranchService.NormalizeBranchName(applyResult.ResolvedLocalBaseBranch);
-        if (!string.IsNullOrWhiteSpace(normalizedResolvedBaseBranch))
-        {
-            m_viewModel.AddLocalBaseBranchOption(normalizedResolvedBaseBranch);
-            m_viewModel.LocalBaseBranch = normalizedResolvedBaseBranch;
-        }
-
-        m_latestReviewWorktreePath = applyResult.ReviewWorktreePath;
-        m_latestSolutionPath = applyResult.SolutionPath;
+        m_viewModel.ApplyReviewWorkflowResult(applyResult);
         UpdateActionButtonStates();
 
         if (applyResult.LocalFindingCacheUpdate is { } cacheUpdate)
@@ -309,7 +289,7 @@ public partial class MainWindow : Window
     private async Task ShowReviewResultsWindowAsync(CodeSmellReport report)
     {
         var canOpenCodeLocation = m_codeLocationOpener.TargetDefinitions.Any(definition => IsOpenTargetAvailable(definition.Target));
-        var canCommentInBitbucket = m_viewModel.IsPullRequestReviewMode && m_latestPullRequest != null;
+        var canCommentInBitbucket = m_viewModel.IsPullRequestReviewMode && m_viewModel.LatestPullRequest != null;
         var canFixLocally = m_viewModel.IsAnyLocalReviewMode;
         var reviewWindowPullRequestTitle = canCommentInBitbucket
             ? m_viewModel.PreviewPullRequestTitle
@@ -351,7 +331,7 @@ public partial class MainWindow : Window
         var result = await m_reviewFindingInteractionService.OpenFindingAsync(
             finding,
             target,
-            m_latestReviewWorktreePath,
+            m_viewModel.LatestReviewWorktreePath,
             Clipboard != null,
             async text =>
             {
@@ -397,14 +377,14 @@ public partial class MainWindow : Window
 
     private void OpenReviewFindingInVsCode(CodeSmellFinding finding)
     {
-        var result = m_reviewFindingInteractionService.OpenFindingInVsCode(finding, m_latestReviewWorktreePath);
+        var result = m_reviewFindingInteractionService.OpenFindingInVsCode(finding, m_viewModel.LatestReviewWorktreePath);
         if (!string.IsNullOrWhiteSpace(result.LogMessage))
             AppendLog(result.LogMessage);
         SetStatus(result.StatusMessage);
     }
 
     private string ResolveReviewFindingPath(CodeSmellFinding finding)
-        => m_reviewFindingInteractionService.ResolveFindingPath(finding, m_latestReviewWorktreePath);
+        => m_reviewFindingInteractionService.ResolveFindingPath(finding, m_viewModel.LatestReviewWorktreePath);
 
     private async Task<IReadOnlyList<CodeSmellFinding>> ResampleLocalFindingsForFileAsync(string filePath)
     {
@@ -442,7 +422,7 @@ public partial class MainWindow : Window
     {
         var result = await m_reviewFindingInteractionService.CommentOnFindingAsync(
             finding,
-            m_latestPullRequest);
+            m_viewModel.LatestPullRequest);
         if (!string.IsNullOrWhiteSpace(result.LogMessage))
             AppendLog(result.LogMessage);
         SetStatus(result.StatusMessage);
@@ -501,8 +481,7 @@ public partial class MainWindow : Window
     {
         if (m_viewModel.IsAnyLocalReviewMode)
         {
-            m_latestPullRequest = null;
-            m_viewModel.ClearPullRequestPreview();
+            m_viewModel.ClearPullRequestReviewContext();
             InvalidateLocalReviewChangedFilesCache();
         }
 
@@ -547,10 +526,8 @@ public partial class MainWindow : Window
 
     private void UpdateActionButtonStates()
     {
-        m_latestSolutionPath = m_viewModel.RefreshActionState(
+        m_viewModel.RefreshActionState(
             m_actionStateService,
-            m_latestSolutionPath,
-            m_latestReviewWorktreePath,
             canCancelCurrentOperation: m_busyActionCancellation is { IsCancellationRequested: false },
             isCancellationRequested: m_busyActionCancellation is { IsCancellationRequested: true });
     }
@@ -595,7 +572,7 @@ public partial class MainWindow : Window
         if (!m_logNavigationService.TryParseLogLocation(entry.Text, out var filePath, out var lineNumber))
             return;
 
-        if (!m_logNavigationService.TryResolveLogFile(filePath, m_latestReviewWorktreePath, out var resolvedFile))
+        if (!m_logNavigationService.TryResolveLogFile(filePath, m_viewModel.LatestReviewWorktreePath, out var resolvedFile))
         {
             SetStatus($"Could not resolve file path: {filePath}");
             return;
@@ -812,16 +789,16 @@ public partial class MainWindow : Window
 
     private void OpenSolution()
     {
-        if (string.IsNullOrWhiteSpace(m_latestSolutionPath) || !m_latestSolutionPath.ToFile().Exists())
+        if (string.IsNullOrWhiteSpace(m_viewModel.LatestSolutionPath) || !m_viewModel.LatestSolutionPath.ToFile().Exists())
         {
             UpdateActionButtonStates();
             SetStatus("No solution is available from the latest review.");
             return;
         }
 
-        m_latestSolutionPath.ToFile().OpenWithDefaultViewer();
+        m_viewModel.LatestSolutionPath.ToFile().OpenWithDefaultViewer();
         SetStatus("Opened solution in default application.");
-        AppendLog($"Opened solution: {m_latestSolutionPath}");
+        AppendLog($"Opened solution: {m_viewModel.LatestSolutionPath}");
     }
 
 }
