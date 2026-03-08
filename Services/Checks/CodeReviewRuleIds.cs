@@ -68,6 +68,7 @@ public static class CodeReviewRuleIds
     public const string MissingReadmeForNewProject = "missing-readme-for-new-project";
     public const string MissingDisclaimerForNewSourceFile = "missing-disclaimer-for-new-source-file";
     public const string UnusedLocalVariable = "unused-local-variable";
+    public const string LocalVariablePrefix = "local-variable-prefix";
     public const string UnnecessaryEnumMemberValue = "unnecessary-enum-member-value";
     public const string ConsecutiveBooleanArguments = "consecutive-boolean-arguments";
     public const string NumericStringCultureForFileWrite = "numeric-string-culture-for-file-write";

@@ -121,6 +121,7 @@ ReviewG33k labels each finding with one of these categories:
 | Unnecessary if/else braces | Extra braces around simple single-line branches. |
 | Large constructors | Constructors doing too much inline setup work. |
 | Boolean literal comparison | Comparisons like `== true` / `== false` that can be simplified. |
+| Local variable field-style prefixes | Local variables named with field-style prefixes like `m_foo` or `_foo`. |
 | Unnecessary casts | Casts that do not change type or behavior. |
 | Unnecessary enum member values | Explicit enum values that simply match the default sequential numbering. |
 | Unnecessary verbatim string prefix | `@` string prefix where no escaping benefit is used. |

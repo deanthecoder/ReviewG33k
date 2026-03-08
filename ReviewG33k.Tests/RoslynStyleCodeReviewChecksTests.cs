@@ -2364,6 +2364,7 @@ public sealed class RoslynStyleCodeReviewChecksTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+
     private static CodeSmellReport AnalyzeSource(ICodeReviewCheck check, string status, string source, IEnumerable<int> addedLines, string path = "Packages/CSharp.Core/Sample.cs")
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');

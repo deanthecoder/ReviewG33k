@@ -328,6 +328,7 @@ public sealed class CodeSmellReportAnalyzer
         new WarningSuppressionCodeReviewCheck(),
         new UnusedUsingRoslynCodeReviewCheck(),
         new LocalVariableCanBeConstCodeReviewCheck(),
+        new LocalVariablePrefixCodeReviewCheck(),
         new UnusedLocalVariableCodeReviewCheck()
     ];
 }

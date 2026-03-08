@@ -79,6 +79,7 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.UnnecessaryVerbatimStringPrefix or
             CodeReviewRuleIds.RedundantSelfLookup or
             CodeReviewRuleIds.ConsecutiveBooleanArguments => Readability,
+            CodeReviewRuleIds.LocalVariablePrefix => Readability,
 
             CodeReviewRuleIds.ConstructorTooLong or
             "local-variable-can-be-const" or
