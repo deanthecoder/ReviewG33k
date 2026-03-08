@@ -296,6 +296,7 @@ public sealed class CodeSmellReportAnalyzer
         new RedundantSelfLookupCodeReviewCheck(),
         new BooleanLiteralComparisonCodeReviewCheck(),
         new ConsecutiveBooleanArgumentsCodeReviewCheck(),
+        new ConsecutiveNullArgumentsCodeReviewCheck(),
         new NumericStringCultureForFileWriteCodeReviewCheck(),
         new UnnecessaryCastCodeReviewCheck(),
         new UnnecessaryEnumMemberValueCodeReviewCheck(),

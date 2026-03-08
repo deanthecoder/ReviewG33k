@@ -71,5 +71,6 @@ public static class CodeReviewRuleIds
     public const string LocalVariablePrefix = "local-variable-prefix";
     public const string UnnecessaryEnumMemberValue = "unnecessary-enum-member-value";
     public const string ConsecutiveBooleanArguments = "consecutive-boolean-arguments";
+    public const string ConsecutiveNullArguments = "consecutive-null-arguments";
     public const string NumericStringCultureForFileWrite = "numeric-string-culture-for-file-write";
 }

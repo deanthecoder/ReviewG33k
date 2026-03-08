@@ -116,6 +116,7 @@ ReviewG33k labels each finding with one of these categories:
 | Blank lines between brace pairs | Empty spacer lines between consecutive brace-only lines like `}` ... `}` or `{` ... `{`. |
 | High parameter count | Methods/constructors with too many parameters. |
 | Consecutive positional boolean arguments | Calls with consecutive unnamed `true`/`false` literals (prefer named args for clarity). |
+| Consecutive positional null arguments | Calls with consecutive unnamed `null` literals (prefer named args for clarity). |
 | Generic type name suffix | Generic type names that do not follow expected suffix conventions. |
 | If/else brace consistency | Mismatched bracing style between `if` and `else` blocks. |
 | Unnecessary if/else braces | Extra braces around simple single-line branches. |

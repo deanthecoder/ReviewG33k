@@ -48,6 +48,7 @@ public sealed class CodeSmellReportAnalyzerTests
         var stringConcatCheck = analyzer.Checks.OfType<StringConcatenationToSameTargetCodeReviewCheck>().Single();
         var constructorEventSubscriptionCheck = analyzer.Checks.OfType<ConstructorEventSubscriptionLifecycleCodeReviewCheck>().Single();
         var consecutiveBooleanArgumentsCheck = analyzer.Checks.OfType<ConsecutiveBooleanArgumentsCodeReviewCheck>().Single();
+        var consecutiveNullArgumentsCheck = analyzer.Checks.OfType<ConsecutiveNullArgumentsCodeReviewCheck>().Single();
         var resxMissingLocaleKeysCheck = analyzer.Checks.OfType<ResxMissingLocaleKeysCodeReviewCheck>().Single();
         var resxUnexpectedExtraKeysCheck = analyzer.Checks.OfType<ResxUnexpectedExtraKeysCodeReviewCheck>().Single();
         var unusedUsingCheck = analyzer.Checks.OfType<UnusedUsingRoslynCodeReviewCheck>().Single();
@@ -64,6 +65,7 @@ public sealed class CodeSmellReportAnalyzerTests
         Assert.That(stringConcatCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(constructorEventSubscriptionCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(consecutiveBooleanArgumentsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(consecutiveNullArgumentsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(resxMissingLocaleKeysCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
         Assert.That(resxUnexpectedExtraKeysCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
         Assert.That(unusedUsingCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
