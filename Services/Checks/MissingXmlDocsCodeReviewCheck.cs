@@ -17,7 +17,7 @@ public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
 {
     public override string RuleId => "missing-xml-docs";
 
-    public override string DisplayName => "XML docs on new public types";
+    public override string DisplayName => "XML docs on new public/internal types";
 
     public override CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
 
@@ -28,11 +28,11 @@ public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
             if (CodeReviewFileClassification.IsLikelyTestCodeFile(file))
                 continue;
 
-            if (!CodeReviewCheckUtilities.TryGetPublicTypeDeclaration(file.Text, out _, out var declarationLineNumber))
+            if (!CodeReviewCheckUtilities.TryGetDocumentableTypeDeclaration(file.Text, out _, out var declarationLineNumber))
                 continue;
 
             if (!CodeReviewCheckUtilities.HasXmlDocumentationAbove(file.Lines, declarationLineNumber))
-                AddFinding(report, CodeReviewFindingSeverity.Hint, file.Path, declarationLineNumber, "Missing XML docs on new public type.");
+                AddFinding(report, CodeReviewFindingSeverity.Hint, file.Path, declarationLineNumber, "Missing XML docs on new public/internal type.");
         }
     }
 }

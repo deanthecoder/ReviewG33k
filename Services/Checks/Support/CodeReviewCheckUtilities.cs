@@ -22,8 +22,8 @@ internal static class CodeReviewCheckUtilities
     private static readonly Regex LoggingCallRegex = new(
         @"(?<!\w)(?:Log|Logger|AppendLog|Trace|Debug|Warn|Warning|Error|Fatal|Console\.Write(?:Line)?)\w*(?:<[^>]+>)?\s*\(",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex PublicTypeDeclarationRegex = new(
-        @"^\s*public\s+(?:sealed\s+|abstract\s+|partial\s+|static\s+)*\b(class|interface|record|struct)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
+    private static readonly Regex DocumentableTypeDeclarationRegex = new(
+        @"^\s*(?<modifiers>(?:(?:public|internal|sealed|abstract|partial|static)\s+)+)\b(class|interface|record|struct)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
         RegexOptions.Multiline | RegexOptions.Compiled);
 
     public static bool LooksLikeEventHandlerSignature(string line) =>
@@ -39,13 +39,35 @@ internal static class CodeReviewCheckUtilities
                fileLines.Any(line => Regex.IsMatch(line, propertyPattern, RegexOptions.IgnoreCase));
     }
 
+    public static bool TryGetDocumentableTypeDeclaration(string fileText, out string typeName, out int lineNumber)
+    {
+        typeName = null;
+        lineNumber = 0;
+
+        var match = DocumentableTypeDeclarationRegex.Match(fileText ?? string.Empty);
+        if (!match.Success)
+            return false;
+
+        var modifiers = match.Groups["modifiers"].Value;
+        if (!Regex.IsMatch(modifiers, @"\b(?:public|internal)\b", RegexOptions.CultureInvariant))
+            return false;
+
+        typeName = match.Groups["name"].Value;
+        lineNumber = (fileText ?? string.Empty)[..match.Index].Count(character => character == '\n') + 1;
+        return !string.IsNullOrWhiteSpace(typeName);
+    }
+
     public static bool TryGetPublicTypeDeclaration(string fileText, out string typeName, out int lineNumber)
     {
         typeName = null;
         lineNumber = 0;
 
-        var match = PublicTypeDeclarationRegex.Match(fileText ?? string.Empty);
+        var match = DocumentableTypeDeclarationRegex.Match(fileText ?? string.Empty);
         if (!match.Success)
+            return false;
+
+        var modifiers = match.Groups["modifiers"].Value;
+        if (!Regex.IsMatch(modifiers, @"\bpublic\b", RegexOptions.CultureInvariant))
             return false;
 
         typeName = match.Groups["name"].Value;

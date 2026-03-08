@@ -33,6 +33,22 @@ public sealed class MissingXmlDocsCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenAddedInternalTypeHasNoXmlDocsReportsHint()
+    {
+        const string source = """
+            internal sealed class IndexedApplication
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile("Models/IndexedApplication.cs", source);
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].RuleId, Is.EqualTo(CodeReviewRuleIds.MissingXmlDocs));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+    }
+
+    [Test]
     public void AnalyzeWhenAddedTypeIsATestFixtureDoesNotReport()
     {
         const string source = """
