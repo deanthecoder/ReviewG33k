@@ -66,6 +66,8 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
             {
                 if (!TryGetPublicMethodSignature(file.Lines, lineNumber, out var signature, out var bodyOpenLine, out var bodyCloseLine))
                     continue;
+                if (IsProgramEntryPointSignature(signature))
+                    continue;
 
                 var parametersToGuard = GetParametersRequiringGuard(signature.ParameterListText);
                 if (parametersToGuard.Count == 0)
@@ -94,7 +96,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
     private static bool TryGetPublicMethodSignature(
         IReadOnlyList<string> lines,
         int startLineNumber,
-        out (string MethodName, string ParameterListText) signature,
+        out (string MethodName, string ParameterListText, string NormalizedSignatureText) signature,
         out int bodyOpenLine,
         out int bodyCloseLine)
     {
@@ -178,8 +180,21 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         if (bodyCloseLine <= bodyOpenLine)
             return false;
 
-        signature = (methodName, parameterListText);
+        signature = (methodName, parameterListText, normalizedSignature);
         return true;
+    }
+
+    private static bool IsProgramEntryPointSignature((string MethodName, string ParameterListText, string NormalizedSignatureText) signature)
+    {
+        if (!string.Equals(signature.MethodName, "Main", StringComparison.Ordinal))
+            return false;
+        if (!Regex.IsMatch(signature.NormalizedSignatureText ?? string.Empty, @"\bstatic\b", RegexOptions.CultureInvariant))
+            return false;
+
+        var normalizedParameters = Regex.Replace(signature.ParameterListText ?? string.Empty, @"\s+", string.Empty);
+        return string.IsNullOrWhiteSpace(normalizedParameters) ||
+               string.Equals(normalizedParameters, "string[]args", StringComparison.Ordinal) ||
+               string.Equals(normalizedParameters, "string[]@args", StringComparison.Ordinal);
     }
 
     private static int FindMethodBodyCloseLine(IReadOnlyList<string> lines, int bodyOpenLine)

@@ -203,6 +203,25 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void AnalyzeWhenMethodIsStaticProgramMainDoesNotRequireArgumentGuard()
+    {
+        const string source = """
+            public static class Program
+            {
+                public static void Main(string[] args)
+                {
+                    foreach (var arg in args)
+                        _ = arg.Length;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport AnalyzeSource(string source)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
