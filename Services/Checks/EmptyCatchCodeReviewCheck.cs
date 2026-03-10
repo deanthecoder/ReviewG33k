@@ -24,6 +24,9 @@ public sealed class EmptyCatchCodeReviewCheck : CodeReviewCheckBase
         {
             foreach (var catchBlock in CodeReviewCheckUtilities.EnumerateAddedCatchBlocks(file))
             {
+                if (CodeReviewCheckUtilities.IsCancellationCatch(catchBlock))
+                    continue;
+
                 if (string.IsNullOrWhiteSpace(catchBlock.BodyWithoutComments))
                 {
                     var severity = catchBlock.HasComments

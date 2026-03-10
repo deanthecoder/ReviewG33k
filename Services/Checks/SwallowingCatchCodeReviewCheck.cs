@@ -30,6 +30,9 @@ public sealed class SwallowingCatchCodeReviewCheck : CodeReviewCheckBase
         {
             foreach (var catchBlock in CodeReviewCheckUtilities.EnumerateAddedCatchBlocks(file))
             {
+                if (CodeReviewCheckUtilities.IsCancellationCatch(catchBlock))
+                    continue;
+
                 if (string.IsNullOrWhiteSpace(catchBlock.BodyWithoutComments))
                     continue;
 

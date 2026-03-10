@@ -12,12 +12,18 @@ namespace ReviewG33k.Services.Checks.Support;
 
 internal sealed class CatchBlockInfo
 {
-    public CatchBlockInfo(int startLine, string bodyWithoutComments, bool hasComments, string exceptionVariableName)
+    public CatchBlockInfo(
+        int startLine,
+        string bodyWithoutComments,
+        bool hasComments,
+        string exceptionVariableName,
+        string exceptionTypeName)
     {
         StartLine = startLine;
         BodyWithoutComments = bodyWithoutComments ?? string.Empty;
         HasComments = hasComments;
         ExceptionVariableName = exceptionVariableName;
+        ExceptionTypeName = exceptionTypeName;
     }
 
     public int StartLine { get; }
@@ -27,4 +33,6 @@ internal sealed class CatchBlockInfo
     public bool HasComments { get; }
 
     public string ExceptionVariableName { get; }
+
+    public string ExceptionTypeName { get; }
 }

@@ -127,7 +127,8 @@ internal static class CodeReviewCheckUtilities
             var bodyWithoutComments = StripComments(body).Trim();
             var hasComments = ContainsComments(body);
             var exceptionVariableName = TryGetCatchExceptionVariableName(catchMatch.Value);
-            yield return new CatchBlockInfo(startLine, bodyWithoutComments, hasComments, exceptionVariableName);
+            var exceptionTypeName = TryGetCatchExceptionTypeName(catchMatch.Value);
+            yield return new CatchBlockInfo(startLine, bodyWithoutComments, hasComments, exceptionVariableName, exceptionTypeName);
         }
     }
 
@@ -138,6 +139,21 @@ internal static class CodeReviewCheckUtilities
     public static bool ContainsLoggingCall(string catchBody) =>
         !string.IsNullOrWhiteSpace(catchBody) &&
         LoggingCallRegex.IsMatch(catchBody);
+
+    public static bool IsCancellationCatch(CatchBlockInfo catchBlock)
+    {
+        if (catchBlock == null || string.IsNullOrWhiteSpace(catchBlock.ExceptionTypeName))
+            return false;
+
+        var typeName = catchBlock.ExceptionTypeName
+            .Replace("global::", string.Empty, StringComparison.Ordinal)
+            .Trim();
+
+        return typeName.EndsWith(".OperationCanceledException", StringComparison.Ordinal) ||
+               typeName.EndsWith(".TaskCanceledException", StringComparison.Ordinal) ||
+               string.Equals(typeName, "OperationCanceledException", StringComparison.Ordinal) ||
+               string.Equals(typeName, "TaskCanceledException", StringComparison.Ordinal);
+    }
 
     private static int[] BuildLineStartOffsets(string text)
     {
@@ -227,5 +243,40 @@ internal static class CodeReviewCheckUtilities
         return string.IsNullOrWhiteSpace(declaration[..candidateMatch.Index])
             ? null
             : candidateMatch.Value;
+    }
+
+    private static string TryGetCatchExceptionTypeName(string catchHeaderText)
+    {
+        if (string.IsNullOrWhiteSpace(catchHeaderText))
+            return null;
+
+        var openParen = catchHeaderText.IndexOf('(');
+        if (openParen < 0)
+            return null;
+
+        var closeParen = catchHeaderText.LastIndexOf(')');
+        if (closeParen <= openParen)
+            return null;
+
+        var declaration = catchHeaderText.Substring(openParen + 1, closeParen - openParen - 1).Trim();
+        if (string.IsNullOrWhiteSpace(declaration))
+            return null;
+
+        var whenIndex = declaration.IndexOf(" when ", StringComparison.Ordinal);
+        if (whenIndex >= 0)
+            declaration = declaration[..whenIndex].TrimEnd();
+
+        var lastWhitespaceIndex = declaration.LastIndexOfAny([' ', '\t', '\r', '\n']);
+        if (lastWhitespaceIndex < 0)
+            return declaration;
+
+        var trailingToken = declaration[(lastWhitespaceIndex + 1)..];
+        if (!Regex.IsMatch(trailingToken, @"^@?[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant))
+            return declaration;
+
+        var typeName = declaration[..lastWhitespaceIndex].TrimEnd();
+        return string.IsNullOrWhiteSpace(typeName)
+            ? declaration
+            : typeName;
     }
 }

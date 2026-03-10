@@ -136,6 +136,62 @@ public sealed class CatchCodeReviewCheckTests
     }
 
     [Test]
+    public void EmptyCatchCheckWhenCatchHandlesOperationCanceledExceptionDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                }
+
+                private static void ThrowSomething() => throw new OperationCanceledException();
+            }
+            """;
+
+        var report = Analyze(source, new EmptyCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void EmptyCatchCheckWhenCatchHandlesTaskCanceledExceptionDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch (TaskCanceledException)
+                    {
+                    }
+                }
+
+                private static void ThrowSomething() => throw new TaskCanceledException();
+            }
+            """;
+
+        var report = Analyze(source, new EmptyCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void SwallowingCatchCheckWhenCatchLogsExceptionDetailsDoesNotReport()
     {
         const string source = """
@@ -408,6 +464,39 @@ public sealed class CatchCodeReviewCheckTests
                 }
 
                 private static void ThrowSomething() => throw new Exception();
+            }
+            """;
+
+        var report = Analyze(source, new SwallowingCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void SwallowingCatchCheckWhenCatchHandlesOperationCanceledExceptionDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    try
+                    {
+                        ThrowSomething();
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        Cleanup();
+                    }
+                }
+
+                private static void Cleanup()
+                {
+                }
+
+                private static void ThrowSomething() => throw new OperationCanceledException();
             }
             """;
 
