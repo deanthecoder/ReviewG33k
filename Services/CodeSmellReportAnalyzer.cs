@@ -26,7 +26,7 @@ public sealed class CodeSmellReportAnalyzer
     private readonly IReadOnlyList<ICodeReviewCheck> m_checks;
 
     public CodeSmellReportAnalyzer(GitCommandRunner gitCommandRunner)
-        : this(gitCommandRunner, CreateChecks())
+        : this(gitCommandRunner, CreateChecks(gitCommandRunner))
     {
     }
 
@@ -108,7 +108,7 @@ public sealed class CodeSmellReportAnalyzer
             return report;
 
         progressLogger?.Invoke($"Code review scan: Building analysis context for {changedFiles.Length} file(s)...");
-        var scopedContexts = BuildScopedContexts(changedFiles);
+        var scopedContexts = BuildScopedContexts(changedFiles, sourceResult?.IsEntireRepositoryScan == true);
         var totalChecks = m_checks.Count;
         progressReporter?.Invoke(0, totalChecks, null);
         progressLogger?.Invoke($"Code review scan: Running {totalChecks} checks...");
@@ -147,7 +147,7 @@ public sealed class CodeSmellReportAnalyzer
         if (files.Length == 0)
             return report;
 
-        var scopedContexts = BuildScopedContexts(files);
+        var scopedContexts = BuildScopedContexts(files, isEntireRepositoryScan: false);
         var checkReports = m_checks
             .AsParallel()
             .Select(check => AnalyzeCheck(
@@ -197,10 +197,10 @@ public sealed class CodeSmellReportAnalyzer
         return (check, checkReport);
     }
 
-    private static CodeReviewCheckContextSet BuildScopedContexts(IReadOnlyList<CodeReviewChangedFile> changedFiles)
+    private static CodeReviewCheckContextSet BuildScopedContexts(IReadOnlyList<CodeReviewChangedFile> changedFiles, bool isEntireRepositoryScan)
     {
-        var addedLinesContext = BuildContext(changedFiles, includeAllFileLines: false);
-        var fullFileContext = BuildContext(changedFiles, includeAllFileLines: true);
+        var addedLinesContext = BuildContext(changedFiles, includeAllFileLines: false, isEntireRepositoryScan);
+        var fullFileContext = BuildContext(changedFiles, includeAllFileLines: true, isEntireRepositoryScan);
 
         return new CodeReviewCheckContextSet(addedLinesContext, fullFileContext);
     }
@@ -219,7 +219,10 @@ public sealed class CodeSmellReportAnalyzer
         };
     }
 
-    private static CodeReviewAnalysisContext BuildContext(IReadOnlyList<CodeReviewChangedFile> changedFiles, bool includeAllFileLines)
+    private static CodeReviewAnalysisContext BuildContext(
+        IReadOnlyList<CodeReviewChangedFile> changedFiles,
+        bool includeAllFileLines,
+        bool isEntireRepositoryScan)
     {
         var relevantChangedFiles = changedFiles
             .Where(file => file != null && !Support.CodeReviewFileClassification.IsIgnoredPath(file.Path))
@@ -242,7 +245,7 @@ public sealed class CodeSmellReportAnalyzer
                 .Select(file => Path.GetFileName(file.Path)),
             StringComparer.OrdinalIgnoreCase);
 
-        return new CodeReviewAnalysisContext(csharpFiles, addedTestFilesByName, resxFiles, sourceFiles);
+        return new CodeReviewAnalysisContext(csharpFiles, addedTestFilesByName, resxFiles, sourceFiles, isEntireRepositoryScan);
     }
 
     private static CodeReviewChangedFile CreateWholeFileClone(CodeReviewChangedFile file)
@@ -267,7 +270,7 @@ public sealed class CodeSmellReportAnalyzer
         public CodeReviewAnalysisContext FullFileContext { get; }
     }
 
-    private static IReadOnlyList<ICodeReviewCheck> CreateChecks() =>
+    private static IReadOnlyList<ICodeReviewCheck> CreateChecks(GitCommandRunner gitCommandRunner) =>
     [
         new AsyncVoidCodeReviewCheck(),
         new AsyncMethodNameSuffixCodeReviewCheck(),
@@ -298,6 +301,7 @@ public sealed class CodeSmellReportAnalyzer
         new ConsecutiveBooleanArgumentsCodeReviewCheck(),
         new ConsecutiveNullArgumentsCodeReviewCheck(),
         new LambdaCanBeMethodGroupCodeReviewCheck(),
+        new DuplicateCodeBlockCodeReviewCheck(gitCommandRunner),
         new NumericStringCultureForFileWriteCodeReviewCheck(),
         new UnnecessaryCastCodeReviewCheck(),
         new UnnecessaryEnumMemberValueCodeReviewCheck(),

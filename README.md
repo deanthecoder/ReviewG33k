@@ -102,6 +102,7 @@ ReviewG33k labels each finding with one of these categories:
 | Private readonly field only used in constructor | Private readonly fields whose references are confined to constructor setup and can likely become local variables. |
 | Method can be static | Instance methods that do not use instance state. |
 | Local variable can be const | Local values that never change and can safely be `const`. |
+| Duplicated code blocks | Newly added blocks that exactly match existing repository code after ignoring comments and `using` lines. |
 | Unused local variables | Local variables that are declared/assigned but never read. |
 | Multiple classes per file | Files that define more than one class (prefer one class per file). |
 | Redundant self lookup | Needlessly resolving an object from itself (or equivalent redundant lookup). |

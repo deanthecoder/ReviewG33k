@@ -45,7 +45,7 @@ public sealed class LocalRepositoryChangedFileSource : ICodeReviewChangedFileSou
         if (string.IsNullOrWhiteSpace(m_repositoryPath) || !repositoryPathInfo.Exists())
         {
             info.Add("Code review scan skipped: Local repository path not found.");
-            return new CodeReviewChangedFileSourceResult([], info);
+            return new CodeReviewChangedFileSourceResult([], info, isEntireRepositoryScan: true);
         }
 
         progressLogger?.Invoke("Code review scan: Enumerating repository files...");
@@ -54,7 +54,7 @@ public sealed class LocalRepositoryChangedFileSource : ICodeReviewChangedFileSou
         if (analyzableFiles.Length == 0)
         {
             info.Add("Code review scan: No analyzable repository files detected.");
-            return new CodeReviewChangedFileSourceResult([], info);
+            return new CodeReviewChangedFileSourceResult([], info, isEntireRepositoryScan: true);
         }
 
         progressLogger?.Invoke($"Code review scan: Loading {analyzableFiles.Length} repository file(s)...");
@@ -77,7 +77,7 @@ public sealed class LocalRepositoryChangedFileSource : ICodeReviewChangedFileSou
         }
 
         info.Add($"Code review scan: Analyzing {changedFiles.Count} analyzable file(s) from the local repository.");
-        return new CodeReviewChangedFileSourceResult(changedFiles, info);
+        return new CodeReviewChangedFileSourceResult(changedFiles, info, isEntireRepositoryScan: true);
     }
 
     private static IReadOnlyList<string> SplitLines(string text) =>

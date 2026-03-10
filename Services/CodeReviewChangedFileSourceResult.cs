@@ -15,13 +15,19 @@ namespace ReviewG33k.Services;
 
 public sealed class CodeReviewChangedFileSourceResult
 {
-    public CodeReviewChangedFileSourceResult(IReadOnlyList<CodeReviewChangedFile> files, IReadOnlyList<string> infoMessages)
+    public CodeReviewChangedFileSourceResult(
+        IReadOnlyList<CodeReviewChangedFile> files,
+        IReadOnlyList<string> infoMessages,
+        bool isEntireRepositoryScan = false)
     {
         Files = files ?? Array.Empty<CodeReviewChangedFile>();
         InfoMessages = infoMessages ?? Array.Empty<string>();
+        IsEntireRepositoryScan = isEntireRepositoryScan;
     }
 
     public IReadOnlyList<CodeReviewChangedFile> Files { get; }
 
     public IReadOnlyList<string> InfoMessages { get; }
+
+    public bool IsEntireRepositoryScan { get; }
 }

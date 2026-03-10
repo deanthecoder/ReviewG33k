@@ -1,0 +1,191 @@
+// Code authored by Dean Edis (DeanTheCoder).
+// Anyone is free to copy, modify, use, compile, or distribute this software,
+// either in source code form or as a compiled binary, for any purpose.
+//
+// If you modify the code, please retain this copyright header,
+// and consider contributing back to the repository or letting us know
+// about your modifications. Your contributions are valued!
+//
+// THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
+
+using DTC.Core;
+using DTC.Core.Extensions;
+using ReviewG33k.Services;
+using ReviewG33k.Services.Checks;
+
+namespace ReviewG33k.Tests;
+
+[TestFixture]
+public sealed class DuplicateCodeBlockCodeReviewCheckTests
+{
+    [Test]
+    public void AnalyzeWhenAddedCodeBlockMatchesExistingFileReportsSuggestion()
+    {
+        using var tempRoot = new TempDirectory();
+        var existingFile = tempRoot.GetDir("Services").GetFile("ExistingHelper.cs");
+        existingFile.Directory!.Create();
+        existingFile.WriteAllText(
+            """
+            using System;
+
+            public sealed class ExistingHelper
+            {
+                public void Run()
+                {
+                    // Existing logic
+                    DoFirst();
+                    DoSecond();
+                    DoThird();
+                    DoFourth();
+                    DoFifth();
+                    DoSixth();
+                }
+            }
+            """);
+
+        const string changedSource =
+            """
+            using System.Linq;
+
+            public sealed class NewHelper
+            {
+                public void Run()
+                {
+                    DoFirst();
+                    DoSecond();
+                    DoThird();
+                    DoFourth();
+                    DoFifth();
+                    DoSixth();
+                }
+            }
+            """;
+        var changedFile = CreateChangedFile(tempRoot, "Services/NewHelper.cs", changedSource, "A");
+
+        var report = Analyze([changedFile]);
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].RuleId, Is.EqualTo(CodeReviewRuleIds.DuplicateCodeBlock));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("ExistingHelper.cs"));
+        Assert.That(report.Findings[0].Message, Does.Contain(":5"));
+    }
+
+    [Test]
+    public void AnalyzeWhenBlockIsSmallerThanThresholdDoesNotReport()
+    {
+        using var tempRoot = new TempDirectory();
+        var existingFile = tempRoot.GetDir("Services").GetFile("ExistingHelper.cs");
+        existingFile.Directory!.Create();
+        existingFile.WriteAllText(
+            """
+            public sealed class ExistingHelper
+            {
+                public void Run()
+                {
+                    DoFirst();
+                    DoSecond();
+                    DoThird();
+                    DoFourth();
+                }
+            }
+            """);
+
+        var changedFile = CreateChangedFile(
+            tempRoot,
+            "Services/NewHelper.cs",
+            """
+            public sealed class NewHelper
+            {
+                public void Run()
+                {
+                    DoFirst();
+                    DoSecond();
+                    DoThird();
+                    DoFourth();
+                }
+            }
+            """,
+            "A");
+
+        var report = Analyze([changedFile]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenWholeRepositoryScanDoesNotRunCheck()
+    {
+        using var tempRoot = new TempDirectory();
+        var existingFile = tempRoot.GetDir("Services").GetFile("ExistingHelper.cs");
+        existingFile.Directory!.Create();
+        existingFile.WriteAllText(
+            """
+            public sealed class ExistingHelper
+            {
+                public void Run()
+                {
+                    DoFirst();
+                    DoSecond();
+                    DoThird();
+                    DoFourth();
+                    DoFifth();
+                    DoSixth();
+                }
+            }
+            """);
+
+        var changedFile = CreateChangedFile(
+            tempRoot,
+            "Services/NewHelper.cs",
+            """
+            public sealed class NewHelper
+            {
+                public void Run()
+                {
+                    DoFirst();
+                    DoSecond();
+                    DoThird();
+                    DoFourth();
+                    DoFifth();
+                    DoSixth();
+                }
+            }
+            """,
+            "M");
+
+        var report = Analyze([changedFile], isEntireRepositoryScan: true);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    private static CodeReviewChangedFile CreateChangedFile(DirectoryInfo root, string relativePath, string source, string status)
+    {
+        var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
+        var lines = normalizedSource.Split('\n');
+        var file = root.GetFile(relativePath);
+        file.Directory!.Create();
+        file.WriteAllText(normalizedSource);
+
+        return new CodeReviewChangedFile(
+            status,
+            relativePath.Replace('\\', '/'),
+            file.FullName,
+            normalizedSource,
+            lines,
+            new HashSet<int>(Enumerable.Range(1, lines.Length)));
+    }
+
+    private static CodeSmellReport Analyze(IReadOnlyList<CodeReviewChangedFile> files, bool isEntireRepositoryScan = false)
+    {
+        var context = new CodeReviewAnalysisContext(
+            files,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            allChangedFiles: files,
+            isEntireRepositoryScan: isEntireRepositoryScan);
+        var report = new CodeSmellReport();
+        var check = new DuplicateCodeBlockCodeReviewCheck();
+        check.Analyze(context, report);
+        return report;
+    }
+}

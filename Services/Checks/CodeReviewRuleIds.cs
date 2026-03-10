@@ -73,5 +73,6 @@ public static class CodeReviewRuleIds
     public const string ConsecutiveBooleanArguments = "consecutive-boolean-arguments";
     public const string ConsecutiveNullArguments = "consecutive-null-arguments";
     public const string LambdaCanBeMethodGroup = "lambda-can-be-method-group";
+    public const string DuplicateCodeBlock = "duplicate-code-block";
     public const string NumericStringCultureForFileWrite = "numeric-string-culture-for-file-write";
 }

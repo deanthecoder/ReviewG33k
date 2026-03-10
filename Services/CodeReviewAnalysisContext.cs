@@ -19,12 +19,14 @@ public sealed class CodeReviewAnalysisContext
         IReadOnlyList<CodeReviewChangedFile> files,
         IReadOnlySet<string> addedTestFilesByName,
         IReadOnlyList<CodeReviewChangedFile> resxFiles = null,
-        IReadOnlyList<CodeReviewChangedFile> allChangedFiles = null)
+        IReadOnlyList<CodeReviewChangedFile> allChangedFiles = null,
+        bool isEntireRepositoryScan = false)
     {
         Files = files ?? throw new ArgumentNullException(nameof(files));
         AddedTestFilesByName = addedTestFilesByName ?? throw new ArgumentNullException(nameof(addedTestFilesByName));
         ResxFiles = resxFiles ?? [];
         AllChangedFiles = allChangedFiles ?? Files;
+        IsEntireRepositoryScan = isEntireRepositoryScan;
     }
 
     public IReadOnlyList<CodeReviewChangedFile> Files { get; }
@@ -34,6 +36,8 @@ public sealed class CodeReviewAnalysisContext
     public IReadOnlyList<CodeReviewChangedFile> ResxFiles { get; }
 
     public IReadOnlyList<CodeReviewChangedFile> AllChangedFiles { get; }
+
+    public bool IsEntireRepositoryScan { get; }
 
     public bool HasAnyAddedTestFiles => AddedTestFilesByName.Count > 0;
 }
