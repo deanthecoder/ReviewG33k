@@ -78,6 +78,7 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.UnnecessaryEnumMemberValue or
             CodeReviewRuleIds.UnnecessaryVerbatimStringPrefix or
             CodeReviewRuleIds.RedundantSelfLookup or
+            CodeReviewRuleIds.LambdaCanBeMethodGroup or
             CodeReviewRuleIds.ConsecutiveBooleanArguments or
             CodeReviewRuleIds.ConsecutiveNullArguments => Readability,
             CodeReviewRuleIds.LocalVariablePrefix => Readability,

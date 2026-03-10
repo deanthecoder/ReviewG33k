@@ -297,6 +297,7 @@ public sealed class CodeSmellReportAnalyzer
         new BooleanLiteralComparisonCodeReviewCheck(),
         new ConsecutiveBooleanArgumentsCodeReviewCheck(),
         new ConsecutiveNullArgumentsCodeReviewCheck(),
+        new LambdaCanBeMethodGroupCodeReviewCheck(),
         new NumericStringCultureForFileWriteCodeReviewCheck(),
         new UnnecessaryCastCodeReviewCheck(),
         new UnnecessaryEnumMemberValueCodeReviewCheck(),
