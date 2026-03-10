@@ -2245,6 +2245,28 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void UnusedPrivateMemberCheckWhenPropertyIsExplicitInterfaceImplementationDoesNotReport()
+    {
+        const string source = """
+            public interface IAudioSource
+            {
+                int ChannelCount { get; }
+            }
+
+            public sealed class Sample : IAudioSource
+            {
+                private int VoiceCount => 3;
+
+                int IAudioSource.ChannelCount => VoiceCount;
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedPrivateMemberCodeReviewCheck(), "A", source, Enumerable.Range(1, 12));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void UnusedPrivateMemberCheckWhenPrivateProgramMainExistsDoesNotReport()
     {
         const string source = """

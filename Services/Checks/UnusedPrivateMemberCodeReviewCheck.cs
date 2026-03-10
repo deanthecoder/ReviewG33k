@@ -155,6 +155,8 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
                 continue;
             if (symbol.DeclaredAccessibility != Accessibility.Private)
                 continue;
+            if (symbol.ExplicitInterfaceImplementations.Length > 0)
+                continue;
             if (HasAnyReference(root, semanticModel, symbol))
                 continue;
 
