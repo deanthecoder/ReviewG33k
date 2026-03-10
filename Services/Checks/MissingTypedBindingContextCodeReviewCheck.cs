@@ -163,14 +163,14 @@ public sealed class MissingTypedBindingContextCodeReviewCheck : CodeReviewCheckB
 
             if (depth == 0)
             {
-                binding = new BindingExpressionRange(startIndex, index, startLine, line, markupText[startIndex..(index + 1)]);
+                binding = new BindingExpressionRange(index, startLine, line, markupText[startIndex..(index + 1)]);
                 return true;
             }
 
             index++;
         }
 
-        binding = new BindingExpressionRange(startIndex, length - 1, startLine, line, markupText[startIndex..]);
+        binding = new BindingExpressionRange(length - 1, startLine, line, markupText[startIndex..]);
         return true;
     }
 
@@ -208,7 +208,6 @@ public sealed class MissingTypedBindingContextCodeReviewCheck : CodeReviewCheckB
         !string.IsNullOrWhiteSpace(bindingExpressionText) && ExplicitSourceRegex.IsMatch(bindingExpressionText);
 
     private readonly record struct BindingExpressionRange(
-        int StartIndex,
         int EndIndex,
         int StartLine,
         int EndLine,

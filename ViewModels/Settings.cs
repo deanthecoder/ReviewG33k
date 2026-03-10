@@ -15,7 +15,6 @@ namespace ReviewG33k.ViewModels;
 public sealed class Settings : UserSettingsBase
 {
     private const int DefaultReviewModeIndex = -1;
-    private const string LegacyIncludeFullModifiedFilesKey = "IncludeFullModifiedFilesForAddedLineChecks";
 
     public static Settings Instance { get; } = new();
 
@@ -81,9 +80,7 @@ public sealed class Settings : UserSettingsBase
 
     public bool IncludeFullModifiedFiles
     {
-        // Keep using the legacy persisted key so existing user settings carry over.
-        get => Get<bool>(LegacyIncludeFullModifiedFilesKey);
-        set => Set(value, LegacyIncludeFullModifiedFilesKey);
+        get => Get<bool>();
+        set => Set(value);
     }
 }
-
