@@ -175,6 +175,28 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenParameterIsOnlyForwardedDoesNotReport()
+    {
+        const string source = """
+            public sealed class Worker
+            {
+                public void Save(object value)
+                {
+                    Store(value);
+                }
+
+                private static void Store(object value)
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AnalyzeWhenParameterIsOnlyUsedWithNullConditionalAndNullCoalescingDoesNotReport()
     {
         const string source = """
@@ -194,6 +216,32 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheckTests
                     var infoCount = sourceResult?.InfoMessages?.Length ?? 0;
                     var fileCount = sourceResult?.Files?.Where(file => file != null).Count() ?? 0;
                     return infoCount + fileCount;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenExtensionMethodUsesReceiverDoesNotRequireGuardForReceiver()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Value { get; set; }
+            }
+
+            public static class SampleExtensions
+            {
+                public static int ReadValue(this Sample sample, object logger)
+                {
+                    if (logger == null)
+                        return 0;
+
+                    return sample.Value;
                 }
             }
             """;

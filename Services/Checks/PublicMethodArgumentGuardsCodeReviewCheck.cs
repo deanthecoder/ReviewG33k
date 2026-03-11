@@ -76,7 +76,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
                 var guardWindowLines = GetGuardWindow(file.Lines, bodyOpenLine, bodyCloseLine, maxLines: GuardWindowMaxLines);
                 var methodBodyLines = GetMethodBodyLines(file.Lines, bodyOpenLine, bodyCloseLine);
                 var unguardedParameters = parametersToGuard
-                    .Where(parameter => ParameterIsUsed(methodBodyLines, parameter))
+                    .Where(parameter => ParameterHasUnsafeLocalUsage(methodBodyLines, parameter))
                     .Where(parameter => !HasArgumentGuard(guardWindowLines, parameter))
                     .ToArray();
 
@@ -258,6 +258,8 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
 
         foreach (var rawParameter in SplitParameters(parameterListText))
         {
+            if (HasParameterModifier(rawParameter, "this"))
+                continue;
             if (HasParameterModifier(rawParameter, "out"))
                 continue;
             if (IsOptionalParameter(rawParameter))
@@ -443,7 +445,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         return false;
     }
 
-    private static bool ParameterIsUsed(IReadOnlyList<string> methodBodyLines, string parameterName)
+    private static bool ParameterHasUnsafeLocalUsage(IReadOnlyList<string> methodBodyLines, string parameterName)
     {
         if (methodBodyLines == null || methodBodyLines.Count == 0 || string.IsNullOrWhiteSpace(parameterName))
             return false;
@@ -451,39 +453,15 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
         var bodyText = string.Join('\n', methodBodyLines);
         var withoutBlockComments = Regex.Replace(bodyText, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
         var withoutLineComments = Regex.Replace(withoutBlockComments, "//.*?$", string.Empty, RegexOptions.Multiline);
+        var escapedParameterName = Regex.Escape(parameterName);
 
-        var usagePattern = $@"\b{Regex.Escape(parameterName)}\b";
-        foreach (Match match in Regex.Matches(withoutLineComments, usagePattern, RegexOptions.Compiled))
-        {
-            if (!match.Success)
-                continue;
-            if (IsSafelyNullTolerantUsage(withoutLineComments, match, parameterName))
-                continue;
-
+        if (Regex.IsMatch(withoutLineComments, $@"\bforeach\s*\([^)]*\bin\s+{escapedParameterName}\b", RegexOptions.Compiled))
             return true;
-        }
-
-        return false;
-    }
-
-    private static bool IsSafelyNullTolerantUsage(string source, Match parameterMatch, string parameterName)
-    {
-        var trailing = source[parameterMatch.Index..];
-        if (Regex.IsMatch(trailing, $@"^\b{Regex.Escape(parameterName)}\b\s*\?\.", RegexOptions.Compiled))
+        if (Regex.IsMatch(withoutLineComments, $@"\b{escapedParameterName}\b\s*\.", RegexOptions.Compiled))
             return true;
-        if (Regex.IsMatch(trailing, $@"^\b{Regex.Escape(parameterName)}\b\s*\?\?", RegexOptions.Compiled))
+        if (Regex.IsMatch(withoutLineComments, $@"\b{escapedParameterName}\b\s*\[", RegexOptions.Compiled))
             return true;
-        if (Regex.IsMatch(trailing, $@"^\b{Regex.Escape(parameterName)}\b\s*(?:==|!=)\s*null\b", RegexOptions.Compiled))
-            return true;
-        if (Regex.IsMatch(trailing, $@"^\b{Regex.Escape(parameterName)}\b\s+is\s+(?:not\s+)?null\b", RegexOptions.Compiled))
-            return true;
-
-        var leading = source[..parameterMatch.Index];
-        if (Regex.IsMatch(leading, @"(?:^|[\s(])nameof\s*\(\s*$", RegexOptions.Compiled))
-            return true;
-        if (Regex.IsMatch(leading, @"ArgumentNullException\.ThrowIfNull\s*\(\s*$", RegexOptions.Compiled))
-            return true;
-        if (Regex.IsMatch(leading, @"Guard\.Against\.Null\s*\(\s*$", RegexOptions.Compiled))
+        if (Regex.IsMatch(withoutLineComments, $@"\b{escapedParameterName}\b\s*\(", RegexOptions.Compiled))
             return true;
 
         return false;
