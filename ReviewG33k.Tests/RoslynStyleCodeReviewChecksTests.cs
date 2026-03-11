@@ -1180,7 +1180,7 @@ public sealed class RoslynStyleCodeReviewChecksTests
 
         Assert.That(report.Findings, Has.Count.EqualTo(1));
         Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
-        Assert.That(report.Findings[0].Message, Does.Contain("`SumAbs`"));
+        Assert.That(report.Findings[0].Message, Does.Contain("`SumAbs(int left, int right)`"));
     }
 
     [Test]
@@ -1283,6 +1283,29 @@ public sealed class RoslynStyleCodeReviewChecksTests
             "Views/ReviewResultsWindow.axaml.cs");
 
         Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void MethodCanBeStaticCheckWhenMethodHasStaticEligibleOverloadReportsOnlyThatOverload()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private void MyMethod(string foo) => MyMethod(foo, 2, true);
+
+                private void MyMethod(string foo, int num, bool enabled)
+                {
+                    _ = foo.Length + num;
+                    _ = enabled;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MethodCanBeStaticCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].LineNumber, Is.EqualTo(5));
+        Assert.That(report.Findings[0].Message, Does.Contain("MyMethod(string foo, int num, bool enabled)"));
     }
 
     [Test]

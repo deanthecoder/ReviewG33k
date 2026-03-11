@@ -99,7 +99,7 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
                 CodeReviewFindingSeverity.Hint,
                 file.Path,
                 lineNumber,
-                $"Method `{method.Identifier.ValueText}` can likely be made static.");
+                $"Method `{method.Identifier.ValueText}{method.ParameterList}` can likely be made static.");
         }
     }
 
@@ -127,6 +127,8 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
             return false;
         if (ImplementsInterfaceMember(methodSymbol))
             return false;
+        if (ContainsUnqualifiedSameNameInvocation(method, methodSymbol.Name))
+            return false;
         if (IsInPartialType(method))
             return false;
         if (CouldBeImplicitInterfaceImplementationWithoutResolution(semanticModel, method, methodSymbol.ContainingType))
@@ -135,6 +137,18 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
             return false;
 
         return true;
+    }
+
+    private static bool ContainsUnqualifiedSameNameInvocation(MethodDeclarationSyntax method, string methodName)
+    {
+        if (method == null || string.IsNullOrWhiteSpace(methodName))
+            return false;
+
+        return method.DescendantNodes()
+            .OfType<InvocationExpressionSyntax>()
+            .Any(invocation =>
+                invocation.Expression is IdentifierNameSyntax identifier &&
+                string.Equals(identifier.Identifier.ValueText, methodName, StringComparison.Ordinal));
     }
 
     private static bool ImplementsInterfaceMember(IMethodSymbol methodSymbol)
@@ -228,9 +242,17 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
             return true;
         }
 
+        foreach (var invocation in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (InvocationRequiresInstance(semanticModel, invocation, containingType))
+                return true;
+        }
+
         foreach (var node in method.DescendantNodes())
         {
             if (node is not IdentifierNameSyntax && node is not MemberAccessExpressionSyntax)
+                continue;
+            if (node.Parent is InvocationExpressionSyntax invocation && invocation.Expression == node)
                 continue;
 
             var symbolInfo = semanticModel.GetSymbolInfo(node);
@@ -252,6 +274,30 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
         }
 
         return false;
+    }
+
+    private static bool InvocationRequiresInstance(
+        SemanticModel semanticModel,
+        InvocationExpressionSyntax invocation,
+        INamedTypeSymbol containingType)
+    {
+        if (semanticModel == null || invocation == null || containingType == null)
+            return false;
+
+        var symbolInfo = semanticModel.GetSymbolInfo(invocation);
+        var candidateMethods = symbolInfo.Symbol != null
+            ? [symbolInfo.Symbol]
+            : symbolInfo.CandidateSymbols;
+
+        foreach (var candidateMethod in candidateMethods.OfType<IMethodSymbol>())
+        {
+            if (RequiresInstance(candidateMethod, containingType))
+                return true;
+        }
+
+        return symbolInfo.Symbol == null &&
+               symbolInfo.CandidateSymbols.Length == 0 &&
+               CouldReferenceInstanceMember(invocation.Expression);
     }
 
     private static bool RequiresInstance(ISymbol symbol, INamedTypeSymbol containingType)
