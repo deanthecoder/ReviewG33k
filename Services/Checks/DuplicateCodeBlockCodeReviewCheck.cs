@@ -50,7 +50,7 @@ public sealed class DuplicateCodeBlockCodeReviewCheck : CodeReviewCheckBase
         var candidateFiles = context.Files
             .Where(file => file != null)
             .Where(file => file.AddedLineNumbers.Count > 0)
-            .Where(file => CodeReviewFileClassification.IsAnalyzableChangedCSharpPath(file.Path))
+            .Where(file => CodeReviewFileClassification.IsDuplicateCodeCheckPath(file.Path))
             .Where(file => !CodeReviewFileClassification.IsTestFilePath(file.Path))
             .ToArray();
         if (candidateFiles.Length == 0)
@@ -78,7 +78,7 @@ public sealed class DuplicateCodeBlockCodeReviewCheck : CodeReviewCheckBase
 
     private Dictionary<ulong, List<CodeBlockWindow>> BuildRepositoryWindowIndex(string repositoryRootPath)
     {
-        var repositoryFiles = DuplicateCodeBlockUtilities.EnumerateAnalyzableCSharpFiles(repositoryRootPath, m_gitCommandRunner);
+        var repositoryFiles = DuplicateCodeBlockUtilities.EnumerateDuplicateCheckFiles(repositoryRootPath, m_gitCommandRunner);
         var windowsByHash = new Dictionary<ulong, List<CodeBlockWindow>>();
         foreach (var repositoryFile in repositoryFiles)
         {

@@ -76,6 +76,13 @@ internal static class CodeReviewFileClassification
         !IsIgnoredPath(path) &&
         path.EndsWith(".resx", StringComparison.OrdinalIgnoreCase);
 
+    public static bool IsDuplicateCodeCheckPath(string path) =>
+        !string.IsNullOrWhiteSpace(path) &&
+        !IsIgnoredPath(path) &&
+        (path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+         path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase) ||
+         path.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase));
+
     public static bool IsAnalyzableChangedPath(string path) =>
         IsAnalyzableChangedCSharpPath(path) || IsAnalyzableResxPath(path);
 

@@ -72,7 +72,7 @@ public sealed class FixableCodeReviewChecksTests
 
         Assert.That(success, Is.False);
         Assert.That(message, Is.EqualTo("Global using directives are excluded from this check."));
-        Assert.That(tempFile.ReadAllText(), Is.EqualTo(source.Replace("\r\n", "\n")));
+        Assert.That(tempFile.ReadAllText().Replace("\r\n", "\n"), Is.EqualTo(source.Replace("\r\n", "\n")));
     }
 
     [Test]
@@ -291,7 +291,7 @@ public sealed class FixableCodeReviewChecksTests
 
         Assert.That(success, Is.False);
         Assert.That(message, Is.EqualTo("Target line does not contain an if/else with unnecessary braces."));
-        Assert.That(tempFile.ReadAllText(), Is.EqualTo(source.Replace("\r\n", "\n")));
+        Assert.That(tempFile.ReadAllText().Replace("\r\n", "\n"), Is.EqualTo(source.Replace("\r\n", "\n")));
     }
 
     [Test]
@@ -330,7 +330,7 @@ public sealed class FixableCodeReviewChecksTests
 
         Assert.That(success, Is.False);
         Assert.That(message, Is.EqualTo("Target line does not contain an if/else with unnecessary braces."));
-        Assert.That(tempFile.ReadAllText(), Is.EqualTo(source.Replace("\r\n", "\n")));
+        Assert.That(tempFile.ReadAllText().Replace("\r\n", "\n"), Is.EqualTo(source.Replace("\r\n", "\n")));
     }
 
     [Test]

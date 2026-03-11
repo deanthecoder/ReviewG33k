@@ -159,6 +159,129 @@ public sealed class DuplicateCodeBlockCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void AnalyzeWhenMarkupOnlyDuplicatesTrivialLayoutBoilerplateDoesNotReport()
+    {
+        using var tempRoot = new TempDirectory();
+        var existingFile = tempRoot.GetDir("Views").GetFile("ExistingView.axaml");
+        existingFile.Directory!.Create();
+        existingFile.WriteAllText(
+            """
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+            </Grid>
+            """);
+
+        var changedFile = CreateChangedFile(
+            tempRoot,
+            "Views/NewView.axaml",
+            """
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+            </Grid>
+            """,
+            "A");
+
+        var report = Analyze([changedFile]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenMarkupDuplicatesSubstantiveUiBlockReportsSuggestion()
+    {
+        using var tempRoot = new TempDirectory();
+        var existingFile = tempRoot.GetDir("Views").GetFile("ExistingView.axaml");
+        existingFile.Directory!.Create();
+        existingFile.WriteAllText(
+            """
+            <StackPanel>
+                <TextBlock Text="{Binding Title}" Classes="HeroTitle"/>
+                <TextBlock Text="{Binding Subtitle}" Classes="HeroSubtitle"/>
+                <Button Content="Run review" Command="{Binding RunCommand}"/>
+                <TextBlock Text="{Binding Status}" Classes="StatusLine"/>
+                <ProgressBar IsIndeterminate="{Binding IsBusy}"/>
+                <TextBlock Text="{Binding Footer}" Classes="Footer"/>
+            </StackPanel>
+            """);
+
+        var changedFile = CreateChangedFile(
+            tempRoot,
+            "Views/NewView.axaml",
+            """
+            <StackPanel>
+                <TextBlock Text="{Binding Title}" Classes="HeroTitle"/>
+                <TextBlock Text="{Binding Subtitle}" Classes="HeroSubtitle"/>
+                <Button Content="Run review" Command="{Binding RunCommand}"/>
+                <TextBlock Text="{Binding Status}" Classes="StatusLine"/>
+                <ProgressBar IsIndeterminate="{Binding IsBusy}"/>
+                <TextBlock Text="{Binding Footer}" Classes="Footer"/>
+            </StackPanel>
+            """,
+            "A");
+
+        var report = Analyze([changedFile]);
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("ExistingView.axaml"));
+    }
+
+    [Test]
+    public void AnalyzeWhenProjectFileDuplicatesExistingProjectFileDoesNotReport()
+    {
+        using var tempRoot = new TempDirectory();
+        var existingFile = tempRoot.GetDir("Src").GetFile("Existing.csproj");
+        existingFile.Directory!.Create();
+        existingFile.WriteAllText(
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <PropertyGroup>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <Nullable>disable</Nullable>
+                    <ImplicitUsings>enable</ImplicitUsings>
+                    <LangVersion>latest</LangVersion>
+                    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                    <AssemblyName>Existing</AssemblyName>
+                </PropertyGroup>
+            </Project>
+            """);
+
+        var changedFile = CreateChangedFile(
+            tempRoot,
+            "Src/New.csproj",
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <PropertyGroup>
+                    <TargetFramework>net8.0</TargetFramework>
+                    <Nullable>disable</Nullable>
+                    <ImplicitUsings>enable</ImplicitUsings>
+                    <LangVersion>latest</LangVersion>
+                    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                    <AssemblyName>Existing</AssemblyName>
+                </PropertyGroup>
+            </Project>
+            """,
+            "A");
+
+        var report = Analyze([changedFile]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeReviewChangedFile CreateChangedFile(DirectoryInfo root, string relativePath, string source, string status)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');

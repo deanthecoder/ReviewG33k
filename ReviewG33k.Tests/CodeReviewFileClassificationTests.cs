@@ -76,6 +76,29 @@ public sealed class CodeReviewFileClassificationTests
     }
 
     [Test]
+    public void IsDuplicateCodeCheckPathWhenPathIsProjectFileReturnsFalse()
+    {
+        var result = InvokeIsDuplicateCodeCheckPath("Packages/CSharp.Core/CSharp.Core.csproj");
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void IsDuplicateCodeCheckPathWhenPathIsMarkupOrCSharpReturnsTrue()
+    {
+        var csharpResult = InvokeIsDuplicateCodeCheckPath("Services/Worker.cs");
+        var axamlResult = InvokeIsDuplicateCodeCheckPath("Views/ReviewResultsWindow.axaml");
+        var xamlResult = InvokeIsDuplicateCodeCheckPath("Views/MainWindow.xaml");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(csharpResult, Is.True);
+            Assert.That(axamlResult, Is.True);
+            Assert.That(xamlResult, Is.True);
+        });
+    }
+
+    [Test]
     public void IsAnalyzableChangedCSharpPathWhenPathIsMarkupReturnsTrue()
     {
         var axamlResult = InvokeIsAnalyzableChangedCSharpPath("Views/ReviewResultsWindow.axaml");
@@ -164,6 +187,11 @@ public sealed class CodeReviewFileClassificationTests
     private static bool InvokeIsCodeBehindFilePath(string path)
     {
         return Support.CodeReviewFileClassification.IsCodeBehindFilePath(path);
+    }
+
+    private static bool InvokeIsDuplicateCodeCheckPath(string path)
+    {
+        return Support.CodeReviewFileClassification.IsDuplicateCodeCheckPath(path);
     }
 
     private static bool InvokeIsMarkupFilePath(string path)

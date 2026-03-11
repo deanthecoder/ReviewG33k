@@ -20,7 +20,16 @@ namespace ReviewG33k.Services.Checks.Support;
 
 internal static class DuplicateCodeBlockUtilities
 {
+    private static readonly string[] DuplicateCheckSearchPatterns = ["*.cs", "*.axaml", "*.xaml"];
     private static readonly Regex WhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
+    private static readonly HashSet<string> TrivialMarkupElementNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Grid",
+        "Grid.RowDefinitions",
+        "Grid.ColumnDefinitions",
+        "RowDefinition",
+        "ColumnDefinition"
+    };
 
     public static bool TryGetRepositoryRootPath(CodeReviewChangedFile file, out string repositoryRootPath)
     {
@@ -50,7 +59,7 @@ internal static class DuplicateCodeBlockUtilities
         return true;
     }
 
-    public static FileInfo[] EnumerateAnalyzableCSharpFiles(string repositoryRootPath, GitCommandRunner gitCommandRunner = null)
+    public static FileInfo[] EnumerateDuplicateCheckFiles(string repositoryRootPath, GitCommandRunner gitCommandRunner = null)
     {
         var repositoryRoot = repositoryRootPath.ToDir();
         if (repositoryRoot?.Exists() != true)
@@ -87,7 +96,7 @@ internal static class DuplicateCodeBlockUtilities
         if (file == null)
             return new NormalizedCodeFile(null, null, []);
 
-        return new NormalizedCodeFile(file.Path, file.FullPath, NormalizeLines(file.Lines));
+        return new NormalizedCodeFile(file.Path, file.FullPath, NormalizeLines(file.Path, file.Lines));
     }
 
     public static NormalizedCodeFile NormalizeCodeFile(FileInfo file, string relativePath)
@@ -97,7 +106,7 @@ internal static class DuplicateCodeBlockUtilities
 
         var text = file.ReadAllText();
         var lines = (text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
-        return new NormalizedCodeFile(relativePath, file.FullName, NormalizeLines(lines));
+        return new NormalizedCodeFile(relativePath, file.FullName, NormalizeLines(relativePath, lines));
     }
 
     public static List<CodeBlockWindow> CreateWindows(
@@ -114,6 +123,11 @@ internal static class DuplicateCodeBlockUtilities
             var slice = file.Lines.Skip(startIndex).Take(windowSize).ToArray();
             if (requiredOriginalLines != null && slice.Any(line => !requiredOriginalLines.Contains(line.OriginalLineNumber)))
                 continue;
+            if (CodeReviewFileClassification.IsMarkupFilePath(file.RelativePath) &&
+                slice.Count(line => line.IsSubstantive) < 2)
+            {
+                continue;
+            }
 
             var normalizedText = string.Join("\n", slice.Select(line => line.NormalizedText));
             if (string.IsNullOrWhiteSpace(normalizedText))
@@ -132,12 +146,13 @@ internal static class DuplicateCodeBlockUtilities
         return windows;
     }
 
-    private static IReadOnlyList<NormalizedCodeLine> NormalizeLines(IReadOnlyList<string> lines)
+    private static IReadOnlyList<NormalizedCodeLine> NormalizeLines(string relativePath, IReadOnlyList<string> lines)
     {
         var normalizedLines = new List<NormalizedCodeLine>();
         if (lines == null || lines.Count == 0)
             return normalizedLines;
 
+        var isMarkupFile = CodeReviewFileClassification.IsMarkupFilePath(relativePath);
         var insideBlockComment = false;
         for (var index = 0; index < lines.Count; index++)
         {
@@ -146,7 +161,10 @@ internal static class DuplicateCodeBlockUtilities
             if (normalizedLine == null)
                 continue;
 
-            normalizedLines.Add(new NormalizedCodeLine(index + 1, normalizedLine));
+            normalizedLines.Add(new NormalizedCodeLine(
+                index + 1,
+                normalizedLine,
+                !isMarkupFile || IsSubstantiveMarkupLine(normalizedLine)));
         }
 
         return normalizedLines;
@@ -171,6 +189,46 @@ internal static class DuplicateCodeBlockUtilities
         }
 
         return trimmed;
+    }
+
+    private static bool IsSubstantiveMarkupLine(string normalizedLine)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedLine))
+            return false;
+
+        if (TryGetMarkupElementName(normalizedLine, out var elementName) &&
+            TrivialMarkupElementNames.Contains(elementName))
+        {
+            return false;
+        }
+
+        return normalizedLine.Contains("=") ||
+               normalizedLine.Contains("{") ||
+               normalizedLine.Contains(">") && normalizedLine.Contains("</", StringComparison.Ordinal);
+    }
+
+    private static bool TryGetMarkupElementName(string normalizedLine, out string elementName)
+    {
+        elementName = null;
+        if (string.IsNullOrWhiteSpace(normalizedLine) || normalizedLine[0] != '<')
+            return false;
+
+        var startIndex = normalizedLine.StartsWith("</", StringComparison.Ordinal) ? 2 : 1;
+        var endIndex = startIndex;
+        while (endIndex < normalizedLine.Length)
+        {
+            var current = normalizedLine[endIndex];
+            if (char.IsWhiteSpace(current) || current is '>' or '/')
+                break;
+
+            endIndex++;
+        }
+
+        if (endIndex <= startIndex)
+            return false;
+
+        elementName = normalizedLine[startIndex..endIndex];
+        return true;
     }
 
     private static string StripComments(string line, ref bool insideBlockComment)
@@ -210,29 +268,32 @@ internal static class DuplicateCodeBlockUtilities
 
     private static IEnumerable<FileInfo> EnumerateMatchingFiles(DirectoryInfo repositoryRoot, DirectoryInfo directory)
     {
-        IEnumerable<FileInfo> files;
-        try
+        foreach (var searchPattern in DuplicateCheckSearchPatterns)
         {
-            files = directory.EnumerateFiles("*.cs", SearchOption.TopDirectoryOnly);
-        }
-        catch
-        {
-            yield break;
-        }
-
-        foreach (var file in files)
-        {
-            if (!file.Exists())
-                continue;
-
-            var relativePath = RepositoryUtilities.NormalizeRepoPath(Path.GetRelativePath(repositoryRoot.FullName, file.FullName));
-            if (!CodeReviewFileClassification.IsAnalyzableChangedCSharpPath(relativePath) ||
-                CodeReviewFileClassification.IsTestFilePath(relativePath))
+            IEnumerable<FileInfo> files;
+            try
+            {
+                files = directory.EnumerateFiles(searchPattern, SearchOption.TopDirectoryOnly);
+            }
+            catch
             {
                 continue;
             }
 
-            yield return file;
+            foreach (var file in files)
+            {
+                if (!file.Exists())
+                    continue;
+
+                var relativePath = RepositoryUtilities.NormalizeRepoPath(Path.GetRelativePath(repositoryRoot.FullName, file.FullName));
+                if (!CodeReviewFileClassification.IsDuplicateCodeCheckPath(relativePath) ||
+                    CodeReviewFileClassification.IsTestFilePath(relativePath))
+                {
+                    continue;
+                }
+
+                yield return file;
+            }
         }
     }
 
@@ -255,7 +316,7 @@ internal static class DuplicateCodeBlockUtilities
             return (result.StandardOutput ?? string.Empty)
                 .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
                 .Select(RepositoryUtilities.NormalizeRepoPath)
-                .Where(CodeReviewFileClassification.IsAnalyzableChangedCSharpPath)
+                .Where(CodeReviewFileClassification.IsDuplicateCodeCheckPath)
                 .Where(relativePath => !CodeReviewFileClassification.IsTestFilePath(relativePath))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(relativePath => repositoryRoot.GetFile(relativePath.Replace('/', Path.DirectorySeparatorChar)))
@@ -293,7 +354,7 @@ internal static class DuplicateCodeBlockUtilities
 
 internal sealed record NormalizedCodeFile(string RelativePath, string FullPath, IReadOnlyList<NormalizedCodeLine> Lines);
 
-internal sealed record NormalizedCodeLine(int OriginalLineNumber, string NormalizedText);
+internal sealed record NormalizedCodeLine(int OriginalLineNumber, string NormalizedText, bool IsSubstantive);
 
 internal sealed record CodeBlockWindow(
     string RelativePath,
