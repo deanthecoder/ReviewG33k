@@ -92,6 +92,8 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
             return false;
         if (method.Modifiers.All(modifier => modifier.RawKind != (int)SyntaxKind.PublicKeyword))
             return false;
+        if (IsStandardDisposeEntryPoint(method))
+            return false;
         if (method.Modifiers.Any(modifier =>
             modifier.RawKind == (int)SyntaxKind.AbstractKeyword ||
             modifier.RawKind == (int)SyntaxKind.OverrideKeyword ||
@@ -101,6 +103,20 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
         }
 
         return method.Body != null || method.ExpressionBody != null;
+    }
+
+    private static bool IsStandardDisposeEntryPoint(MethodDeclarationSyntax method)
+    {
+        if (method == null)
+            return false;
+
+        var methodName = method.Identifier.ValueText;
+        if (string.Equals(methodName, "Dispose", StringComparison.Ordinal))
+            return method.ParameterList?.Parameters.Count == 0;
+        if (string.Equals(methodName, "DisposeAsync", StringComparison.Ordinal))
+            return method.ParameterList?.Parameters.Count == 0;
+
+        return false;
     }
 
     private static bool HasLikelyMatchingTestFile(IReadOnlySet<string> changedTestFileNames, string typeName)

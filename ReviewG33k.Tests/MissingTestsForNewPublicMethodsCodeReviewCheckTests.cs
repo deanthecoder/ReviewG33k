@@ -107,6 +107,43 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenMethodIsPublicDisposeDoesNotReport()
+    {
+        const string source = """
+            public sealed class OrderService
+            {
+                public void Dispose()
+                {
+                }
+            }
+            """;
+
+        var report = Analyze(source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenMethodIsPublicDisposeAsyncDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class OrderService
+            {
+                public ValueTask DisposeAsync()
+                {
+                    return ValueTask.CompletedTask;
+                }
+            }
+            """;
+
+        var report = Analyze(source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AnalyzeWhenFileIsCodeBehindDoesNotReport()
     {
         const string source = """
