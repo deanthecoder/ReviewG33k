@@ -18,15 +18,18 @@ namespace ReviewG33k.Services;
 internal sealed class ReviewFindingInteractionService
 {
     private readonly CodeLocationOpener m_codeLocationOpener;
+    private readonly ReviewFindingCommentFormatter m_commentFormatter;
     private readonly LogNavigationService m_logNavigationService;
     private readonly BitbucketPullRequestMetadataClient m_pullRequestMetadataClient;
 
     public ReviewFindingInteractionService(
         CodeLocationOpener codeLocationOpener,
+        ReviewFindingCommentFormatter commentFormatter,
         LogNavigationService logNavigationService,
         BitbucketPullRequestMetadataClient pullRequestMetadataClient)
     {
         m_codeLocationOpener = codeLocationOpener ?? throw new ArgumentNullException(nameof(codeLocationOpener));
+        m_commentFormatter = commentFormatter ?? throw new ArgumentNullException(nameof(commentFormatter));
         m_logNavigationService = logNavigationService ?? throw new ArgumentNullException(nameof(logNavigationService));
         m_pullRequestMetadataClient = pullRequestMetadataClient ?? throw new ArgumentNullException(nameof(pullRequestMetadataClient));
     }
@@ -112,7 +115,7 @@ internal sealed class ReviewFindingInteractionService
                 null);
         }
 
-        var commentText = finding.Message ?? string.Empty;
+        var commentText = m_commentFormatter.Format(finding);
         var result = await m_pullRequestMetadataClient.TryAddInlineCommentAsync(
             pullRequest,
             finding.FilePath,

@@ -22,11 +22,13 @@ internal static class MainWindowCompositionRoot
         var gitAvailabilityService = new GitAvailabilityService(
             (workingDirectory, arguments) => gitCommandRunner.RunAsync(workingDirectory, arguments));
         var codeLocationOpener = new CodeLocationOpener();
+        var reviewFindingCommentFormatter = new ReviewFindingCommentFormatter();
         var logNavigationService = new LogNavigationService();
         var logFeedService = new MainWindowLogFeedService();
         var pullRequestMetadataClient = new BitbucketPullRequestMetadataClient();
         var reviewFindingInteractionService = new ReviewFindingInteractionService(
             codeLocationOpener,
+            reviewFindingCommentFormatter,
             logNavigationService,
             pullRequestMetadataClient);
         var pullRequestUrlExtractionService = new PullRequestUrlExtractionService();
