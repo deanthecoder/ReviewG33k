@@ -55,6 +55,7 @@ public sealed class DisposableNotDisposedCodeReviewCheck : RoslynSemanticCodeRev
                 if (localSymbol != null &&
                     declarationBlock != null &&
                     (IsDisposedLater(semanticModel, declarationBlock, localDeclaration.SpanStart, localSymbol) ||
+                     IsReturnedLater(semanticModel, declarationBlock, localDeclaration.SpanStart, localSymbol) ||
                      IsPassedAsArgumentLater(semanticModel, declarationBlock, localDeclaration.SpanStart, localSymbol)))
                 {
                     continue;
@@ -95,6 +96,27 @@ public sealed class DisposableNotDisposedCodeReviewCheck : RoslynSemanticCodeRev
 
             var targetSymbol = semanticModel.GetSymbolInfo(memberAccess.Expression).Symbol;
             if (targetSymbol != null && SymbolEqualityComparer.Default.Equals(targetSymbol, localSymbol))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsReturnedLater(
+        SemanticModel semanticModel,
+        BlockSyntax declarationBlock,
+        int declarationSpanStart,
+        ILocalSymbol localSymbol)
+    {
+        foreach (var returnStatement in declarationBlock.DescendantNodes().OfType<ReturnStatementSyntax>())
+        {
+            if (returnStatement.SpanStart <= declarationSpanStart)
+                continue;
+            if (returnStatement.Expression == null)
+                continue;
+
+            var returnedSymbol = semanticModel.GetSymbolInfo(returnStatement.Expression).Symbol;
+            if (returnedSymbol != null && SymbolEqualityComparer.Default.Equals(returnedSymbol, localSymbol))
                 return true;
         }
 

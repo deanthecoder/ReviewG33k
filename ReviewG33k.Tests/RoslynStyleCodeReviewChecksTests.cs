@@ -1902,6 +1902,27 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void DisposableNotDisposedCheckWhenDisposableIsReturnedDoesNotReport()
+    {
+        const string source = """
+            using System.IO;
+
+            public sealed class Sample
+            {
+                public MemoryStream CreateStream()
+                {
+                    var stream = new MemoryStream();
+                    return stream;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new DisposableNotDisposedCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void MultipleEnumerationCheckWhenIEnumerableIsEnumeratedTwiceReportsSuggestion()
     {
         const string source = """
