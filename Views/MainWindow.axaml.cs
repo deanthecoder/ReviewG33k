@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private readonly CodeLocationOpener m_codeLocationOpener;
     private readonly LogNavigationService m_logNavigationService;
     private readonly ReviewFindingInteractionService m_reviewFindingInteractionService;
+    private readonly PullRequestReviewStampService m_pullRequestReviewStampService;
     private readonly PullRequestUrlExtractionService m_pullRequestUrlExtractionService;
     private readonly MainWindowActionStateService m_actionStateService;
     private readonly LocalBaseBranchService m_localBaseBranchService;
@@ -69,6 +70,7 @@ public partial class MainWindow : Window
         m_logNavigationService = dependencies.LogNavigationService;
         var logFeedService = dependencies.LogFeedService;
         m_reviewFindingInteractionService = dependencies.ReviewFindingInteractionService;
+        m_pullRequestReviewStampService = dependencies.PullRequestReviewStampService;
         m_pullRequestUrlExtractionService = dependencies.PullRequestUrlExtractionService;
         m_actionStateService = dependencies.ActionStateService;
         m_localBaseBranchService = dependencies.LocalBaseBranchService;
@@ -83,6 +85,7 @@ public partial class MainWindow : Window
             BrowseRepositoryRootAsync,
             BrowseLocalRepositoryAsync,
             ExecutePrepareReviewAsync,
+            PostPullRequestReviewStampAsync,
             CancelProcessing,
             OpenPullRequest,
             OpenSolution);
@@ -386,7 +389,33 @@ public partial class MainWindow : Window
             finding,
             m_viewModel.LatestPullRequest);
         ApplyInteractionResult(result.StatusMessage, result.LogMessage);
+        if (result.Success)
+            m_viewModel.RecordPostedInlineReviewComment();
         return result.Success;
+    }
+
+    private async Task PostPullRequestReviewStampAsync()
+    {
+        if (!m_viewModel.CanPostPullRequestReviewStamp)
+            return;
+
+        PullRequestReviewStampResult result = default;
+        await ExecuteBusyActionAsync(
+            "Posting PR review stamp...",
+            async cancellationToken =>
+            {
+                result = await m_pullRequestReviewStampService.PostReviewStampAsync(
+                    m_viewModel.LatestPullRequest,
+                    m_viewModel.RepositoryRootPath?.Trim(),
+                    m_viewModel.LatestPullRequestFindingCount,
+                    m_viewModel.LatestPullRequestImportantFindingCount,
+                    m_viewModel.LatestPostedInlineCommentCount,
+                    cancellationToken);
+            });
+
+        ApplyInteractionResult(result.StatusMessage, result.LogMessage);
+        if (result.Success)
+            m_viewModel.MarkPullRequestReviewStampPosted();
     }
 
     private async Task ExecuteBusyActionAsync(string statusText, Func<CancellationToken, Task> action)

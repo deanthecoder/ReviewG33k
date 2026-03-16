@@ -26,6 +26,9 @@ internal static class MainWindowCompositionRoot
         var logNavigationService = new LogNavigationService();
         var logFeedService = new MainWindowLogFeedService();
         var pullRequestMetadataClient = new BitbucketPullRequestMetadataClient();
+        var pullRequestReviewStampService = new PullRequestReviewStampService(
+            gitCommandRunner,
+            pullRequestMetadataClient);
         var reviewFindingInteractionService = new ReviewFindingInteractionService(
             codeLocationOpener,
             reviewFindingCommentFormatter,
@@ -56,6 +59,7 @@ internal static class MainWindowCompositionRoot
             logNavigationService,
             logFeedService,
             reviewFindingInteractionService,
+            pullRequestReviewStampService,
             pullRequestUrlExtractionService,
             actionStateService,
             localBaseBranchService,

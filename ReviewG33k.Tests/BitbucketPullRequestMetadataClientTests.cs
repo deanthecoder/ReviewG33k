@@ -174,6 +174,30 @@ public sealed class BitbucketPullRequestMetadataClientTests
         Assert.That(handler.RequestBodies, Has.Count.EqualTo(1));
     }
 
+    [Test]
+    public async Task TryAddPullRequestCommentAsyncWhenCalledPostsGeneralCommentBody()
+    {
+        using var handler = new StubHttpMessageHandler(
+        [
+            CreateJsonResponse(HttpStatusCode.Created, "{}")
+        ]);
+        using var httpClient = new HttpClient(handler);
+        var pullRequest = new BitbucketPullRequestReference(
+            "bitbucket.example.com",
+            "PROJ",
+            "sample-repo",
+            42,
+            "https://bitbucket.example.com/projects/PROJ/repos/sample-repo/pull-requests/42");
+
+        using var client = new BitbucketPullRequestMetadataClient(httpClient);
+        var result = await client.TryAddPullRequestCommentAsync(pullRequest, "Reviewed with ReviewG33k.");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.RequestBodies, Has.Count.EqualTo(1));
+        Assert.That(handler.RequestBodies[0], Does.Not.Contain("\"anchor\":"));
+        Assert.That(handler.RequestBodies[0], Does.Contain("\"text\":\"Reviewed with ReviewG33k.\""));
+    }
+
     private static HttpResponseMessage CreateJsonResponse(HttpStatusCode statusCode, string json) =>
         new(statusCode)
         {

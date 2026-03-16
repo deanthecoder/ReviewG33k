@@ -54,15 +54,20 @@ public sealed class MainWindowViewModel : ViewModelBase
     private bool m_hasValidPullRequestPrepareInputs;
     private bool m_hasValidLocalPrepareInputs;
     private bool m_hasAvailableSolution;
+    private bool m_hasPostedPullRequestReviewStamp;
     private bool m_canCancelCurrentOperation;
     private bool m_isCancellationRequested;
     private bool m_busyProgressIsIndeterminate = true;
     private double m_busyProgressMaximum = 1;
     private double m_busyProgressValue;
+    private int m_latestPullRequestFindingCount;
+    private int m_latestPullRequestImportantFindingCount;
+    private int m_latestPostedInlineCommentCount;
     private bool m_gitAvailabilityChecked;
     private CommandBase m_browseRepositoryRootCommandImpl;
     private CommandBase m_browseLocalRepositoryCommandImpl;
     private CommandBase m_prepareReviewCommandImpl;
+    private CommandBase m_postPullRequestReviewStampCommandImpl;
     private CommandBase m_cancelProcessingCommandImpl;
     private CommandBase m_openPullRequestCommandImpl;
     private CommandBase m_openSolutionCommandImpl;
@@ -71,6 +76,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     public ICommand BrowseRepositoryRootCommand { get; private set; }
     public ICommand BrowseLocalRepositoryCommand { get; private set; }
     public ICommand PrepareReviewCommand { get; private set; }
+    public ICommand PostPullRequestReviewStampCommand { get; private set; }
     public ICommand CancelProcessingCommand { get; private set; }
     public ICommand OpenPullRequestCommand { get; private set; }
     public ICommand OpenSolutionCommand { get; private set; }
@@ -309,6 +315,13 @@ public sealed class MainWindowViewModel : ViewModelBase
                                       ShowPullRequestInputs &&
                                       m_hasValidPullRequestInput;
 
+    public bool CanPostPullRequestReviewStamp => !m_isBusy &&
+                                                 IsPullRequestReviewMode &&
+                                                 LatestPullRequest != null &&
+                                                 CurrentPullRequestMatchesLatestReview() &&
+                                                 m_latestPullRequestFindingCount >= 0 &&
+                                                 !m_hasPostedPullRequestReviewStamp;
+
     public bool CanOpenSolution => !m_isBusy && m_hasAvailableSolution;
 
     public bool CanCancelProcessing => m_isBusy &&
@@ -339,6 +352,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         Func<Task> browseRepositoryRootAsync,
         Func<Task> browseLocalRepositoryAsync,
         Func<Task> prepareReviewAsync,
+        Func<Task> postPullRequestReviewStampAsync,
         Action cancelProcessing,
         Action openPullRequest,
         Action openSolution)
@@ -346,6 +360,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(browseRepositoryRootAsync);
         ArgumentNullException.ThrowIfNull(browseLocalRepositoryAsync);
         ArgumentNullException.ThrowIfNull(prepareReviewAsync);
+        ArgumentNullException.ThrowIfNull(postPullRequestReviewStampAsync);
         ArgumentNullException.ThrowIfNull(cancelProcessing);
         ArgumentNullException.ThrowIfNull(openPullRequest);
         ArgumentNullException.ThrowIfNull(openSolution);
@@ -359,6 +374,9 @@ public sealed class MainWindowViewModel : ViewModelBase
         m_prepareReviewCommandImpl = new AsyncRelayCommand(
             _ => prepareReviewAsync(),
             _ => CanPrepareReview);
+        m_postPullRequestReviewStampCommandImpl = new AsyncRelayCommand(
+            _ => postPullRequestReviewStampAsync(),
+            _ => CanPostPullRequestReviewStamp);
         m_cancelProcessingCommandImpl = new RelayCommand(
             _ => cancelProcessing(),
             _ => CanCancelProcessing);
@@ -372,6 +390,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         BrowseRepositoryRootCommand = m_browseRepositoryRootCommandImpl;
         BrowseLocalRepositoryCommand = m_browseLocalRepositoryCommandImpl;
         PrepareReviewCommand = m_prepareReviewCommandImpl;
+        PostPullRequestReviewStampCommand = m_postPullRequestReviewStampCommandImpl;
         CancelProcessingCommand = m_cancelProcessingCommandImpl;
         OpenPullRequestCommand = m_openPullRequestCommandImpl;
         OpenSolutionCommand = m_openSolutionCommandImpl;
@@ -379,6 +398,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(BrowseRepositoryRootCommand));
         OnPropertyChanged(nameof(BrowseLocalRepositoryCommand));
         OnPropertyChanged(nameof(PrepareReviewCommand));
+        OnPropertyChanged(nameof(PostPullRequestReviewStampCommand));
         OnPropertyChanged(nameof(CancelProcessingCommand));
         OnPropertyChanged(nameof(OpenPullRequestCommand));
         OnPropertyChanged(nameof(OpenSolutionCommand));
@@ -480,6 +500,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     internal void ClearPullRequestReviewContext()
     {
         LatestPullRequest = null;
+        ResetPullRequestReviewStampState();
         ClearPullRequestPreview();
     }
 
@@ -489,11 +510,16 @@ public sealed class MainWindowViewModel : ViewModelBase
             throw new ArgumentNullException(nameof(applyResult));
 
         LatestPullRequest = applyResult.PullRequest;
+        ResetPullRequestReviewStampState();
         if (applyResult.Mode == MainWindowReviewPreparationMode.PullRequest)
         {
             UpdatePullRequestReviewState(
                 applyResult.PullRequestTitle,
                 applyResult.PullRequestState);
+
+            var findings = applyResult.Report?.Findings ?? [];
+            m_latestPullRequestFindingCount = findings.Count;
+            m_latestPullRequestImportantFindingCount = findings.Count(finding => finding.Severity == CodeReviewFindingSeverity.Important);
         }
 
         var normalizedResolvedBaseBranch = LocalBaseBranchService.NormalizeBranchName(applyResult.ResolvedLocalBaseBranch);
@@ -725,6 +751,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(CanPrepareReview));
         OnPropertyChanged(nameof(CanOpenPullRequest));
+        OnPropertyChanged(nameof(CanPostPullRequestReviewStamp));
         OnPropertyChanged(nameof(CanOpenSolution));
         OnPropertyChanged(nameof(CanCancelProcessing));
         OnPropertyChanged(nameof(ShowCancelStoppingText));
@@ -736,6 +763,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         m_browseRepositoryRootCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
         m_browseLocalRepositoryCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
         m_prepareReviewCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
+        m_postPullRequestReviewStampCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
         m_cancelProcessingCommandImpl = new RelayCommand(_ => { }, _ => false);
         m_openPullRequestCommandImpl = new RelayCommand(_ => { }, _ => false);
         m_openSolutionCommandImpl = new RelayCommand(_ => { }, _ => false);
@@ -743,6 +771,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         BrowseRepositoryRootCommand = m_browseRepositoryRootCommandImpl;
         BrowseLocalRepositoryCommand = m_browseLocalRepositoryCommandImpl;
         PrepareReviewCommand = m_prepareReviewCommandImpl;
+        PostPullRequestReviewStampCommand = m_postPullRequestReviewStampCommandImpl;
         CancelProcessingCommand = m_cancelProcessingCommandImpl;
         OpenPullRequestCommand = m_openPullRequestCommandImpl;
         OpenSolutionCommand = m_openSolutionCommandImpl;
@@ -753,9 +782,49 @@ public sealed class MainWindowViewModel : ViewModelBase
         m_browseRepositoryRootCommandImpl?.RaiseCanExecuteChanged();
         m_browseLocalRepositoryCommandImpl?.RaiseCanExecuteChanged();
         m_prepareReviewCommandImpl?.RaiseCanExecuteChanged();
+        m_postPullRequestReviewStampCommandImpl?.RaiseCanExecuteChanged();
         m_cancelProcessingCommandImpl?.RaiseCanExecuteChanged();
         m_openPullRequestCommandImpl?.RaiseCanExecuteChanged();
         m_openSolutionCommandImpl?.RaiseCanExecuteChanged();
+    }
+
+    internal void RecordPostedInlineReviewComment()
+    {
+        m_latestPostedInlineCommentCount++;
+        OnActionStateChanged();
+    }
+
+    internal void MarkPullRequestReviewStampPosted()
+    {
+        if (m_hasPostedPullRequestReviewStamp)
+            return;
+
+        m_hasPostedPullRequestReviewStamp = true;
+        OnActionStateChanged();
+    }
+
+    internal int LatestPullRequestFindingCount => m_latestPullRequestFindingCount;
+
+    internal int LatestPullRequestImportantFindingCount => m_latestPullRequestImportantFindingCount;
+
+    internal int LatestPostedInlineCommentCount => m_latestPostedInlineCommentCount;
+
+    private void ResetPullRequestReviewStampState()
+    {
+        m_latestPullRequestFindingCount = -1;
+        m_latestPullRequestImportantFindingCount = 0;
+        m_latestPostedInlineCommentCount = 0;
+        m_hasPostedPullRequestReviewStamp = false;
+        OnActionStateChanged();
+    }
+
+    private bool CurrentPullRequestMatchesLatestReview()
+    {
+        if (LatestPullRequest == null)
+            return false;
+
+        var normalizedCurrentUrl = NormalizePullRequestUrl(PullRequestUrl);
+        return string.Equals(normalizedCurrentUrl, LatestPullRequest.SourceUrl, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool SetIfDifferent<T>(ref T field, T value)

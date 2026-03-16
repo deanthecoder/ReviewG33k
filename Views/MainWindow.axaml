@@ -235,14 +235,25 @@
                                   Grid.Column="1"
                                   Grid.ColumnSpan="2"
                                   Margin="0,12,0,0"
-                                  ColumnDefinitions="Auto,Auto,Auto,*,Auto">
+                                  ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto">
                                 <Button x:Name="PrepareReviewButton"
                                         Grid.Column="0"
                                         Classes="accent neon"
                                         Command="{Binding PrepareReviewCommand}"
                                         IsEnabled="{Binding CanPrepareReview}"
                                         Content="{Binding PrepareReviewButtonText}" />
-                                <ProgressBar Grid.Column="1" x:Name="BusyIndicatorSpinner"
+                                <Button x:Name="PostPullRequestReviewStampButton"
+                                        Grid.Column="1"
+                                        Margin="8,0,0,0"
+                                        Classes="neon"
+                                        Padding="12,8"
+                                        VerticalAlignment="Center"
+                                        Content="Stamp PR"
+                                        Command="{Binding PostPullRequestReviewStampCommand}"
+                                        IsEnabled="{Binding CanPostPullRequestReviewStamp}"
+                                        IsVisible="{Binding ShowPullRequestInputs}"
+                                        ToolTip.Tip="Post a general Bitbucket PR review comment"/>
+                                <ProgressBar Grid.Column="2" x:Name="BusyIndicatorSpinner"
                                              Width="120"
                                              Margin="8,0"
                                              VerticalAlignment="Center"
@@ -251,7 +262,7 @@
                                              Maximum="{Binding BusyProgressMaximum}"
                                              Value="{Binding BusyProgressValue}" />
                                 <Button x:Name="CancelProcessingButton"
-                                        Grid.Column="2"
+                                        Grid.Column="3"
                                         Margin="0,0,8,0"
                                         Classes="neon"
                                         Padding="8"
@@ -272,7 +283,7 @@
                                     </Grid>
                                 </Button>
                                 <Button x:Name="OpenSolutionButton"
-                                        Grid.Column="4"
+                                        Grid.Column="5"
                                         Classes="neon"
                                         Padding="12,8"
                                         VerticalAlignment="Center"

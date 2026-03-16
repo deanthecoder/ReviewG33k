@@ -192,6 +192,28 @@ public sealed class BitbucketPullRequestMetadataClient : IDisposable
         return (false, CombineCommentErrors(latestInlineError, fallbackResult.ErrorMessage));
     }
 
+    public async Task<(bool Success, string ErrorMessage)> TryAddPullRequestCommentAsync(
+        BitbucketPullRequestReference pullRequest,
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        if (pullRequest == null)
+            return (false, "Pull request reference is not available.");
+        if (string.IsNullOrWhiteSpace(text))
+            return (false, "Comment text is required.");
+
+        var apiUrl = BuildCommentsApiUrl(pullRequest);
+        var payloadJson = JsonSerializer.Serialize(new
+        {
+            text = text.Trim()
+        });
+
+        var result = await TryPostCommentAsync(pullRequest, apiUrl, payloadJson, cancellationToken);
+        return result.Success
+            ? (true, null)
+            : (false, string.IsNullOrWhiteSpace(result.ErrorMessage) ? "Failed to post comment." : result.ErrorMessage);
+    }
+
     public void Dispose()
     {
         if (m_ownsHttpClient)

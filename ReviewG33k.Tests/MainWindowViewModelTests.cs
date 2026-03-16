@@ -651,6 +651,7 @@ public sealed class MainWindowViewModelTests
             () => Task.CompletedTask,
             () => Task.CompletedTask,
             () => Task.CompletedTask,
+            () => Task.CompletedTask,
             () => { },
             () => { },
             () => { });
@@ -683,6 +684,7 @@ public sealed class MainWindowViewModelTests
                 commandInvoked.TrySetResult(true);
                 return Task.CompletedTask;
             },
+            () => Task.CompletedTask,
             () => { },
             () => { },
             () => { });
@@ -701,6 +703,7 @@ public sealed class MainWindowViewModelTests
             IsBusy = true
         };
         viewModel.ConfigureCommands(
+            () => Task.CompletedTask,
             () => Task.CompletedTask,
             () => Task.CompletedTask,
             () => Task.CompletedTask,
@@ -727,6 +730,80 @@ public sealed class MainWindowViewModelTests
             canCancelCurrentOperation: true,
             isCancellationRequested: true);
         Assert.That(viewModel.CancelProcessingCommand.CanExecute(null), Is.False);
+    }
+
+    [Test]
+    public void ApplyReviewWorkflowResultWhenPullRequestReviewCompletedEnablesPostPullRequestReviewStamp()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 0,
+            PullRequestUrl = "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/42"
+        };
+        var pullRequest = new BitbucketPullRequestReference(
+            "bitbucket.example.com",
+            "PROJ",
+            "repo",
+            42,
+            "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/42");
+        var report = new CodeSmellReport();
+        report.AddFinding(CodeReviewFindingSeverity.Suggestion, "sample-rule", "src/Sample.cs", 8, "Suggestion");
+        var applyResult = new MainWindowReviewWorkflowApplyResult(
+            MainWindowReviewPreparationMode.PullRequest,
+            pullRequest,
+            "Example PR",
+            "OPEN",
+            @"C:\repo\CodeReview\PR42",
+            @"C:\repo\CodeReview\PR42\Repo.sln",
+            "Review complete.",
+            null,
+            false,
+            report,
+            null,
+            null);
+
+        viewModel.ApplyReviewWorkflowResult(applyResult);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.CanPostPullRequestReviewStamp, Is.True);
+            Assert.That(viewModel.LatestPullRequestFindingCount, Is.EqualTo(1));
+            Assert.That(viewModel.LatestPostedInlineCommentCount, Is.EqualTo(0));
+        });
+    }
+
+    [Test]
+    public void RecordPostedInlineReviewCommentWhenCalledIncrementsCount()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 0,
+            PullRequestUrl = "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/42"
+        };
+        var pullRequest = new BitbucketPullRequestReference(
+            "bitbucket.example.com",
+            "PROJ",
+            "repo",
+            42,
+            "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/42");
+        var applyResult = new MainWindowReviewWorkflowApplyResult(
+            MainWindowReviewPreparationMode.PullRequest,
+            pullRequest,
+            "Example PR",
+            "OPEN",
+            @"C:\repo\CodeReview\PR42",
+            @"C:\repo\CodeReview\PR42\Repo.sln",
+            "Review complete.",
+            null,
+            false,
+            new CodeSmellReport(),
+            null,
+            null);
+
+        viewModel.ApplyReviewWorkflowResult(applyResult);
+        viewModel.RecordPostedInlineReviewComment();
+
+        Assert.That(viewModel.LatestPostedInlineCommentCount, Is.EqualTo(1));
     }
 
     private static BitbucketPullRequestMetadataClient CreateMetadataClient(IEnumerable<HttpResponseMessage> responses)

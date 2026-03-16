@@ -28,6 +28,7 @@ internal sealed class MainWindowDependencies
         LogNavigationService logNavigationService,
         MainWindowLogFeedService logFeedService,
         ReviewFindingInteractionService reviewFindingInteractionService,
+        PullRequestReviewStampService pullRequestReviewStampService,
         PullRequestUrlExtractionService pullRequestUrlExtractionService,
         MainWindowActionStateService actionStateService,
         LocalBaseBranchService localBaseBranchService,
@@ -43,6 +44,7 @@ internal sealed class MainWindowDependencies
         LogNavigationService = logNavigationService ?? throw new ArgumentNullException(nameof(logNavigationService));
         LogFeedService = logFeedService ?? throw new ArgumentNullException(nameof(logFeedService));
         ReviewFindingInteractionService = reviewFindingInteractionService ?? throw new ArgumentNullException(nameof(reviewFindingInteractionService));
+        PullRequestReviewStampService = pullRequestReviewStampService ?? throw new ArgumentNullException(nameof(pullRequestReviewStampService));
         PullRequestUrlExtractionService = pullRequestUrlExtractionService ?? throw new ArgumentNullException(nameof(pullRequestUrlExtractionService));
         ActionStateService = actionStateService ?? throw new ArgumentNullException(nameof(actionStateService));
         LocalBaseBranchService = localBaseBranchService ?? throw new ArgumentNullException(nameof(localBaseBranchService));
@@ -63,6 +65,8 @@ internal sealed class MainWindowDependencies
     public MainWindowLogFeedService LogFeedService { get; }
 
     public ReviewFindingInteractionService ReviewFindingInteractionService { get; }
+
+    public PullRequestReviewStampService PullRequestReviewStampService { get; }
 
     public PullRequestUrlExtractionService PullRequestUrlExtractionService { get; }
 
