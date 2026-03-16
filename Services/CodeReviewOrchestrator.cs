@@ -25,11 +25,18 @@ public sealed class CodeReviewOrchestrator
 {
     private const string CodeReviewFolderName = "CodeReview";
     private const string CodeReviewMarkerFileName = ".reviewg33k";
-    private readonly GitCommandRunner m_gitCommandRunner;
+    private readonly Func<string, CancellationToken, string[], Task<GitCommandResult>> m_runGitAsync;
 
     public CodeReviewOrchestrator(GitCommandRunner gitCommandRunner)
     {
-        m_gitCommandRunner = gitCommandRunner ?? throw new ArgumentNullException(nameof(gitCommandRunner));
+        ArgumentNullException.ThrowIfNull(gitCommandRunner);
+        m_runGitAsync = (workingDirectory, cancellationToken, arguments) =>
+            gitCommandRunner.RunAsync(workingDirectory, cancellationToken, arguments);
+    }
+
+    internal CodeReviewOrchestrator(Func<string, CancellationToken, string[], Task<GitCommandResult>> runGitAsync)
+    {
+        m_runGitAsync = runGitAsync ?? throw new ArgumentNullException(nameof(runGitAsync));
     }
 
     public async Task<PrepareReviewResult> PrepareReviewAsync(
@@ -56,7 +63,7 @@ public sealed class CodeReviewOrchestrator
         var fetchSpec = $"+refs/pull-requests/{pullRequest.PullRequestId}/from:{reviewRef}";
 
         log($"Fetching PR #{pullRequest.PullRequestId} from origin...");
-        var fetchResult = await m_gitCommandRunner.RunAsync(localRepository, cancellationToken, "fetch", "--prune", "origin", fetchSpec);
+        var fetchResult = await m_runGitAsync(localRepository, cancellationToken, ["fetch", "--prune", "origin", fetchSpec]);
         EnsureSuccess(fetchResult, "Failed to fetch pull request from origin.");
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -100,19 +107,16 @@ public sealed class CodeReviewOrchestrator
         if (!string.IsNullOrWhiteSpace(targetBranch))
         {
             log?.Invoke($"Fetching target branch '{targetBranch}' before merge-commit review...");
-            _ = await m_gitCommandRunner.RunAsync(
+            _ = await m_runGitAsync(
                 localRepository,
                 cancellationToken,
-                "fetch",
-                "--prune",
-                "origin",
-                $"+refs/heads/{targetBranch}:refs/remotes/origin/{targetBranch}");
+                ["fetch", "--prune", "origin", $"+refs/heads/{targetBranch}:refs/remotes/origin/{targetBranch}"]);
         }
 
         if (!await CommitExistsAsync(localRepository, mergeCommitHash, cancellationToken))
         {
             log?.Invoke("Merge commit not present locally. Fetching latest origin refs...");
-            _ = await m_gitCommandRunner.RunAsync(localRepository, cancellationToken, "fetch", "--prune", "origin");
+            _ = await m_runGitAsync(localRepository, cancellationToken, ["fetch", "--prune", "origin"]);
             if (!await CommitExistsAsync(localRepository, mergeCommitHash, cancellationToken))
             {
                 throw new InvalidOperationException(
@@ -171,7 +175,7 @@ public sealed class CodeReviewOrchestrator
         foreach (var repositoryPath in EnumerateTopLevelGitRepositories(repositoryRoot))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var worktreeList = await m_gitCommandRunner.RunAsync(repositoryPath, cancellationToken, "worktree", "list", "--porcelain");
+            var worktreeList = await m_runGitAsync(repositoryPath, cancellationToken, ["worktree", "list", "--porcelain"]);
             if (!worktreeList.IsSuccess)
                 continue;
 
@@ -181,12 +185,12 @@ public sealed class CodeReviewOrchestrator
                 if (!IsChildPathOf(worktreePath, codeReviewRoot.FullName))
                     continue;
 
-                var removeResult = await m_gitCommandRunner.RunAsync(repositoryPath, cancellationToken, "worktree", "remove", "--force", worktreePath);
+                var removeResult = await m_runGitAsync(repositoryPath, cancellationToken, ["worktree", "remove", "--force", worktreePath]);
                 if (!removeResult.IsSuccess)
                     log($"Warning: could not remove registered worktree '{worktreePath}'. {removeResult.GetCombinedOutput()}");
             }
 
-            _ = await m_gitCommandRunner.RunAsync(repositoryPath, cancellationToken, "worktree", "prune");
+            _ = await m_runGitAsync(repositoryPath, cancellationToken, ["worktree", "prune"]);
         }
 
         if (codeReviewRoot.Exists())
@@ -233,8 +237,9 @@ public sealed class CodeReviewOrchestrator
         var targetPath = GetAvailableRepositoryPath(repositoryRoot.ToDir().GetDir(pullRequest.RepoSlug).FullName);
 
         log($"Local repository not found. Cloning '{pullRequest.CloneUrl}'...");
-        var cloneResult = await m_gitCommandRunner.RunAsync(repositoryRoot, cancellationToken, "clone", pullRequest.CloneUrl, targetPath);
+        var cloneResult = await m_runGitAsync(repositoryRoot, cancellationToken, ["clone", pullRequest.CloneUrl, targetPath]);
         EnsureSuccess(cloneResult, "Failed to clone repository.");
+        await EnsureSubmodulesReadyAsync(targetPath, "cloned repository", log, cancellationToken);
 
         log($"Clone complete: {targetPath}");
         return targetPath;
@@ -258,7 +263,7 @@ public sealed class CodeReviewOrchestrator
             if (folderName.Equals(expectedRepo, StringComparison.OrdinalIgnoreCase) && nameOnlyMatch == null)
                 nameOnlyMatch = candidate;
 
-            var remoteUrlResult = await m_gitCommandRunner.RunAsync(candidate, cancellationToken, "config", "--get", "remote.origin.url");
+            var remoteUrlResult = await m_runGitAsync(candidate, cancellationToken, ["config", "--get", "remote.origin.url"]);
             if (!remoteUrlResult.IsSuccess)
                 continue;
 
@@ -357,32 +362,55 @@ public sealed class CodeReviewOrchestrator
         {
             reviewFolderInfo.Parent?.Create();
             log($"Creating worktree copy at '{reviewFolder}' on local branch '{reviewBranch}'...");
-            var addResult = await m_gitCommandRunner.RunAsync(localRepository, cancellationToken, "worktree", "add", "--force", "-B", reviewBranch, reviewFolder, reviewRef);
+            var addResult = await m_runGitAsync(localRepository, cancellationToken, ["worktree", "add", "--force", "-B", reviewBranch, reviewFolder, reviewRef]);
             EnsureSuccess(addResult, "Failed to create review worktree.");
+            await EnsureSubmodulesReadyAsync(reviewFolder, "review worktree", log, cancellationToken);
             return;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        var currentHeadResult = await m_gitCommandRunner.RunAsync(reviewFolder, cancellationToken, "rev-parse", "--verify", "HEAD");
-        var targetHeadResult = await m_gitCommandRunner.RunAsync(localRepository, cancellationToken, "rev-parse", "--verify", reviewRef);
+        var currentHeadResult = await m_runGitAsync(reviewFolder, cancellationToken, ["rev-parse", "--verify", "HEAD"]);
+        var targetHeadResult = await m_runGitAsync(localRepository, cancellationToken, ["rev-parse", "--verify", reviewRef]);
         if (currentHeadResult.IsSuccess &&
             targetHeadResult.IsSuccess &&
             AreSameCommit(currentHeadResult.StandardOutput, targetHeadResult.StandardOutput))
         {
             log($"Reusing existing review worktree at '{reviewFolder}' (already up to date).");
+            await EnsureSubmodulesReadyAsync(reviewFolder, "review worktree", log, cancellationToken);
             return;
         }
 
         log($"Refreshing existing review worktree at '{reviewFolder}'...");
-        var checkoutResult = await m_gitCommandRunner.RunAsync(reviewFolder, cancellationToken, "checkout", "--force", "-B", reviewBranch, reviewRef);
+        var checkoutResult = await m_runGitAsync(reviewFolder, cancellationToken, ["checkout", "--force", "-B", reviewBranch, reviewRef]);
         EnsureSuccess(
             checkoutResult,
             $"Failed to refresh existing review worktree at '{reviewFolder}'. Close apps using this folder and retry.");
 
-        var cleanResult = await m_gitCommandRunner.RunAsync(reviewFolder, cancellationToken, "clean", "-fd");
+        var cleanResult = await m_runGitAsync(reviewFolder, cancellationToken, ["clean", "-fd"]);
         if (!cleanResult.IsSuccess)
             log($"Warning: could not fully clean review worktree. {cleanResult.GetCombinedOutput()}");
+
+        await EnsureSubmodulesReadyAsync(reviewFolder, "review worktree", log, cancellationToken);
+    }
+
+    private async Task EnsureSubmodulesReadyAsync(
+        string repositoryPath,
+        string targetDescription,
+        Action<string> log,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(repositoryPath) || !repositoryPath.ToDir().Exists())
+            return;
+
+        log?.Invoke($"Syncing submodules in {targetDescription}...");
+        var syncResult = await m_runGitAsync(repositoryPath, cancellationToken, ["submodule", "sync", "--recursive"]);
+        EnsureSuccess(syncResult, $"Failed to sync submodules in {targetDescription}.");
+
+        log?.Invoke($"Updating submodules in {targetDescription}...");
+        var updateResult = await m_runGitAsync(repositoryPath, cancellationToken, ["submodule", "update", "--init", "--recursive"]);
+        EnsureSuccess(updateResult, $"Failed to update submodules in {targetDescription}.");
     }
 
     private async Task<bool> CommitExistsAsync(string localRepository, string commitHash, CancellationToken cancellationToken)
@@ -390,12 +418,10 @@ public sealed class CodeReviewOrchestrator
         if (string.IsNullOrWhiteSpace(localRepository) || string.IsNullOrWhiteSpace(commitHash))
             return false;
 
-        var commitResult = await m_gitCommandRunner.RunAsync(
+        var commitResult = await m_runGitAsync(
             localRepository,
             cancellationToken,
-            "cat-file",
-            "-e",
-            $"{commitHash}^{{commit}}");
+            ["cat-file", "-e", $"{commitHash}^{{commit}}"]);
         return commitResult.IsSuccess;
     }
 
