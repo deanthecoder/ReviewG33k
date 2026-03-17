@@ -19,7 +19,7 @@ namespace ReviewG33k.Tests;
 public sealed class CodeReviewOrchestratorTests
 {
     [Test]
-    public async Task PrepareReviewAsyncWhenRepositoryIsClonedSyncsAndUpdatesSubmodules()
+    public async Task PrepareReviewAsyncWhenRepositoryIsClonedDoesNotInitializeSubmodules()
     {
         using var tempRoot = new TempDirectory();
         var commands = new List<(string WorkingDirectory, string CommandText)>();
@@ -54,15 +54,13 @@ public sealed class CodeReviewOrchestratorTests
         Assert.Multiple(() =>
         {
             Assert.That(commands.Select(command => command.CommandText), Does.Contain($"clone {pullRequest.CloneUrl} {result.LocalRepositoryPath}"));
-            Assert.That(commands.Select(command => command.CommandText), Does.Contain("submodule sync --recursive"));
-            Assert.That(commands.Select(command => command.CommandText), Does.Contain("submodule update --init --recursive"));
-            Assert.That(commands.Count(command => command.CommandText == "submodule sync --recursive"), Is.EqualTo(2));
-            Assert.That(commands.Count(command => command.CommandText == "submodule update --init --recursive"), Is.EqualTo(2));
+            Assert.That(commands.Any(command => command.CommandText == "submodule sync --recursive"), Is.False);
+            Assert.That(commands.Any(command => command.CommandText == "submodule update --init --recursive"), Is.False);
         });
     }
 
     [Test]
-    public async Task PrepareReviewAsyncWhenExistingWorktreeIsUpToDateStillUpdatesSubmodules()
+    public async Task PrepareReviewAsyncWhenExistingWorktreeIsUpToDateDoesNotUpdateSubmodules()
     {
         using var tempRoot = new TempDirectory();
         var repoDirectory = tempRoot.GetDir("sample-repo");
@@ -99,8 +97,68 @@ public sealed class CodeReviewOrchestratorTests
         {
             Assert.That(commands.Any(command => command.CommandText.StartsWith("clone ", StringComparison.Ordinal)), Is.False);
             Assert.That(commands.Any(command => command.CommandText.StartsWith("worktree add ", StringComparison.Ordinal)), Is.False);
-            Assert.That(commands.Count(command => command.WorkingDirectory == reviewFolder.FullName && command.CommandText == "submodule sync --recursive"), Is.EqualTo(1));
-            Assert.That(commands.Count(command => command.WorkingDirectory == reviewFolder.FullName && command.CommandText == "submodule update --init --recursive"), Is.EqualTo(1));
+            Assert.That(commands.Any(command => command.WorkingDirectory == reviewFolder.FullName && command.CommandText == "submodule sync --recursive"), Is.False);
+            Assert.That(commands.Any(command => command.WorkingDirectory == reviewFolder.FullName && command.CommandText == "submodule update --init --recursive"), Is.False);
+        });
+    }
+
+    [Test]
+    public async Task EnsureSubmodulesReadyIfNeededAsyncWhenStatusShowsUninitializedSubmoduleSyncsAndUpdates()
+    {
+        using var tempRoot = new TempDirectory();
+        var repoDirectory = tempRoot.GetDir("sample-repo");
+        repoDirectory.Create();
+        repoDirectory.GetDir(".git").Create();
+
+        var commands = new List<(string WorkingDirectory, string CommandText)>();
+        var orchestrator = new CodeReviewOrchestrator((workingDirectory, _, arguments) =>
+        {
+            var commandText = string.Join(" ", arguments);
+            commands.Add((workingDirectory, commandText));
+
+            if (commandText == "submodule status --recursive")
+                return Task.FromResult(new GitCommandResult(0, "-abc123 libs/shared", string.Empty, commandText));
+
+            return Task.FromResult(Success(commandText));
+        });
+
+        await orchestrator.EnsureSubmodulesReadyIfNeededAsync(repoDirectory.FullName, _ => { }, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(commands.Select(command => command.CommandText), Does.Contain("submodule status --recursive"));
+            Assert.That(commands.Select(command => command.CommandText), Does.Contain("submodule sync --recursive"));
+            Assert.That(commands.Select(command => command.CommandText), Does.Contain("submodule update --init --recursive"));
+        });
+    }
+
+    [Test]
+    public async Task EnsureSubmodulesReadyIfNeededAsyncWhenStatusShowsInitializedSubmodulesDoesNotUpdate()
+    {
+        using var tempRoot = new TempDirectory();
+        var repoDirectory = tempRoot.GetDir("sample-repo");
+        repoDirectory.Create();
+        repoDirectory.GetDir(".git").Create();
+
+        var commands = new List<(string WorkingDirectory, string CommandText)>();
+        var orchestrator = new CodeReviewOrchestrator((workingDirectory, _, arguments) =>
+        {
+            var commandText = string.Join(" ", arguments);
+            commands.Add((workingDirectory, commandText));
+
+            if (commandText == "submodule status --recursive")
+                return Task.FromResult(new GitCommandResult(0, " abc123 libs/shared", string.Empty, commandText));
+
+            return Task.FromResult(Success(commandText));
+        });
+
+        await orchestrator.EnsureSubmodulesReadyIfNeededAsync(repoDirectory.FullName, _ => { }, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(commands.Select(command => command.CommandText), Does.Contain("submodule status --recursive"));
+            Assert.That(commands.Any(command => command.CommandText == "submodule sync --recursive"), Is.False);
+            Assert.That(commands.Any(command => command.CommandText == "submodule update --init --recursive"), Is.False);
         });
     }
 

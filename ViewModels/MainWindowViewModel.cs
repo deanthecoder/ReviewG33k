@@ -355,7 +355,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         Func<Task> postPullRequestReviewStampAsync,
         Action cancelProcessing,
         Action openPullRequest,
-        Action openSolution)
+        Func<Task> openSolutionAsync)
     {
         ArgumentNullException.ThrowIfNull(browseRepositoryRootAsync);
         ArgumentNullException.ThrowIfNull(browseLocalRepositoryAsync);
@@ -363,7 +363,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(postPullRequestReviewStampAsync);
         ArgumentNullException.ThrowIfNull(cancelProcessing);
         ArgumentNullException.ThrowIfNull(openPullRequest);
-        ArgumentNullException.ThrowIfNull(openSolution);
+        ArgumentNullException.ThrowIfNull(openSolutionAsync);
 
         m_browseRepositoryRootCommandImpl = new AsyncRelayCommand(
             _ => browseRepositoryRootAsync(),
@@ -383,8 +383,8 @@ public sealed class MainWindowViewModel : ViewModelBase
         m_openPullRequestCommandImpl = new RelayCommand(
             _ => openPullRequest(),
             _ => CanOpenPullRequest);
-        m_openSolutionCommandImpl = new RelayCommand(
-            _ => openSolution(),
+        m_openSolutionCommandImpl = new AsyncRelayCommand(
+            _ => openSolutionAsync(),
             _ => CanOpenSolution);
 
         BrowseRepositoryRootCommand = m_browseRepositoryRootCommandImpl;

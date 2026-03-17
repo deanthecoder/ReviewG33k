@@ -36,6 +36,7 @@ public partial class MainWindow : Window
 
     private readonly CodeLocationOpener m_codeLocationOpener;
     private readonly LogNavigationService m_logNavigationService;
+    private readonly CodeReviewOrchestrator m_reviewOrchestrator;
     private readonly ReviewFindingInteractionService m_reviewFindingInteractionService;
     private readonly PullRequestReviewStampService m_pullRequestReviewStampService;
     private readonly PullRequestUrlExtractionService m_pullRequestUrlExtractionService;
@@ -68,6 +69,7 @@ public partial class MainWindow : Window
         m_settings = dependencies.Settings;
         m_codeLocationOpener = dependencies.CodeLocationOpener;
         m_logNavigationService = dependencies.LogNavigationService;
+        m_reviewOrchestrator = dependencies.ReviewOrchestrator;
         var logFeedService = dependencies.LogFeedService;
         m_reviewFindingInteractionService = dependencies.ReviewFindingInteractionService;
         m_pullRequestReviewStampService = dependencies.PullRequestReviewStampService;
@@ -88,7 +90,7 @@ public partial class MainWindow : Window
             PostPullRequestReviewStampAsync,
             CancelProcessing,
             OpenPullRequest,
-            OpenSolution);
+            OpenSolutionAsync);
         m_isInitializing = true;
         InitializeComponent();
         DataContext = m_viewModel;
@@ -770,7 +772,7 @@ public partial class MainWindow : Window
             $"{message}{Environment.NewLine}{Environment.NewLine}You can still click 'Open PR' to inspect it in Bitbucket.");
     }
 
-    private void OpenSolution()
+    private async Task OpenSolutionAsync()
     {
         if (string.IsNullOrWhiteSpace(m_viewModel.LatestSolutionPath) || !m_viewModel.LatestSolutionPath.ToFile().Exists())
         {
@@ -778,6 +780,20 @@ public partial class MainWindow : Window
             SetStatus("No solution is available from the latest review.");
             return;
         }
+
+        var wasPrepared = false;
+        await ExecuteBusyActionAsync(
+            "Preparing solution...",
+            async cancellationToken =>
+            {
+                await m_reviewOrchestrator.EnsureSubmodulesReadyIfNeededAsync(
+                    m_viewModel.LatestReviewWorktreePath,
+                    AppendLog,
+                    cancellationToken);
+                wasPrepared = true;
+            });
+        if (!wasPrepared)
+            return;
 
         m_viewModel.LatestSolutionPath.ToFile().OpenWithDefaultViewer();
         SetStatus("Opened solution in default application.");

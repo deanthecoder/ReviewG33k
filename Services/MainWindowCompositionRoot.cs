@@ -67,6 +67,7 @@ internal static class MainWindowCompositionRoot
             pullRequestPreviewService,
             codeSmellReportAnalyzer,
             pullRequestMetadataClient,
+            orchestrator,
             startupService,
             reviewWorkflowService);
     }

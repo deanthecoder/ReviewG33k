@@ -239,7 +239,6 @@ public sealed class CodeReviewOrchestrator
         log($"Local repository not found. Cloning '{pullRequest.CloneUrl}'...");
         var cloneResult = await m_runGitAsync(repositoryRoot, cancellationToken, ["clone", pullRequest.CloneUrl, targetPath]);
         EnsureSuccess(cloneResult, "Failed to clone repository.");
-        await EnsureSubmodulesReadyAsync(targetPath, "cloned repository", log, cancellationToken);
 
         log($"Clone complete: {targetPath}");
         return targetPath;
@@ -364,7 +363,6 @@ public sealed class CodeReviewOrchestrator
             log($"Creating worktree copy at '{reviewFolder}' on local branch '{reviewBranch}'...");
             var addResult = await m_runGitAsync(localRepository, cancellationToken, ["worktree", "add", "--force", "-B", reviewBranch, reviewFolder, reviewRef]);
             EnsureSuccess(addResult, "Failed to create review worktree.");
-            await EnsureSubmodulesReadyAsync(reviewFolder, "review worktree", log, cancellationToken);
             return;
         }
 
@@ -377,7 +375,6 @@ public sealed class CodeReviewOrchestrator
             AreSameCommit(currentHeadResult.StandardOutput, targetHeadResult.StandardOutput))
         {
             log($"Reusing existing review worktree at '{reviewFolder}' (already up to date).");
-            await EnsureSubmodulesReadyAsync(reviewFolder, "review worktree", log, cancellationToken);
             return;
         }
 
@@ -390,27 +387,31 @@ public sealed class CodeReviewOrchestrator
         var cleanResult = await m_runGitAsync(reviewFolder, cancellationToken, ["clean", "-fd"]);
         if (!cleanResult.IsSuccess)
             log($"Warning: could not fully clean review worktree. {cleanResult.GetCombinedOutput()}");
-
-        await EnsureSubmodulesReadyAsync(reviewFolder, "review worktree", log, cancellationToken);
     }
 
-    private async Task EnsureSubmodulesReadyAsync(
+    public async Task EnsureSubmodulesReadyIfNeededAsync(
         string repositoryPath,
-        string targetDescription,
         Action<string> log,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(repositoryPath) || !repositoryPath.ToDir().Exists())
             return;
+        if (!RepositoryUtilities.IsGitRepository(repositoryPath))
+            return;
 
-        log?.Invoke($"Syncing submodules in {targetDescription}...");
+        var statusResult = await m_runGitAsync(repositoryPath, cancellationToken, ["submodule", "status", "--recursive"]);
+        EnsureSuccess(statusResult, $"Failed to inspect submodules in '{repositoryPath}'.");
+        if (!RequiresSubmoduleUpdate(statusResult.StandardOutput))
+            return;
+
+        log?.Invoke("Syncing submodules for solution open...");
         var syncResult = await m_runGitAsync(repositoryPath, cancellationToken, ["submodule", "sync", "--recursive"]);
-        EnsureSuccess(syncResult, $"Failed to sync submodules in {targetDescription}.");
+        EnsureSuccess(syncResult, $"Failed to sync submodules in '{repositoryPath}'.");
 
-        log?.Invoke($"Updating submodules in {targetDescription}...");
+        log?.Invoke("Updating submodules for solution open...");
         var updateResult = await m_runGitAsync(repositoryPath, cancellationToken, ["submodule", "update", "--init", "--recursive"]);
-        EnsureSuccess(updateResult, $"Failed to update submodules in {targetDescription}.");
+        EnsureSuccess(updateResult, $"Failed to update submodules in '{repositoryPath}'.");
     }
 
     private async Task<bool> CommitExistsAsync(string localRepository, string commitHash, CancellationToken cancellationToken)
@@ -430,6 +431,18 @@ public sealed class CodeReviewOrchestrator
             NormalizeCommitHash(leftCommit),
             NormalizeCommitHash(rightCommit),
             StringComparison.OrdinalIgnoreCase);
+
+    private static bool RequiresSubmoduleUpdate(string statusOutput)
+    {
+        var lines = (statusOutput ?? string.Empty)
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        if (lines.Length == 0)
+            return false;
+
+        return lines.Any(line =>
+            !string.IsNullOrWhiteSpace(line) &&
+            line[0] is '-' or '+' or 'U');
+    }
 
     private static string NormalizeCommitHash(string value)
     {

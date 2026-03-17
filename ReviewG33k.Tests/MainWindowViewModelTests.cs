@@ -654,7 +654,7 @@ public sealed class MainWindowViewModelTests
             () => Task.CompletedTask,
             () => { },
             () => { },
-            () => { });
+            () => Task.CompletedTask);
 
         Assert.That(viewModel.PrepareReviewCommand.CanExecute(null), Is.True);
     }
@@ -687,7 +687,7 @@ public sealed class MainWindowViewModelTests
             () => Task.CompletedTask,
             () => { },
             () => { },
-            () => { });
+            () => Task.CompletedTask);
 
         viewModel.PrepareReviewCommand.Execute(null);
         var completed = await Task.WhenAny(commandInvoked.Task, Task.Delay(1000));
@@ -709,7 +709,7 @@ public sealed class MainWindowViewModelTests
             () => Task.CompletedTask,
             () => { },
             () => { },
-            () => { });
+            () => Task.CompletedTask);
 
         viewModel.UpdateActionStateInputs(
             canReviewCurrentPullRequest: true,

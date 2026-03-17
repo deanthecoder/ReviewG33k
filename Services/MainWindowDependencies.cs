@@ -36,6 +36,7 @@ internal sealed class MainWindowDependencies
         PullRequestPreviewService pullRequestPreviewService,
         CodeSmellReportAnalyzer codeSmellReportAnalyzer,
         BitbucketPullRequestMetadataClient pullRequestMetadataClient,
+        CodeReviewOrchestrator reviewOrchestrator,
         MainWindowStartupService startupService,
         MainWindowReviewWorkflowService reviewWorkflowService)
     {
@@ -52,6 +53,7 @@ internal sealed class MainWindowDependencies
         PullRequestPreviewService = pullRequestPreviewService ?? throw new ArgumentNullException(nameof(pullRequestPreviewService));
         CodeSmellReportAnalyzer = codeSmellReportAnalyzer ?? throw new ArgumentNullException(nameof(codeSmellReportAnalyzer));
         PullRequestMetadataClient = pullRequestMetadataClient ?? throw new ArgumentNullException(nameof(pullRequestMetadataClient));
+        ReviewOrchestrator = reviewOrchestrator ?? throw new ArgumentNullException(nameof(reviewOrchestrator));
         StartupService = startupService ?? throw new ArgumentNullException(nameof(startupService));
         ReviewWorkflowService = reviewWorkflowService ?? throw new ArgumentNullException(nameof(reviewWorkflowService));
     }
@@ -81,6 +83,8 @@ internal sealed class MainWindowDependencies
     public CodeSmellReportAnalyzer CodeSmellReportAnalyzer { get; }
 
     public BitbucketPullRequestMetadataClient PullRequestMetadataClient { get; }
+
+    public CodeReviewOrchestrator ReviewOrchestrator { get; }
 
     public MainWindowStartupService StartupService { get; }
 
