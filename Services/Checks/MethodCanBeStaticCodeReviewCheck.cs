@@ -99,7 +99,9 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
                 CodeReviewFindingSeverity.Hint,
                 file.Path,
                 lineNumber,
-                $"Method `{method.Identifier.ValueText}{method.ParameterList}` can likely be made static.");
+                string.IsNullOrWhiteSpace(method.Identifier.ValueText)
+                    ? "This method can likely be made static."
+                    : $"Method `{method.Identifier.ValueText}` can likely be made static.");
         }
     }
 

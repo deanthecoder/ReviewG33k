@@ -144,6 +144,45 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenMethodIsProgramMainDoesNotReport()
+    {
+        const string source = """
+            using Avalonia;
+            using Avalonia.ReactiveUI;
+
+            namespace ReviewG33k;
+
+            public static class Program
+            {
+                [STAThread]
+                public static void Main(string[] args) => BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+
+                public static AppBuilder BuildAvaloniaApp() =>
+                    AppBuilder.Configure<App>()
+                        .UsePlatformDetect()
+                        .LogToTrace();
+            }
+            """;
+
+        var lines = source.Replace("\r\n", "\n").Split('\n');
+        var file = new CodeReviewChangedFile(
+            "M",
+            "Program.cs",
+            "Program.cs",
+            source.Replace("\r\n", "\n"),
+            lines,
+            new HashSet<int> { 8, 9 });
+        var context = new CodeReviewAnalysisContext(
+            [file],
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        var report = new CodeSmellReport();
+        var check = new MissingTestsForNewPublicMethodsCodeReviewCheck();
+        check.Analyze(context, report);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AnalyzeWhenFileIsCodeBehindDoesNotReport()
     {
         const string source = """

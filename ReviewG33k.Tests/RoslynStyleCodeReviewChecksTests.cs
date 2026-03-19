@@ -1180,7 +1180,8 @@ public sealed class RoslynStyleCodeReviewChecksTests
 
         Assert.That(report.Findings, Has.Count.EqualTo(1));
         Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
-        Assert.That(report.Findings[0].Message, Does.Contain("`SumAbs(int left, int right)`"));
+        Assert.That(report.Findings[0].Message, Does.Contain("`SumAbs`"));
+        Assert.That(report.Findings[0].Message, Does.Not.Contain("int left, int right"));
     }
 
     [Test]
@@ -1305,7 +1306,7 @@ public sealed class RoslynStyleCodeReviewChecksTests
 
         Assert.That(report.Findings, Has.Count.EqualTo(1));
         Assert.That(report.Findings[0].LineNumber, Is.EqualTo(5));
-        Assert.That(report.Findings[0].Message, Does.Contain("MyMethod(string foo, int num, bool enabled)"));
+        Assert.That(report.Findings[0].Message, Is.EqualTo("Method `MyMethod` can likely be made static."));
     }
 
     [Test]

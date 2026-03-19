@@ -10,6 +10,7 @@
 
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Avalonia.Media;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks.Support;
@@ -51,8 +52,8 @@ public sealed class ReviewResultRow : INotifyPropertyChanged
         Finding = finding;
         RuleId = finding?.RuleId ?? string.Empty;
         CategoryText = CodeReviewFindingCategoryResolver.ResolveCategory(RuleId);
-        IssueSummary = finding?.Message ?? string.Empty;
-        IssueFull = IssueSummary;
+        IssueFull = finding?.Message ?? string.Empty;
+        IssueSummary = CollapseDisplayText(IssueFull);
         IssueLocation = finding == null
             ? string.Empty
             : finding.LineNumber > 0
@@ -189,6 +190,14 @@ public sealed class ReviewResultRow : INotifyPropertyChanged
     public IBrush IssueForeground => IsIncluded ? IncludedIssueBrush : ExcludedIssueBrush;
 
     public IBrush IssueLocationForeground => IsIncluded ? IncludedLocationBrush : ExcludedLocationBrush;
+
+    private static string CollapseDisplayText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        return Regex.Replace(text, @"\s+", " ").Trim();
+    }
 
     private void RaisePropertyChanged([CallerMemberName] string propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

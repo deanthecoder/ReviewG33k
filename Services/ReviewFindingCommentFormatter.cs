@@ -8,8 +8,6 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-using System;
-using ReviewG33k.Models;
 using ReviewG33k.Services.Checks;
 
 namespace ReviewG33k.Services;

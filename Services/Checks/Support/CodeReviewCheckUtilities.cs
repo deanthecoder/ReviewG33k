@@ -271,7 +271,7 @@ internal static class CodeReviewCheckUtilities
             return declaration;
 
         var trailingToken = declaration[(lastWhitespaceIndex + 1)..];
-        if (!Regex.IsMatch(trailingToken, @"^@?[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant))
+        if (!Regex.IsMatch(trailingToken, "^@?[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant))
             return declaration;
 
         var typeName = declaration[..lastWhitespaceIndex].TrimEnd();

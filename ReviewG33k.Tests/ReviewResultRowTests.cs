@@ -83,6 +83,25 @@ public sealed class ReviewResultRowTests
         Assert.That(row.CategoryText, Is.EqualTo(CodeReviewFindingCategoryResolver.Maintainability));
     }
 
+    [Test]
+    public void IssueSummaryWhenFindingMessageContainsNewlinesCollapsesToSingleLine()
+    {
+        var row = new ReviewResultRow(
+            new CodeSmellFinding(
+                CodeReviewFindingSeverity.Hint,
+                "sample-rule",
+                "Sample.cs",
+                12,
+                "Method `Method(int foo,\nstring bar)` can likely be made static."),
+            canOpen: false,
+            commentAvailability: ReviewResultRow.ActionAvailability.Hidden,
+            fixAvailability: ReviewResultRow.ActionAvailability.Hidden,
+            codexPromptAvailability: ReviewResultRow.ActionAvailability.Enabled);
+
+        Assert.That(row.IssueSummary, Is.EqualTo("Method `Method(int foo, string bar)` can likely be made static."));
+        Assert.That(row.IssueFull, Is.EqualTo("Method `Method(int foo,\nstring bar)` can likely be made static."));
+    }
+
     private static ReviewResultRow CreateCodexRow()
     {
         var finding = new CodeSmellFinding(

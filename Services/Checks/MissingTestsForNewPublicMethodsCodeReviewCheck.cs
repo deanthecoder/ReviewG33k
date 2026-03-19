@@ -92,6 +92,8 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
             return false;
         if (method.Modifiers.All(modifier => modifier.RawKind != (int)SyntaxKind.PublicKeyword))
             return false;
+        if (IsEntryPointMethod(method))
+            return false;
         if (IsStandardDisposeEntryPoint(method))
             return false;
         if (method.Modifiers.Any(modifier =>
@@ -104,6 +106,11 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
 
         return method.Body != null || method.ExpressionBody != null;
     }
+
+    private static bool IsEntryPointMethod(MethodDeclarationSyntax method) =>
+        method != null &&
+        string.Equals(method.Identifier.ValueText, "Main", StringComparison.Ordinal) &&
+        method.Modifiers.Any(modifier => modifier.RawKind == (int)SyntaxKind.StaticKeyword);
 
     private static bool IsStandardDisposeEntryPoint(MethodDeclarationSyntax method)
     {

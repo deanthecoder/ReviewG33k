@@ -30,8 +30,7 @@ public sealed class CodeReviewOrchestrator
     public CodeReviewOrchestrator(GitCommandRunner gitCommandRunner)
     {
         ArgumentNullException.ThrowIfNull(gitCommandRunner);
-        m_runGitAsync = (workingDirectory, cancellationToken, arguments) =>
-            gitCommandRunner.RunAsync(workingDirectory, cancellationToken, arguments);
+        m_runGitAsync = gitCommandRunner.RunAsync;
     }
 
     internal CodeReviewOrchestrator(Func<string, CancellationToken, string[], Task<GitCommandResult>> runGitAsync)

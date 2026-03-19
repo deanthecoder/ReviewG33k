@@ -731,7 +731,7 @@ public partial class MainWindow : Window
             return;
 
         var didApply = await m_startupService.TryPrefillPullRequestUrlFromClipboardAsync(
-            () => Clipboard.GetTextAsync(),
+            Clipboard.GetTextAsync,
             m_viewModel.TryApplyPullRequestUrlFromClipboard);
         if (didApply)
             SetStatus("Pull request URL loaded from clipboard.");
