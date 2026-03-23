@@ -63,6 +63,48 @@ public sealed class MissingXmlDocsCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void AnalyzeWhenAddedTypeHasXmlDocsAboveAttributesDoesNotReport()
+    {
+        const string source = """
+            /// <summary>
+            /// Represents the OPC node used to expose low-level Meteor operations.
+            /// </summary>
+            [Description("Meteor-specific control and status for the active print run.")]
+            [OpcNodeName("Meteor")]
+            public class OpcMeteor
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile("SPC/SmartRip/OPC/OpcMeteor.cs", source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenAddedTypeHasXmlDocsAboveMultilineAttributesDoesNotReport()
+    {
+        const string source = """
+            /// <summary>
+            /// Represents the OPC node used to expose low-level Meteor operations.
+            /// </summary>
+            [Description("Meteor-specific control and status for the active print run.")]
+            [ExtendedDescription(
+                "The `Meteor` node exposes low-level Meteor methods.",
+                "",
+                "These methods are only available while a Meteor print run is active.")]
+            [OpcNodeName("Meteor")]
+            public class OpcMeteor
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile("SPC/SmartRip/OPC/OpcMeteor.cs", source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport AnalyzeAddedFile(string path, string source)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');

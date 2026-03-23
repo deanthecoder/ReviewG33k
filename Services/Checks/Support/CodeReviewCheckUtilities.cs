@@ -78,6 +78,8 @@ internal static class CodeReviewCheckUtilities
     public static bool HasXmlDocumentationAbove(IReadOnlyList<string> lines, int declarationLineNumber)
     {
         var index = declarationLineNumber - 2;
+        var encounteredAttribute = false;
+        var encounteredXmlDoc = false;
         while (index >= 0)
         {
             var trimmed = lines[index].Trim();
@@ -88,18 +90,26 @@ internal static class CodeReviewCheckUtilities
             }
 
             if (trimmed.StartsWith("///", StringComparison.Ordinal))
-                return true;
-
-            if (trimmed.StartsWith("[", StringComparison.Ordinal))
             {
+                encounteredXmlDoc = true;
                 index--;
                 continue;
             }
 
-            return false;
+            if (trimmed.StartsWith("[", StringComparison.Ordinal))
+            {
+                encounteredAttribute = true;
+                index--;
+                continue;
+            }
+
+            if (encounteredAttribute)
+                return encounteredXmlDoc;
+
+            return encounteredXmlDoc;
         }
 
-        return false;
+        return encounteredXmlDoc;
     }
 
     public static IEnumerable<CatchBlockInfo> EnumerateAddedCatchBlocks(CodeReviewChangedFile file)

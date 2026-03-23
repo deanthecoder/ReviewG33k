@@ -9,6 +9,9 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System.Linq;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
@@ -28,11 +31,35 @@ public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
             if (CodeReviewFileClassification.IsLikelyTestCodeFile(file))
                 continue;
 
-            if (!CodeReviewCheckUtilities.TryGetDocumentableTypeDeclaration(file.Text, out _, out var declarationLineNumber))
-                continue;
+            var root = RoslynCodeReviewCheckUtilities.ParseRoot(file);
+            var types = root.DescendantNodes().OfType<TypeDeclarationSyntax>();
+            foreach (var type in types)
+            {
+                if (!IsDocumentableType(type))
+                    continue;
 
-            if (!CodeReviewCheckUtilities.HasXmlDocumentationAbove(file.Lines, declarationLineNumber))
+                var declarationLineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(type);
+                if (HasXmlDocumentation(type))
+                    continue;
+
                 AddFinding(report, CodeReviewFindingSeverity.Hint, file.Path, declarationLineNumber, "Missing XML docs on new public/internal type.");
+            }
         }
     }
+
+    private static bool IsDocumentableType(TypeDeclarationSyntax type)
+    {
+        if (type == null)
+            return false;
+
+        return type.Modifiers.Any(modifier =>
+            modifier.IsKind(SyntaxKind.PublicKeyword) ||
+            modifier.IsKind(SyntaxKind.InternalKeyword));
+    }
+
+    private static bool HasXmlDocumentation(TypeDeclarationSyntax type) =>
+        type != null &&
+        type.GetLeadingTrivia().Any(trivia =>
+            trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
+            trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia));
 }
