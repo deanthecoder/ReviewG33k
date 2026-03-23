@@ -2452,3 +2452,32 @@ public sealed class RoslynStyleCodeReviewChecksTests
         return report;
     }
 }
+    [Test]
+    public void PrivateFieldCanBeReadonlyCheckWhenFieldIsGcHandleDoesNotReport()
+    {
+        const string source = """
+            using System;
+            using System.Runtime.InteropServices;
+
+            public sealed class Sample : IDisposable
+            {
+                private GCHandle handle;
+
+                public Sample()
+                {
+                    handle = GCHandle.Alloc(this);
+                }
+
+                public void Dispose()
+                {
+                    if (handle.IsAllocated)
+                        handle.Free();
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new PrivateFieldCanBeReadonlyCodeReviewCheck(), "A", source, Enumerable.Range(1, 18));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+

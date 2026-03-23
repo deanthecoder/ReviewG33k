@@ -81,7 +81,8 @@ public sealed class PrivateFieldCanBeReadonlyCodeReviewCheck : RoslynSemanticCod
         if (fieldSymbol.DeclaredAccessibility != Accessibility.Private ||
             fieldSymbol.IsConst ||
             fieldSymbol.IsReadOnly ||
-            fieldSymbol.IsImplicitlyDeclared)
+            fieldSymbol.IsImplicitlyDeclared ||
+            IsUnsupportedReadonlyFieldType(fieldSymbol.Type))
         {
             return false;
         }
@@ -157,6 +158,10 @@ public sealed class PrivateFieldCanBeReadonlyCodeReviewCheck : RoslynSemanticCod
 
         return hasInitializer || hasAllowedWrite;
     }
+
+    private static bool IsUnsupportedReadonlyFieldType(ITypeSymbol typeSymbol) =>
+        typeSymbol != null &&
+        string.Equals(typeSymbol.ToDisplayString(), "System.Runtime.InteropServices.GCHandle", System.StringComparison.Ordinal);
 
     private static bool TargetsField(SemanticModel semanticModel, ExpressionSyntax expression, IFieldSymbol fieldSymbol)
     {
