@@ -536,20 +536,27 @@ public sealed class CodeReviewOrchestrator
         if (string.IsNullOrWhiteSpace(normalizedRelativePath))
             return null;
 
-        var fullPath = Path.GetFullPath(rootFolder.ToDir().GetFile(normalizedRelativePath).FullName);
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(rootFolder.ToDir().GetFile(normalizedRelativePath).FullName);
+        }
+        catch
+        {
+            return null;
+        }
+
         if (!IsChildPathOf(fullPath, rootFolder))
             return null;
 
         var currentDirectory = fullPath.ToDir().Exists() ? fullPath : fullPath.ToFile().Directory?.FullName;
+        currentDirectory = FindNearestExistingDirectory(currentDirectory, rootFolder);
         if (string.IsNullOrWhiteSpace(currentDirectory))
             return null;
 
         while (!string.IsNullOrWhiteSpace(currentDirectory) && IsChildPathOf(currentDirectory, rootFolder))
         {
-            var matches = Directory
-                .EnumerateFiles(currentDirectory, "*.sln", SearchOption.TopDirectoryOnly)
-                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            var matches = GetSolutionFiles(currentDirectory);
             if (matches.Length > 0)
                 return matches[0];
 
@@ -560,6 +567,41 @@ public sealed class CodeReviewOrchestrator
         }
 
         return null;
+    }
+
+    private static string FindNearestExistingDirectory(string directoryPath, string rootFolder)
+    {
+        var currentDirectory = directoryPath;
+        while (!string.IsNullOrWhiteSpace(currentDirectory) && IsChildPathOf(currentDirectory, rootFolder))
+        {
+            if (currentDirectory.ToDir().Exists())
+                return currentDirectory;
+
+            if (AreSamePath(currentDirectory, rootFolder))
+                break;
+
+            currentDirectory = Path.GetDirectoryName(currentDirectory);
+        }
+
+        return null;
+    }
+
+    private static string[] GetSolutionFiles(string directoryPath)
+    {
+        if (string.IsNullOrWhiteSpace(directoryPath) || !directoryPath.ToDir().Exists())
+            return [];
+
+        try
+        {
+            return Directory
+                .EnumerateFiles(directoryPath, "*.sln", SearchOption.TopDirectoryOnly)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return [];
+        }
     }
 
     private static string NormalizeRelativePath(string path)

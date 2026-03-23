@@ -103,6 +103,43 @@ public sealed class CodeReviewOrchestratorTests
     }
 
     [Test]
+    public async Task PrepareReviewAsyncWhenChangedPathDirectoryNoLongerExistsFallsBackToTopLevelSolution()
+    {
+        using var tempRoot = new TempDirectory();
+        var repoDirectory = tempRoot.GetDir("sample-repo");
+        repoDirectory.Create();
+        repoDirectory.GetDir(".git").Create();
+
+        var reviewFolder = tempRoot.GetDir("CodeReview/sample-repo/PR-42");
+        reviewFolder.Create();
+        reviewFolder.GetDir(".git").Create();
+        var solutionFile = reviewFolder.GetFile("SmartPrintController.sln");
+        solutionFile.WriteAllText("Microsoft Visual Studio Solution File, Format Version 12.00");
+
+        var orchestrator = new CodeReviewOrchestrator((workingDirectory, _, arguments) =>
+        {
+            var commandText = string.Join(" ", arguments);
+
+            if (commandText == "config --get remote.origin.url")
+                return Task.FromResult(new GitCommandResult(0, "https://bitbucket.example.com/scm/proj/sample-repo.git", string.Empty, commandText));
+
+            if (commandText == "rev-parse --verify HEAD" || commandText == "rev-parse --verify refs/remotes/origin/pr/42")
+                return Task.FromResult(new GitCommandResult(0, "abc123", string.Empty, commandText));
+
+            return Task.FromResult(Success(commandText));
+        });
+
+        var result = await orchestrator.PrepareReviewAsync(
+            tempRoot.FullName,
+            CreatePullRequest(),
+            ["Removed/Deep/Nested/DeletedFile.cs"],
+            _ => { },
+            CancellationToken.None);
+
+        Assert.That(result.SolutionPath, Is.EqualTo(solutionFile.FullName));
+    }
+
+    [Test]
     public async Task EnsureSubmodulesReadyIfNeededAsyncWhenStatusShowsUninitializedSubmoduleSyncsAndUpdates()
     {
         using var tempRoot = new TempDirectory();
