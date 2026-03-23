@@ -2481,3 +2481,29 @@ public sealed class RoslynStyleCodeReviewChecksTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void AutoPropertyCheckWhenPropertyIsExplicitInterfaceImplementationDoesNotReport()
+    {
+        const string source = """
+            public interface ISample
+            {
+                int Count { get; set; }
+            }
+
+            public sealed class Sample : ISample
+            {
+                private int count;
+
+                int ISample.Count
+                {
+                    get => count;
+                    set => count = value;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new PropertyCanBeAutoPropertyCodeReviewCheck(), "A", source, Enumerable.Range(1, 15));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+

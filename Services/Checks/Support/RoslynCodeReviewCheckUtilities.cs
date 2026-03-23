@@ -116,6 +116,9 @@ internal static class RoslynCodeReviewCheckUtilities
     public static bool IsPrivateProperty(PropertyDeclarationSyntax property) =>
         property.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PrivateKeyword));
 
+    public static bool IsExplicitInterfaceImplementation(PropertyDeclarationSyntax property) =>
+        property?.ExplicitInterfaceSpecifier != null;
+
     public static bool IsSimpleAutoProperty(PropertyDeclarationSyntax property)
     {
         if (property.AccessorList == null || property.ExpressionBody != null)

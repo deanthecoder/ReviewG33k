@@ -32,6 +32,8 @@ public sealed class PropertyCanBeAutoPropertyCodeReviewCheck : CodeReviewCheckBa
                     continue;
                 if (RoslynCodeReviewCheckUtilities.IsPrivateProperty(property))
                     continue;
+                if (RoslynCodeReviewCheckUtilities.IsExplicitInterfaceImplementation(property))
+                    continue;
 
                 if (!RoslynCodeReviewCheckUtilities.TryGetSimplePropertyBackingField(property, out _))
                     continue;
