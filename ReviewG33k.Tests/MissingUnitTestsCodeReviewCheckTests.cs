@@ -93,7 +93,40 @@ public sealed class MissingUnitTestsCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
-    private static CodeSmellReport AnalyzeAddedFile(string path, string source, bool hasAnyAddedTestFiles)
+    [Test]
+    public void AnalyzeWhenMatchingExistingTestFileWasModifiedDoesNotReportMissingUnitTests()
+    {
+        const string source = """
+            public sealed class PrinterInterfaceLock
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile(
+            path: "SPC/MeteorOpc/PrinterInterfaceLock.cs",
+            source: source,
+            addedTestFileNames: new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            changedTestFileNames: new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "PrinterInterfaceLockTests.cs" });
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    private static CodeSmellReport AnalyzeAddedFile(
+        string path,
+        string source,
+        bool hasAnyAddedTestFiles)
+    {
+        var addedTestFileNames = hasAnyAddedTestFiles
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "UnrelatedTests.cs" }
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return AnalyzeAddedFile(path, source, addedTestFileNames, addedTestFileNames);
+    }
+
+    private static CodeSmellReport AnalyzeAddedFile(
+        string path,
+        string source,
+        IReadOnlySet<string> addedTestFileNames,
+        IReadOnlySet<string> changedTestFileNames)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
         var lines = normalizedSource.Split('\n');
@@ -104,10 +137,7 @@ public sealed class MissingUnitTestsCodeReviewCheckTests
             normalizedSource,
             lines,
             new HashSet<int>(Enumerable.Range(1, lines.Length)));
-        var addedTestFileNames = hasAnyAddedTestFiles
-            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "UnrelatedTests.cs" }
-            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var context = new CodeReviewAnalysisContext([changedFile], addedTestFileNames);
+        var context = new CodeReviewAnalysisContext([changedFile], addedTestFileNames, changedTestFileNames);
 
         var report = new CodeSmellReport();
         var check = new MissingUnitTestsCodeReviewCheck();

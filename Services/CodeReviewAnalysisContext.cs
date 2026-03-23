@@ -21,9 +21,21 @@ public sealed class CodeReviewAnalysisContext
         IReadOnlyList<CodeReviewChangedFile> resxFiles = null,
         IReadOnlyList<CodeReviewChangedFile> allChangedFiles = null,
         bool isEntireRepositoryScan = false)
+        : this(files, addedTestFilesByName, addedTestFilesByName, resxFiles, allChangedFiles, isEntireRepositoryScan)
+    {
+    }
+
+    public CodeReviewAnalysisContext(
+        IReadOnlyList<CodeReviewChangedFile> files,
+        IReadOnlySet<string> addedTestFilesByName,
+        IReadOnlySet<string> changedTestFilesByName,
+        IReadOnlyList<CodeReviewChangedFile> resxFiles = null,
+        IReadOnlyList<CodeReviewChangedFile> allChangedFiles = null,
+        bool isEntireRepositoryScan = false)
     {
         Files = files ?? throw new ArgumentNullException(nameof(files));
         AddedTestFilesByName = addedTestFilesByName ?? throw new ArgumentNullException(nameof(addedTestFilesByName));
+        ChangedTestFilesByName = changedTestFilesByName ?? throw new ArgumentNullException(nameof(changedTestFilesByName));
         ResxFiles = resxFiles ?? [];
         AllChangedFiles = allChangedFiles ?? Files;
         IsEntireRepositoryScan = isEntireRepositoryScan;
@@ -33,6 +45,8 @@ public sealed class CodeReviewAnalysisContext
 
     public IReadOnlySet<string> AddedTestFilesByName { get; }
 
+    public IReadOnlySet<string> ChangedTestFilesByName { get; }
+
     public IReadOnlyList<CodeReviewChangedFile> ResxFiles { get; }
 
     public IReadOnlyList<CodeReviewChangedFile> AllChangedFiles { get; }
@@ -40,4 +54,6 @@ public sealed class CodeReviewAnalysisContext
     public bool IsEntireRepositoryScan { get; }
 
     public bool HasAnyAddedTestFiles => AddedTestFilesByName.Count > 0;
+
+    public bool HasAnyChangedTestFiles => ChangedTestFilesByName.Count > 0;
 }

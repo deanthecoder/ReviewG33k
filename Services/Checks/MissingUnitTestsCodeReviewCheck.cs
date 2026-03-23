@@ -40,10 +40,10 @@ public sealed class MissingUnitTestsCodeReviewCheck : CodeReviewCheckBase
                 continue;
 
             var expectedTestFileName = $"{typeName}Tests.cs";
-            if (context.AddedTestFilesByName.Contains(expectedTestFileName))
+            if (context.ChangedTestFilesByName.Contains(expectedTestFileName))
                 continue;
 
-            if (!context.HasAnyAddedTestFiles)
+            if (!context.HasAnyChangedTestFiles)
             {
                 AddFinding(report, CodeReviewFindingSeverity.Suggestion, file.Path, declarationLineNumber, $"No new unit test(s) added for new type '{typeName}'.");
                 continue;

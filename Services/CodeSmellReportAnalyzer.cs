@@ -244,8 +244,13 @@ public sealed class CodeSmellReportAnalyzer
                 .Where(Support.CodeReviewFileClassification.IsLikelyTestCodeFile)
                 .Select(file => Path.GetFileName(file.Path)),
             StringComparer.OrdinalIgnoreCase);
+        var changedTestFilesByName = new HashSet<string>(
+            csharpFiles
+                .Where(Support.CodeReviewFileClassification.IsLikelyTestCodeFile)
+                .Select(file => Path.GetFileName(file.Path)),
+            StringComparer.OrdinalIgnoreCase);
 
-        return new CodeReviewAnalysisContext(csharpFiles, addedTestFilesByName, resxFiles, sourceFiles, isEntireRepositoryScan);
+        return new CodeReviewAnalysisContext(csharpFiles, addedTestFilesByName, changedTestFilesByName, resxFiles, sourceFiles, isEntireRepositoryScan);
     }
 
     private static CodeReviewChangedFile CreateWholeFileClone(CodeReviewChangedFile file)
