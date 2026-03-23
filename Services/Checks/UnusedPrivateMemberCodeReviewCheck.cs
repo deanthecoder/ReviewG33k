@@ -117,6 +117,8 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
         {
             if (!RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, method.Span))
                 continue;
+            if (method.ExplicitInterfaceSpecifier != null)
+                continue;
             if (IsInPartialType(method))
                 continue;
 
@@ -147,6 +149,8 @@ public sealed class UnusedPrivateMemberCodeReviewCheck : RoslynSemanticCodeRevie
         foreach (var property in root.DescendantNodes().OfType<PropertyDeclarationSyntax>())
         {
             if (!RoslynCodeReviewCheckUtilities.SpanContainsAddedLine(file, property.Span))
+                continue;
+            if (RoslynCodeReviewCheckUtilities.IsExplicitInterfaceImplementation(property))
                 continue;
             if (IsInPartialType(property))
                 continue;

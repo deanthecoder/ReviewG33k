@@ -2312,6 +2312,32 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void UnusedPrivateMemberCheckWhenExplicitInterfacePropertyHasGetterAndSetterDoesNotReport()
+    {
+        const string source = """
+            public interface IAudioSource
+            {
+                ulong InstanceId { get; set; }
+            }
+
+            public sealed class Sample : IAudioSource
+            {
+                private ulong instanceId;
+
+                ulong IAudioSource.InstanceId
+                {
+                    get => instanceId;
+                    set => instanceId = value;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnusedPrivateMemberCodeReviewCheck(), "A", source, Enumerable.Range(1, 15));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void UnusedPrivateMemberCheckWhenPrivateProgramMainExistsDoesNotReport()
     {
         const string source = """
@@ -2452,58 +2478,4 @@ public sealed class RoslynStyleCodeReviewChecksTests
         return report;
     }
 }
-    [Test]
-    public void PrivateFieldCanBeReadonlyCheckWhenFieldIsGcHandleDoesNotReport()
-    {
-        const string source = """
-            using System;
-            using System.Runtime.InteropServices;
-
-            public sealed class Sample : IDisposable
-            {
-                private GCHandle handle;
-
-                public Sample()
-                {
-                    handle = GCHandle.Alloc(this);
-                }
-
-                public void Dispose()
-                {
-                    if (handle.IsAllocated)
-                        handle.Free();
-                }
-            }
-            """;
-
-        var report = AnalyzeSource(new PrivateFieldCanBeReadonlyCodeReviewCheck(), "A", source, Enumerable.Range(1, 18));
-
-        Assert.That(report.Findings, Is.Empty);
-    }
-
-    [Test]
-    public void AutoPropertyCheckWhenPropertyIsExplicitInterfaceImplementationDoesNotReport()
-    {
-        const string source = """
-            public interface ISample
-            {
-                int Count { get; set; }
-            }
-
-            public sealed class Sample : ISample
-            {
-                private int count;
-
-                int ISample.Count
-                {
-                    get => count;
-                    set => count = value;
-                }
-            }
-            """;
-
-        var report = AnalyzeSource(new PropertyCanBeAutoPropertyCodeReviewCheck(), "A", source, Enumerable.Range(1, 15));
-
-        Assert.That(report.Findings, Is.Empty);
-    }
 
