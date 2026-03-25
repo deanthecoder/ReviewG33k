@@ -202,6 +202,54 @@ public sealed class DuplicateCodeBlockCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenMarkupOnlyDuplicatesWindowAttributeBoilerplateDoesNotReport()
+    {
+        using var tempRoot = new TempDirectory();
+        var existingFile = tempRoot.GetDir("Views").GetFile("ExistingDialog.xaml");
+        existingFile.Directory!.Create();
+        existingFile.WriteAllText(
+            """
+            <Window
+                xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                mc:Ignorable="d"
+                TextElement.FontWeight="Regular"
+                TextElement.FontSize="13"
+                TextOptions.TextFormattingMode="Ideal"
+                TextOptions.TextRenderingMode="Auto"
+                UseLayoutRounding="True"
+                WindowStartupLocation="CenterOwner"
+                SizeToContent="Height"
+                ResizeMode="NoResize">
+            </Window>
+            """);
+
+        var changedFile = CreateChangedFile(
+            tempRoot,
+            "Views/NewDialog.xaml",
+            """
+            <Window
+                xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                mc:Ignorable="d"
+                TextElement.FontWeight="Regular"
+                TextElement.FontSize="13"
+                TextOptions.TextFormattingMode="Ideal"
+                TextOptions.TextRenderingMode="Auto"
+                UseLayoutRounding="True"
+                WindowStartupLocation="CenterOwner"
+                SizeToContent="Height"
+                ResizeMode="NoResize">
+            </Window>
+            """,
+            "A");
+
+        var report = Analyze([changedFile]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AnalyzeWhenMarkupDuplicatesSubstantiveUiBlockReportsSuggestion()
     {
         using var tempRoot = new TempDirectory();

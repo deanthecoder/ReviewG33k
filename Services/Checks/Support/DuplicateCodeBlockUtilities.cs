@@ -22,6 +22,7 @@ internal static class DuplicateCodeBlockUtilities
 {
     private static readonly string[] DuplicateCheckSearchPatterns = ["*.cs", "*.axaml", "*.xaml"];
     private static readonly Regex WhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
+    private static readonly Regex MarkupAttributeOnlyLineRegex = new(@"^[A-Za-z_][A-Za-z0-9_:\.-]*\s*=", RegexOptions.Compiled);
     private static readonly HashSet<string> TrivialMarkupElementNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "Grid",
@@ -194,6 +195,9 @@ internal static class DuplicateCodeBlockUtilities
     private static bool IsSubstantiveMarkupLine(string normalizedLine)
     {
         if (string.IsNullOrWhiteSpace(normalizedLine))
+            return false;
+
+        if (MarkupAttributeOnlyLineRegex.IsMatch(normalizedLine))
             return false;
 
         if (TryGetMarkupElementName(normalizedLine, out var elementName) &&
