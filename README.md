@@ -103,6 +103,8 @@ ReviewG33k labels each finding with one of these categories:
 | Method can be static | Instance methods that do not use instance state. |
 | Local variable can be const | Local values that never change and can safely be `const`. |
 | Duplicated code blocks | Newly added blocks that exactly match existing repository code after ignoring comments and `using` lines. |
+| Bool methods with constant returns | Non-private `bool` methods whose control flow always returns the same literal value. |
+| Private bool methods with constant returns | Private `bool` methods whose callers can likely be simplified because they always return the same literal value. |
 | Unused local variables | Local variables that are declared/assigned but never read. |
 | Multiple classes per file | Files that define more than one class (prefer one class per file). |
 | Redundant self lookup | Needlessly resolving an object from itself (or equivalent redundant lookup). |
