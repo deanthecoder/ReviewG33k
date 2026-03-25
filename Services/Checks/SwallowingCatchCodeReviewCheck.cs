@@ -8,7 +8,11 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
@@ -28,6 +32,7 @@ public sealed class SwallowingCatchCodeReviewCheck : CodeReviewCheckBase
     {
         foreach (var file in context.Files)
         {
+            var tryPatternCatchStartLines = GetTryPatternCatchStartLines(file.Text);
             foreach (var catchBlock in CodeReviewCheckUtilities.EnumerateAddedCatchBlocks(file))
             {
                 if (CodeReviewCheckUtilities.IsCancellationCatch(catchBlock))
@@ -45,6 +50,10 @@ public sealed class SwallowingCatchCodeReviewCheck : CodeReviewCheckBase
                 var (severity, message) = ClassifyCatchBody(catchBlock.BodyWithoutComments);
                 if (severity == CodeReviewFindingSeverity.Ok)
                     continue;
+
+                if (severity == CodeReviewFindingSeverity.Hint && tryPatternCatchStartLines.Contains(catchBlock.StartLine))
+                    continue;
+
                 AddFinding(report, severity, file.Path, catchBlock.StartLine, message);
             }
         }
@@ -105,5 +114,40 @@ public sealed class SwallowingCatchCodeReviewCheck : CodeReviewCheckBase
         return (
             CodeReviewFindingSeverity.Important,
             "Catch block appears to swallow exceptions.");
+    }
+
+    private static HashSet<int> GetTryPatternCatchStartLines(string sourceText)
+    {
+        var tryPatternCatchStartLines = new HashSet<int>();
+        if (string.IsNullOrWhiteSpace(sourceText))
+            return tryPatternCatchStartLines;
+
+        var syntaxTree = CSharpSyntaxTree.ParseText(sourceText);
+        var root = syntaxTree.GetCompilationUnitRoot();
+        foreach (var catchClause in root.DescendantNodes().OfType<CatchClauseSyntax>())
+        {
+            var method = catchClause.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+            if (!IsTryBooleanMethod(method))
+                continue;
+
+            var catchLineSpan = syntaxTree.GetLineSpan(catchClause.Span);
+            tryPatternCatchStartLines.Add(catchLineSpan.StartLinePosition.Line + 1);
+        }
+
+        return tryPatternCatchStartLines;
+    }
+
+    private static bool IsTryBooleanMethod(MethodDeclarationSyntax method)
+    {
+        if (method == null)
+            return false;
+
+        if (!method.Identifier.ValueText.StartsWith("Try", System.StringComparison.Ordinal))
+            return false;
+
+        var returnTypeText = method.ReturnType.ToString();
+        return returnTypeText == "bool" ||
+               returnTypeText == "System.Boolean" ||
+               returnTypeText == "global::System.Boolean";
     }
 }

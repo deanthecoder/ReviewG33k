@@ -284,7 +284,7 @@ public sealed class CatchCodeReviewCheckTests
     }
 
     [Test]
-    public void SwallowingCatchCheckWhenCatchReturnsFailureReportsHint()
+    public void SwallowingCatchCheckWhenTryMethodReturnsFailureDoesNotReport()
     {
         const string source = """
             using System;
@@ -293,6 +293,34 @@ public sealed class CatchCodeReviewCheckTests
             public sealed class Sample
             {
                 public bool TryRead()
+                {
+                    try
+                    {
+                        throw new FileNotFoundException();
+                    }
+                    catch (FileNotFoundException ex)
+                    {
+                        return false;
+                    }
+                }
+            }
+            """;
+
+        var report = Analyze(source, new SwallowingCatchCodeReviewCheck());
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void SwallowingCatchCheckWhenNonTryMethodReturnsFailureReportsHint()
+    {
+        const string source = """
+            using System;
+            using System.IO;
+
+            public sealed class Sample
+            {
+                public bool Read()
                 {
                     try
                     {
