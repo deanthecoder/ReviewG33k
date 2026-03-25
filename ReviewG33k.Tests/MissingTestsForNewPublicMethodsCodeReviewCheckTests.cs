@@ -183,6 +183,32 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenMethodIsPublicBootstrapHelperOnProgramDoesNotReport()
+    {
+        const string source = """
+            using Avalonia;
+            using Avalonia.ReactiveUI;
+
+            namespace ReviewG33k;
+
+            public static class Program
+            {
+                [STAThread]
+                public static void Main(string[] args) => BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+
+                public static AppBuilder BuildAvaloniaApp() =>
+                    AppBuilder.Configure<App>()
+                        .UsePlatformDetect()
+                        .LogToTrace();
+            }
+            """;
+
+        var report = AnalyzeWithProductionPath(source, "Program.cs");
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AnalyzeWhenFileIsCodeBehindDoesNotReport()
     {
         const string source = """

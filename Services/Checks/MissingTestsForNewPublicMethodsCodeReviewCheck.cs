@@ -60,6 +60,8 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
                 var containingType = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
                 if (containingType == null || containingType is InterfaceDeclarationSyntax)
                     continue;
+                if (IsProgramType(containingType))
+                    continue;
                 if (IsLikelyTestFixtureType(containingType))
                     continue;
 
@@ -161,4 +163,8 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
 
         return false;
     }
+
+    private static bool IsProgramType(TypeDeclarationSyntax typeDeclaration) =>
+        typeDeclaration != null &&
+        string.Equals(typeDeclaration.Identifier.ValueText, "Program", StringComparison.Ordinal);
 }

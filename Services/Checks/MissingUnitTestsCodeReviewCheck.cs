@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System;
 using System.Linq;
 using ReviewG33k.Services.Checks.Support;
 
@@ -37,6 +38,8 @@ public sealed class MissingUnitTestsCodeReviewCheck : CodeReviewCheckBase
                 continue;
 
             if (!CodeReviewCheckUtilities.TryGetPublicTypeDeclaration(file.Text, out var typeName, out var declarationLineNumber))
+                continue;
+            if (string.Equals(typeName, "Program", StringComparison.Ordinal))
                 continue;
 
             var expectedTestFileName = $"{typeName}Tests.cs";

@@ -56,6 +56,23 @@ public sealed class MissingUnitTestsCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenAddedProgramTypeDoesNotReportMissingUnitTests()
+    {
+        const string source = """
+            public static class Program
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile(
+            path: "Program.cs",
+            source: source,
+            hasAnyAddedTestFiles: false);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AnalyzeWhenFileIsCodeBehindDoesNotReportMissingUnitTests()
     {
         const string source = """

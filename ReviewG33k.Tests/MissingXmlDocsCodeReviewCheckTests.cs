@@ -49,6 +49,20 @@ public sealed class MissingXmlDocsCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenAddedProgramTypeHasNoXmlDocsDoesNotReport()
+    {
+        const string source = """
+            internal static class Program
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile("Program.cs", source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AnalyzeWhenAddedTypeIsATestFixtureDoesNotReport()
     {
         const string source = """

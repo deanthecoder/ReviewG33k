@@ -52,6 +52,9 @@ public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
         if (type == null)
             return false;
 
+        if (type.Identifier.ValueText == "Program")
+            return false;
+
         return type.Modifiers.Any(modifier =>
             modifier.IsKind(SyntaxKind.PublicKeyword) ||
             modifier.IsKind(SyntaxKind.InternalKeyword));
