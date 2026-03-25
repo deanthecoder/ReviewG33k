@@ -50,6 +50,8 @@ public sealed class CodeSmellReportAnalyzerTests
         var consecutiveBooleanArgumentsCheck = analyzer.Checks.OfType<ConsecutiveBooleanArgumentsCodeReviewCheck>().Single();
         var consecutiveNullArgumentsCheck = analyzer.Checks.OfType<ConsecutiveNullArgumentsCodeReviewCheck>().Single();
         var duplicateCodeBlockCheck = analyzer.Checks.OfType<DuplicateCodeBlockCodeReviewCheck>().Single();
+        var booleanMethodAlwaysReturnsSameValueCheck = analyzer.Checks.OfType<BooleanMethodAlwaysReturnsSameValueCodeReviewCheck>().Single();
+        var privateBooleanMethodAlwaysReturnsSameValueCheck = analyzer.Checks.OfType<PrivateBooleanMethodAlwaysReturnsSameValueCodeReviewCheck>().Single();
         var resxMissingLocaleKeysCheck = analyzer.Checks.OfType<ResxMissingLocaleKeysCodeReviewCheck>().Single();
         var resxUnexpectedExtraKeysCheck = analyzer.Checks.OfType<ResxUnexpectedExtraKeysCodeReviewCheck>().Single();
         var unusedUsingCheck = analyzer.Checks.OfType<UnusedUsingRoslynCodeReviewCheck>().Single();
@@ -68,6 +70,8 @@ public sealed class CodeSmellReportAnalyzerTests
         Assert.That(consecutiveBooleanArgumentsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(consecutiveNullArgumentsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(duplicateCodeBlockCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(booleanMethodAlwaysReturnsSameValueCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(privateBooleanMethodAlwaysReturnsSameValueCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(resxMissingLocaleKeysCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
         Assert.That(resxUnexpectedExtraKeysCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
         Assert.That(unusedUsingCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));

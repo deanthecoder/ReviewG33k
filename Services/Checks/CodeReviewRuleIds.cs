@@ -75,4 +75,6 @@ public static class CodeReviewRuleIds
     public const string LambdaCanBeMethodGroup = "lambda-can-be-method-group";
     public const string DuplicateCodeBlock = "duplicate-code-block";
     public const string NumericStringCultureForFileWrite = "numeric-string-culture-for-file-write";
+    public const string BooleanMethodAlwaysReturnsSameValue = "bool-method-always-returns-same-value";
+    public const string PrivateBooleanMethodAlwaysReturnsSameValue = "private-bool-method-always-returns-same-value";
 }

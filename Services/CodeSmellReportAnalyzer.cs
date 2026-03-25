@@ -303,6 +303,8 @@ public sealed class CodeSmellReportAnalyzer
         new MethodCanBeStaticCodeReviewCheck(),
         new RedundantSelfLookupCodeReviewCheck(),
         new BooleanLiteralComparisonCodeReviewCheck(),
+        new BooleanMethodAlwaysReturnsSameValueCodeReviewCheck(),
+        new PrivateBooleanMethodAlwaysReturnsSameValueCodeReviewCheck(),
         new ConsecutiveBooleanArgumentsCodeReviewCheck(),
         new ConsecutiveNullArgumentsCodeReviewCheck(),
         new LambdaCanBeMethodGroupCodeReviewCheck(),

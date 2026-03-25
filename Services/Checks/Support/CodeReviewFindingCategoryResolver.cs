@@ -86,6 +86,8 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.ConstructorTooLong or
             "local-variable-can-be-const" or
             CodeReviewRuleIds.DuplicateCodeBlock or
+            CodeReviewRuleIds.BooleanMethodAlwaysReturnsSameValue or
+            CodeReviewRuleIds.PrivateBooleanMethodAlwaysReturnsSameValue or
             CodeReviewRuleIds.PrivateFieldUsedInSingleMethod or
             CodeReviewRuleIds.UnusedLocalVariable or
             CodeReviewRuleIds.UnusedPrivateMember => Maintainability,

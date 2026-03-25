@@ -36,6 +36,9 @@ public sealed class CodeReviewFindingCategoryResolverTests
             Assert.That(
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.PrivateFieldUsedInSingleMethod),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Maintainability));
+            Assert.That(
+                CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.PrivateBooleanMethodAlwaysReturnsSameValue),
+                Is.EqualTo(CodeReviewFindingCategoryResolver.Maintainability));
         });
     }
 
