@@ -22,7 +22,7 @@ public sealed class RepositoryUtilitiesTests
         using var tempRoot = new TempDirectory();
         tempRoot.GetFile("Root.sln").WriteAllText(string.Empty);
         tempRoot.GetDir("src/App").Create();
-        tempRoot.GetDir("src/App").GetFile("Nested.sln").WriteAllText(string.Empty);
+        tempRoot.GetFile("src/App/Nested.sln").WriteAllText(string.Empty);
 
         var solutionPath = RepositoryUtilities.FindTopLevelSolutionFile(tempRoot.FullName);
 
@@ -34,12 +34,12 @@ public sealed class RepositoryUtilitiesTests
     {
         using var tempRoot = new TempDirectory();
         tempRoot.GetDir("bin/Debug").Create();
-        tempRoot.GetDir("bin/Debug").GetFile("Generated.sln").WriteAllText(string.Empty);
+        tempRoot.GetFile("bin/Debug/Generated.sln").WriteAllText(string.Empty);
         tempRoot.GetDir("src/App").Create();
-        tempRoot.GetDir("src/App").GetFile("Actual.sln").WriteAllText(string.Empty);
+        tempRoot.GetFile("src/App/Actual.sln").WriteAllText(string.Empty);
 
         var solutionPath = RepositoryUtilities.FindTopLevelSolutionFile(tempRoot.FullName);
 
-        Assert.That(solutionPath, Is.EqualTo(tempRoot.GetDir("src/App").GetFile("Actual.sln").FullName));
+        Assert.That(solutionPath, Is.EqualTo(tempRoot.GetFile("src/App/Actual.sln").FullName));
     }
 }

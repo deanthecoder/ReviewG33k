@@ -381,15 +381,15 @@ public sealed class CodeLocationOpener
 
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (!string.IsNullOrWhiteSpace(localAppData))
-            yield return localAppData.ToDir().GetDir("Programs/Microsoft VS Code").GetFile("Code.exe").FullName;
+            yield return localAppData.ToDir().GetFile("Programs/Microsoft VS Code/Code.exe").FullName;
 
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         if (!string.IsNullOrWhiteSpace(programFiles))
-            yield return programFiles.ToDir().GetDir("Microsoft VS Code").GetFile("Code.exe").FullName;
+            yield return programFiles.ToDir().GetFile("Microsoft VS Code/Code.exe").FullName;
 
         var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
         if (!string.IsNullOrWhiteSpace(programFilesX86))
-            yield return programFilesX86.ToDir().GetDir("Microsoft VS Code").GetFile("Code.exe").FullName;
+            yield return programFilesX86.ToDir().GetFile("Microsoft VS Code/Code.exe").FullName;
     }
 
     private static IEnumerable<string> GetVisualStudioCandidates()
@@ -411,7 +411,7 @@ public sealed class CodeLocationOpener
         foreach (var yearDir in vsRoot.EnumerateDirectories())
         foreach (var skuDir in yearDir.EnumerateDirectories())
         {
-            var devenv = skuDir.GetDir("Common7/IDE").GetFile("devenv.exe");
+            var devenv = skuDir.GetFile("Common7/IDE/devenv.exe");
             yield return devenv.FullName;
         }
     }

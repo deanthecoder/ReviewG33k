@@ -24,9 +24,9 @@ public sealed class LocalRepositoryChangedFileSourceTests
         tempRoot.GetDir("bin/Debug").Create();
         tempRoot.GetDir("dist/output").Create();
 
-        tempRoot.GetDir("src/App").GetFile("Worker.cs").WriteAllText("public sealed class Worker { }");
-        tempRoot.GetDir("bin/Debug").GetFile("Generated.cs").WriteAllText("public sealed class Generated { }");
-        tempRoot.GetDir("dist/output").GetFile("Built.cs").WriteAllText("public sealed class Built { }");
+        tempRoot.GetFile("src/App/Worker.cs").WriteAllText("public sealed class Worker { }");
+        tempRoot.GetFile("bin/Debug/Generated.cs").WriteAllText("public sealed class Generated { }");
+        tempRoot.GetFile("dist/output/Built.cs").WriteAllText("public sealed class Built { }");
 
         var source = new LocalRepositoryChangedFileSource(tempRoot.FullName);
 
@@ -42,9 +42,9 @@ public sealed class LocalRepositoryChangedFileSourceTests
         tempRoot.GetDir("src/App").Create();
         tempRoot.GetDir("bin/Debug").Create();
 
-        tempRoot.GetDir("src/App").GetFile("Tracked.cs").WriteAllText("public sealed class Tracked { }");
-        tempRoot.GetDir("src/App").GetFile("Untracked.cs").WriteAllText("public sealed class Untracked { }");
-        tempRoot.GetDir("bin/Debug").GetFile("Generated.cs").WriteAllText("public sealed class Generated { }");
+        tempRoot.GetFile("src/App/Tracked.cs").WriteAllText("public sealed class Tracked { }");
+        tempRoot.GetFile("src/App/Untracked.cs").WriteAllText("public sealed class Untracked { }");
+        tempRoot.GetFile("bin/Debug/Generated.cs").WriteAllText("public sealed class Generated { }");
 
         var gitRunner = new GitCommandRunner();
         await gitRunner.RunAsync(tempRoot.FullName, "init");

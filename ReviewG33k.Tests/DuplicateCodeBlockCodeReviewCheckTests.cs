@@ -22,7 +22,7 @@ public sealed class DuplicateCodeBlockCodeReviewCheckTests
     public void AnalyzeWhenAddedCodeBlockMatchesExistingFileReportsSuggestion()
     {
         using var tempRoot = new TempDirectory();
-        var existingFile = tempRoot.GetDir("Services").GetFile("ExistingHelper.cs");
+        var existingFile = tempRoot.GetFile("Services/ExistingHelper.cs");
         existingFile.Directory!.Create();
         existingFile.WriteAllText(
             """
@@ -75,7 +75,7 @@ public sealed class DuplicateCodeBlockCodeReviewCheckTests
     public void AnalyzeWhenBlockIsSmallerThanThresholdDoesNotReport()
     {
         using var tempRoot = new TempDirectory();
-        var existingFile = tempRoot.GetDir("Services").GetFile("ExistingHelper.cs");
+        var existingFile = tempRoot.GetFile("Services/ExistingHelper.cs");
         existingFile.Directory!.Create();
         existingFile.WriteAllText(
             """
@@ -117,7 +117,7 @@ public sealed class DuplicateCodeBlockCodeReviewCheckTests
     public void AnalyzeWhenWholeRepositoryScanDoesNotRunCheck()
     {
         using var tempRoot = new TempDirectory();
-        var existingFile = tempRoot.GetDir("Services").GetFile("ExistingHelper.cs");
+        var existingFile = tempRoot.GetFile("Services/ExistingHelper.cs");
         existingFile.Directory!.Create();
         existingFile.WriteAllText(
             """
@@ -163,7 +163,7 @@ public sealed class DuplicateCodeBlockCodeReviewCheckTests
     public void AnalyzeWhenMarkupOnlyDuplicatesTrivialLayoutBoilerplateDoesNotReport()
     {
         using var tempRoot = new TempDirectory();
-        var existingFile = tempRoot.GetDir("Views").GetFile("ExistingView.axaml");
+        var existingFile = tempRoot.GetFile("Views/ExistingView.axaml");
         existingFile.Directory!.Create();
         existingFile.WriteAllText(
             """
@@ -205,7 +205,7 @@ public sealed class DuplicateCodeBlockCodeReviewCheckTests
     public void AnalyzeWhenMarkupOnlyDuplicatesWindowAttributeBoilerplateDoesNotReport()
     {
         using var tempRoot = new TempDirectory();
-        var existingFile = tempRoot.GetDir("Views").GetFile("ExistingDialog.xaml");
+        var existingFile = tempRoot.GetFile("Views/ExistingDialog.xaml");
         existingFile.Directory!.Create();
         existingFile.WriteAllText(
             """
@@ -253,7 +253,7 @@ public sealed class DuplicateCodeBlockCodeReviewCheckTests
     public void AnalyzeWhenMarkupDuplicatesSubstantiveUiBlockReportsSuggestion()
     {
         using var tempRoot = new TempDirectory();
-        var existingFile = tempRoot.GetDir("Views").GetFile("ExistingView.axaml");
+        var existingFile = tempRoot.GetFile("Views/ExistingView.axaml");
         existingFile.Directory!.Create();
         existingFile.WriteAllText(
             """
@@ -292,7 +292,7 @@ public sealed class DuplicateCodeBlockCodeReviewCheckTests
     public void AnalyzeWhenProjectFileDuplicatesExistingProjectFileDoesNotReport()
     {
         using var tempRoot = new TempDirectory();
-        var existingFile = tempRoot.GetDir("Src").GetFile("Existing.csproj");
+        var existingFile = tempRoot.GetFile("Src/Existing.csproj");
         existingFile.Directory!.Create();
         existingFile.WriteAllText(
             """
