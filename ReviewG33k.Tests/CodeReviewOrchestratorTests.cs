@@ -54,6 +54,7 @@ public sealed class CodeReviewOrchestratorTests
         Assert.Multiple(() =>
         {
             Assert.That(commands.Select(command => command.CommandText), Does.Contain($"clone {pullRequest.CloneUrl} {result.LocalRepositoryPath}"));
+            Assert.That(commands.Select(command => command.CommandText), Does.Contain("worktree add --force --detach " + result.ReviewWorktreePath + " refs/remotes/origin/pr/42"));
             Assert.That(commands.Any(command => command.CommandText == "submodule sync --recursive"), Is.False);
             Assert.That(commands.Any(command => command.CommandText == "submodule update --init --recursive"), Is.False);
         });
@@ -97,6 +98,7 @@ public sealed class CodeReviewOrchestratorTests
         {
             Assert.That(commands.Any(command => command.CommandText.StartsWith("clone ", StringComparison.Ordinal)), Is.False);
             Assert.That(commands.Any(command => command.CommandText.StartsWith("worktree add ", StringComparison.Ordinal)), Is.False);
+            Assert.That(commands.Any(command => command.WorkingDirectory == reviewFolder.FullName && command.CommandText == "checkout --detach --force refs/remotes/origin/pr/42"), Is.True);
             Assert.That(commands.Any(command => command.WorkingDirectory == reviewFolder.FullName && command.CommandText == "submodule sync --recursive"), Is.False);
             Assert.That(commands.Any(command => command.WorkingDirectory == reviewFolder.FullName && command.CommandText == "submodule update --init --recursive"), Is.False);
         });

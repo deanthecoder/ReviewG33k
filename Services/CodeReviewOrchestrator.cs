@@ -58,7 +58,6 @@ public sealed class CodeReviewOrchestrator
         cancellationToken.ThrowIfCancellationRequested();
 
         var reviewRef = $"refs/remotes/origin/pr/{pullRequest.PullRequestId}";
-        var reviewBranch = $"review/pr-{pullRequest.PullRequestId}";
         var fetchSpec = $"+refs/pull-requests/{pullRequest.PullRequestId}/from:{reviewRef}";
 
         log($"Fetching PR #{pullRequest.PullRequestId} from origin...");
@@ -70,7 +69,12 @@ public sealed class CodeReviewOrchestrator
 
         var reviewFolderInfo = repositoryRootDir.GetDir(
             $"{CodeReviewFolderName}/{pullRequest.RepoSlug}/PR-{pullRequest.PullRequestId}");
-        await EnsureReviewWorktreeReadyAsync(localRepository, reviewFolderInfo.FullName, reviewBranch, reviewRef, log, cancellationToken);
+        await EnsureReviewWorktreeReadyAsync(
+            localRepository,
+            reviewFolderInfo.FullName,
+            reviewRef,
+            log,
+            cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
         var solutionPath = FindBestSolutionFile(reviewFolderInfo.FullName, changedPaths);
@@ -127,11 +131,9 @@ public sealed class CodeReviewOrchestrator
 
         var reviewFolderInfo = repositoryRootDir.GetDir(
             $"{CodeReviewFolderName}/{pullRequest.RepoSlug}/PR-{pullRequest.PullRequestId}-Merged");
-        var reviewBranch = $"review/pr-{pullRequest.PullRequestId}-merged";
         await EnsureReviewWorktreeReadyAsync(
             localRepository,
             reviewFolderInfo.FullName,
-            reviewBranch,
             mergeCommitHash,
             log,
             cancellationToken);
@@ -350,7 +352,6 @@ public sealed class CodeReviewOrchestrator
     private async Task EnsureReviewWorktreeReadyAsync(
         string localRepository,
         string reviewFolder,
-        string reviewBranch,
         string reviewRef,
         Action<string> log,
         CancellationToken cancellationToken)
@@ -359,8 +360,8 @@ public sealed class CodeReviewOrchestrator
         if (!reviewFolderInfo.Exists())
         {
             reviewFolderInfo.Parent?.Create();
-            log($"Creating worktree copy at '{reviewFolder}' on local branch '{reviewBranch}'...");
-            var addResult = await m_runGitAsync(localRepository, cancellationToken, ["worktree", "add", "--force", "-B", reviewBranch, reviewFolder, reviewRef]);
+            log($"Creating detached review worktree at '{reviewFolder}'...");
+            var addResult = await m_runGitAsync(localRepository, cancellationToken, ["worktree", "add", "--force", "--detach", reviewFolder, reviewRef]);
             EnsureSuccess(addResult, "Failed to create review worktree.");
             return;
         }
@@ -374,18 +375,25 @@ public sealed class CodeReviewOrchestrator
             AreSameCommit(currentHeadResult.StandardOutput, targetHeadResult.StandardOutput))
         {
             log($"Reusing existing review worktree at '{reviewFolder}' (already up to date).");
-            return;
+        }
+        else
+        {
+            log($"Refreshing existing review worktree at '{reviewFolder}'...");
         }
 
-        log($"Refreshing existing review worktree at '{reviewFolder}'...");
-        var checkoutResult = await m_runGitAsync(reviewFolder, cancellationToken, ["checkout", "--force", "-B", reviewBranch, reviewRef]);
+        var checkoutResult = await m_runGitAsync(reviewFolder, cancellationToken, ["checkout", "--detach", "--force", reviewRef]);
         EnsureSuccess(
             checkoutResult,
             $"Failed to refresh existing review worktree at '{reviewFolder}'. Close apps using this folder and retry.");
 
-        var cleanResult = await m_runGitAsync(reviewFolder, cancellationToken, ["clean", "-fd"]);
-        if (!cleanResult.IsSuccess)
-            log($"Warning: could not fully clean review worktree. {cleanResult.GetCombinedOutput()}");
+        if (!(currentHeadResult.IsSuccess &&
+              targetHeadResult.IsSuccess &&
+              AreSameCommit(currentHeadResult.StandardOutput, targetHeadResult.StandardOutput)))
+        {
+            var cleanResult = await m_runGitAsync(reviewFolder, cancellationToken, ["clean", "-fd"]);
+            if (!cleanResult.IsSuccess)
+                log($"Warning: could not fully clean review worktree. {cleanResult.GetCombinedOutput()}");
+        }
     }
 
     public async Task EnsureSubmodulesReadyIfNeededAsync(
