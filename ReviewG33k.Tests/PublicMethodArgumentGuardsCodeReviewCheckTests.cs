@@ -270,6 +270,35 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void AnalyzeWhenResolvedStructParametersAreUsedDoesNotRequireNullGuards()
+    {
+        const string source = """
+            public struct HeadStatusData
+            {
+                public int HeadState { get; set; }
+            }
+
+            public static class MeteorHeadStatusUtilities
+            {
+                public static int GetChangedPropertyNames(HeadStatusData previousStatus, HeadStatusData currentStatus, object logger)
+                {
+                    _ = previousStatus.HeadState;
+                    _ = currentStatus.HeadState;
+                    _ = logger.ToString();
+                    return 0;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(source);
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("logger"));
+        Assert.That(report.Findings[0].Message, Does.Not.Contain("previousStatus"));
+        Assert.That(report.Findings[0].Message, Does.Not.Contain("currentStatus"));
+    }
+
     private static CodeSmellReport AnalyzeSource(string source)
     {
         var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');

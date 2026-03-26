@@ -13,6 +13,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
@@ -62,6 +64,15 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
             if (CodeReviewFileClassification.IsTestFilePath(file.Path))
                 continue;
 
+            var semanticAnalysisAvailable = RoslynCodeReviewCheckUtilities.TryGetSemanticAnalysis(
+                file,
+                out var root,
+                out var semanticModel,
+                out var syntaxTree,
+                out var diagnostics);
+            if (semanticAnalysisAvailable && RoslynCodeReviewCheckUtilities.HasSourceErrorsForTree(diagnostics, syntaxTree))
+                semanticAnalysisAvailable = false;
+
             foreach (var lineNumber in file.AddedLineNumbers.OrderBy(number => number))
             {
                 if (!TryGetPublicMethodSignature(file.Lines, lineNumber, out var signature, out var bodyOpenLine, out var bodyCloseLine))
@@ -70,6 +81,15 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
                     continue;
 
                 var parametersToGuard = GetParametersRequiringGuard(signature.ParameterListText);
+                if (semanticAnalysisAvailable)
+                {
+                    parametersToGuard = FilterResolvedValueTypeParameters(
+                        parametersToGuard,
+                        root,
+                        semanticModel,
+                        lineNumber,
+                        signature.MethodName);
+                }
                 if (parametersToGuard.Count == 0)
                     continue;
 
@@ -91,6 +111,38 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
                     $"Public method '{signature.MethodName}' may be missing argument guard(s): {string.Join(", ", unguardedParameters)}.");
             }
         }
+    }
+
+    private static IReadOnlyList<string> FilterResolvedValueTypeParameters(
+        IReadOnlyList<string> parameterNames,
+        CompilationUnitSyntax root,
+        SemanticModel semanticModel,
+        int methodLineNumber,
+        string methodName)
+    {
+        if (parameterNames == null || parameterNames.Count == 0 || root == null || semanticModel == null)
+            return parameterNames ?? [];
+
+        var method = root.DescendantNodes()
+            .OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(candidate =>
+                RoslynCodeReviewCheckUtilities.GetStartLine(candidate) == methodLineNumber &&
+                string.Equals(candidate.Identifier.ValueText, methodName, StringComparison.Ordinal));
+        if (method == null)
+            return parameterNames;
+
+        var parametersByName = method.ParameterList?.Parameters
+            .Where(parameter => parameter != null)
+            .GroupBy(parameter => parameter.Identifier.ValueText, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal)
+            ?? new Dictionary<string, ParameterSyntax>(StringComparer.Ordinal);
+
+        return parameterNames
+            .Where(parameterName =>
+                !parametersByName.TryGetValue(parameterName, out var parameterSyntax) ||
+                semanticModel.GetDeclaredSymbol(parameterSyntax) is not IParameterSymbol parameterSymbol ||
+                !parameterSymbol.Type.IsValueType)
+            .ToArray();
     }
 
     private static bool TryGetPublicMethodSignature(
