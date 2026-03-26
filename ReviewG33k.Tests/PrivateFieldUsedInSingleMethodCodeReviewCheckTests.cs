@@ -90,6 +90,34 @@ public sealed class PrivateFieldUsedInSingleMethodCodeReviewCheckTests : TestsBa
     }
 
     [Test]
+    public void AnalyzeWhenReadonlyFieldIsUsedInAnotherMethodWithUnresolvedTypeDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                private readonly Func<MissingType> m_getStatusFunc;
+                private MissingType m_statusData;
+
+                public Sample(Func<MissingType> getStatusFunc)
+                {
+                    m_getStatusFunc = getStatusFunc;
+                }
+
+                public void Refresh()
+                {
+                    m_statusData = m_getStatusFunc();
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(source, Enumerable.Range(1, 17));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AnalyzeWhenReadonlyFieldHasInitializerDoesNotReport()
     {
         const string source = """

@@ -95,7 +95,7 @@ public sealed class PrivateFieldUsedInSingleMethodCodeReviewCheck : RoslynSemant
         methodSymbol = null;
         foreach (var identifier in root.DescendantNodes().OfType<IdentifierNameSyntax>())
         {
-            if (!SymbolEqualityComparer.Default.Equals(semanticModel.GetSymbolInfo(identifier).Symbol, fieldSymbol))
+            if (!SymbolMatches(semanticModel.GetSymbolInfo(identifier), fieldSymbol))
                 continue;
 
             var containingMethod = identifier.Ancestors().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault();
@@ -140,7 +140,7 @@ public sealed class PrivateFieldUsedInSingleMethodCodeReviewCheck : RoslynSemant
     {
         var references = memberDeclaration.DescendantNodes()
             .OfType<IdentifierNameSyntax>()
-            .Where(identifier => SymbolEqualityComparer.Default.Equals(semanticModel.GetSymbolInfo(identifier).Symbol, fieldSymbol))
+            .Where(identifier => SymbolMatches(semanticModel.GetSymbolInfo(identifier), fieldSymbol))
             .OrderBy(identifier => identifier.SpanStart)
             .ToArray();
         if (references.Length == 0)
@@ -210,9 +210,21 @@ public sealed class PrivateFieldUsedInSingleMethodCodeReviewCheck : RoslynSemant
 
         return node.DescendantNodesAndSelf()
             .OfType<IdentifierNameSyntax>()
-            .Any(identifier => SymbolEqualityComparer.Default.Equals(semanticModel.GetSymbolInfo(identifier).Symbol, fieldSymbol));
+            .Any(identifier => SymbolMatches(semanticModel.GetSymbolInfo(identifier), fieldSymbol));
     }
 
     private static bool TargetsField(SemanticModel semanticModel, ExpressionSyntax expression, IFieldSymbol fieldSymbol) =>
-        SymbolEqualityComparer.Default.Equals(semanticModel.GetSymbolInfo(expression).Symbol, fieldSymbol);
+        SymbolMatches(semanticModel.GetSymbolInfo(expression), fieldSymbol);
+
+    private static bool SymbolMatches(SymbolInfo symbolInfo, IFieldSymbol fieldSymbol)
+    {
+        if (fieldSymbol == null)
+            return false;
+
+        if (SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol, fieldSymbol))
+            return true;
+
+        return symbolInfo.CandidateSymbols.Any(candidateSymbol =>
+            SymbolEqualityComparer.Default.Equals(candidateSymbol, fieldSymbol));
+    }
 }
