@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -54,6 +55,11 @@ public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
 
         if (type.Identifier.ValueText == "Program")
             return false;
+        if (type.Identifier.ValueText.EndsWith("Extensions", StringComparison.Ordinal) &&
+            type.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.StaticKeyword)))
+        {
+            return false;
+        }
 
         return type.Modifiers.Any(modifier =>
             modifier.IsKind(SyntaxKind.PublicKeyword) ||

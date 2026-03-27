@@ -63,6 +63,20 @@ public sealed class MissingXmlDocsCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenAddedStaticExtensionsTypeHasNoXmlDocsDoesNotReport()
+    {
+        const string source = """
+            public static class OutputTypeExtensions
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile("Extensions/OutputTypeExtensions.cs", source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AnalyzeWhenAddedTypeIsATestFixtureDoesNotReport()
     {
         const string source = """
