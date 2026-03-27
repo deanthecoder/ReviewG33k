@@ -89,10 +89,7 @@ internal static class CodeReviewFileClassification
     public static bool IsTestFilePath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&
         (path.EndsWith("Tests.cs", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("/Tests/", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("\\Tests\\", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("/UnitTests/", StringComparison.OrdinalIgnoreCase) ||
-         path.Contains("\\UnitTests\\", StringComparison.OrdinalIgnoreCase));
+         ContainsLikelyTestDirectorySegment(path));
 
     public static bool IsGeneratedFilePath(string path) =>
         !string.IsNullOrWhiteSpace(path) &&
@@ -147,6 +144,24 @@ internal static class CodeReviewFileClassification
         file != null &&
         (IsTestFilePath(file.Path) ||
          (!string.IsNullOrWhiteSpace(file.Text) && TestAttributeRegex.IsMatch(file.Text)));
+
+    private static bool ContainsLikelyTestDirectorySegment(string path)
+    {
+        var normalizedPath = (path ?? string.Empty).Replace('\\', '/');
+        var segments = normalizedPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var segment in segments)
+        {
+            if (string.Equals(segment, "Tests", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(segment, "UnitTests", StringComparison.OrdinalIgnoreCase) ||
+                segment.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase) ||
+                segment.EndsWith(".UnitTests", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static bool IsUnderIgnoredDirectory(string path)
     {

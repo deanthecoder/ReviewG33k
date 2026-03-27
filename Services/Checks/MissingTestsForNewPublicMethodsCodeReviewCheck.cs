@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using DTC.Core.Extensions;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ReviewG33k.Services.Checks.Support;
@@ -40,6 +41,7 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
             changedTestFiles.Select(file => Path.GetFileName(file.Path)),
             StringComparer.OrdinalIgnoreCase);
         var hasAnyChangedTests = changedTestFiles.Length > 0;
+        var repositoryTestFilesByRoot = new Dictionary<string, IReadOnlyList<FileInfo>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var file in context.Files)
         {
@@ -69,11 +71,19 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
                 if (string.IsNullOrWhiteSpace(typeName))
                     continue;
 
+                var methodName = method.Identifier.ValueText;
                 if (HasLikelyMatchingTestFile(changedTestFileNames, typeName))
                     continue;
+                if (HasLikelyExistingRepositoryTest(
+                        file,
+                        repositoryTestFilesByRoot,
+                        typeName,
+                        methodName))
+                {
+                    continue;
+                }
 
                 var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(method);
-                var methodName = method.Identifier.ValueText;
                 var severity = hasAnyChangedTests
                     ? CodeReviewFindingSeverity.Hint
                     : CodeReviewFindingSeverity.Suggestion;
@@ -133,14 +143,61 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
         if (changedTestFileNames == null || changedTestFileNames.Count == 0 || string.IsNullOrWhiteSpace(typeName))
             return false;
 
+        return changedTestFileNames.Any(fileName => IsLikelyMatchingTestFileName(fileName, typeName));
+    }
+
+    private static bool HasLikelyExistingRepositoryTest(
+        CodeReviewChangedFile file,
+        IDictionary<string, IReadOnlyList<FileInfo>> repositoryTestFilesByRoot,
+        string typeName,
+        string methodName)
+    {
+        if (file == null ||
+            string.IsNullOrWhiteSpace(typeName) ||
+            string.IsNullOrWhiteSpace(methodName) ||
+            !DuplicateCodeBlockUtilities.TryGetRepositoryRootPath(file, out var repositoryRootPath) ||
+            string.IsNullOrWhiteSpace(repositoryRootPath))
+        {
+            return false;
+        }
+
+        if (!repositoryTestFilesByRoot.TryGetValue(repositoryRootPath, out var repositoryTestFiles))
+        {
+            repositoryTestFiles = EnumerateRepositoryTestFiles(repositoryRootPath);
+            repositoryTestFilesByRoot[repositoryRootPath] = repositoryTestFiles;
+        }
+
+        return repositoryTestFiles.Any(testFile =>
+            IsLikelyMatchingTestFileName(testFile.Name, typeName) &&
+            testFile.ReadAllText().Contains(methodName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IReadOnlyList<FileInfo> EnumerateRepositoryTestFiles(string repositoryRootPath)
+    {
+        var repositoryRoot = repositoryRootPath.ToDir();
+        if (repositoryRoot?.Exists() != true)
+            return [];
+
+        return repositoryRoot
+            .TryGetFiles("*.cs", SearchOption.AllDirectories)
+            .Where(file => file?.Exists() == true)
+            .Where(file => CodeReviewFileClassification.IsTestFilePath(
+                RepositoryUtilities.NormalizeRepoPath(Path.GetRelativePath(repositoryRootPath, file.FullName))))
+            .ToArray();
+    }
+
+    private static bool IsLikelyMatchingTestFileName(string fileName, string typeName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(typeName))
+            return false;
+
         var exactName = $"{typeName}Tests.cs";
-        if (changedTestFileNames.Contains(exactName))
+        if (string.Equals(fileName, exactName, StringComparison.OrdinalIgnoreCase))
             return true;
 
-        return changedTestFileNames.Any(fileName =>
-            !string.IsNullOrWhiteSpace(fileName) &&
+        return
             fileName.Contains(typeName, StringComparison.OrdinalIgnoreCase) &&
-            fileName.Contains("Test", StringComparison.OrdinalIgnoreCase));
+            fileName.Contains("Test", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsLikelyTestFixtureType(TypeDeclarationSyntax typeDeclaration)

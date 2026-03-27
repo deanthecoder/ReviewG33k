@@ -10,6 +10,8 @@
 
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
+using DTC.Core;
+using DTC.Core.Extensions;
 
 namespace ReviewG33k.Tests;
 
@@ -243,6 +245,97 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheckTests
         Assert.That(report.Findings, Is.Empty);
     }
 
+    [Test]
+    public void AnalyzeWhenExistingRepositoryTestMentionsMethodDoesNotReport()
+    {
+        using var tempRoot = new TempDirectory();
+        var productionFile = tempRoot.GetFile("SPC/MeteorOpc/MeteorInterface.cs");
+        productionFile.Directory!.Create();
+        productionFile.WriteAllText(
+            """
+            public sealed class MeteorInterface
+            {
+                public int GetControllersData()
+                {
+                    return 0;
+                }
+            }
+            """);
+
+        var testFile = tempRoot.GetFile("SPC/CSharp.UnitTests/MeteorOpc/MeteorInterfaceTests.cs");
+        testFile.Directory!.Create();
+        testFile.WriteAllText(
+            """
+            public sealed class MeteorInterfaceTests
+            {
+                public void GivenInvalidControllerEntriesCheckGetControllersDataFiltersThemOut()
+                {
+                }
+            }
+            """);
+
+        var changedFile = CreateChangedFile(
+            relativePath: "SPC/MeteorOpc/MeteorInterface.cs",
+            fullPath: productionFile.FullName,
+            status: "A",
+            source: productionFile.ReadAllText());
+        var context = new CodeReviewAnalysisContext(
+            [changedFile],
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        var report = new CodeSmellReport();
+        var check = new MissingTestsForNewPublicMethodsCodeReviewCheck();
+        check.Analyze(context, report);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenExistingRepositoryTestDoesNotMentionMethodStillReports()
+    {
+        using var tempRoot = new TempDirectory();
+        var productionFile = tempRoot.GetFile("SPC/MeteorOpc/MeteorInterface.cs");
+        productionFile.Directory!.Create();
+        productionFile.WriteAllText(
+            """
+            public sealed class MeteorInterface
+            {
+                public int GetControllersData()
+                {
+                    return 0;
+                }
+            }
+            """);
+
+        var testFile = tempRoot.GetFile("SPC/CSharp.UnitTests/MeteorOpc/MeteorInterfaceTests.cs");
+        testFile.Directory!.Create();
+        testFile.WriteAllText(
+            """
+            public sealed class MeteorInterfaceTests
+            {
+                public void GivenSomethingElse()
+                {
+                }
+            }
+            """);
+
+        var changedFile = CreateChangedFile(
+            relativePath: "SPC/MeteorOpc/MeteorInterface.cs",
+            fullPath: productionFile.FullName,
+            status: "A",
+            source: productionFile.ReadAllText());
+        var context = new CodeReviewAnalysisContext(
+            [changedFile],
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        var report = new CodeSmellReport();
+        var check = new MissingTestsForNewPublicMethodsCodeReviewCheck();
+        check.Analyze(context, report);
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("GetControllersData"));
+    }
+
     private static CodeSmellReport Analyze(string productionSource, params (string Path, string Status, string Source)[] additionalFiles) =>
         AnalyzeWithProductionPath(productionSource, "Services/OrderService.cs", additionalFiles);
 
@@ -280,6 +373,19 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheckTests
             status,
             path,
             path,
+            normalizedSource,
+            lines,
+            new HashSet<int>(Enumerable.Range(1, lines.Length)));
+    }
+
+    private static CodeReviewChangedFile CreateChangedFile(string relativePath, string fullPath, string status, string source)
+    {
+        var normalizedSource = (source ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
+        var lines = normalizedSource.Split('\n');
+        return new CodeReviewChangedFile(
+            status,
+            relativePath,
+            fullPath,
             normalizedSource,
             lines,
             new HashSet<int>(Enumerable.Range(1, lines.Length)));

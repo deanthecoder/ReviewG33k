@@ -159,6 +159,21 @@ public sealed class CodeReviewFileClassificationTests
         Assert.That(result, Is.True);
     }
 
+    [TestCase("Tests/MeteorInterfaceTests.cs", true)]
+    [TestCase("UnitTests/MeteorInterfaceTests.cs", true)]
+    [TestCase("CSharp.Tests/MeteorOpc/MeteorInterfaceTests.cs", true)]
+    [TestCase("CSharp.UnitTests/MeteorOpc/MeteorInterfaceTests.cs", true)]
+    [TestCase("SPC/CSharp.UnitTests/MeteorOpc/MeteorInterfaceTests.cs", true)]
+    [TestCase("SPC/CSharp.Integration/MeteorOpc/MeteorInterfaceTests.cs", true)]
+    [TestCase("SPC/CSharp.Unit/MeteorOpc/MeteorInterface.cs", false)]
+    [TestCase("SPC/CSharp/MeteorOpc/MeteorInterface.cs", false)]
+    public void IsTestFilePathReturnsExpectedResult(string path, bool expected)
+    {
+        var result = Support.CodeReviewFileClassification.IsTestFilePath(path);
+
+        Assert.That(result, Is.EqualTo(expected));
+    }
+
     [TestCase("src/Foo.cs", true)]
     [TestCase("src/Foo.CS", true)]
     [TestCase("native/Foo.cpp", true)]
