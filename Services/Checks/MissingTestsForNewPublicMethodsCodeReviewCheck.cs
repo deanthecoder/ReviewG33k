@@ -59,7 +59,8 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
                 if (!IsEligiblePublicMethod(method))
                     continue;
 
-                var containingType = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+                var containingTypes = method.Ancestors().OfType<TypeDeclarationSyntax>().ToArray();
+                var containingType = containingTypes.FirstOrDefault();
                 if (containingType == null || containingType is InterfaceDeclarationSyntax)
                     continue;
                 if (IsProgramType(containingType))
@@ -67,17 +68,17 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
                 if (IsLikelyTestFixtureType(containingType))
                     continue;
 
-                var typeName = containingType.Identifier.ValueText;
-                if (string.IsNullOrWhiteSpace(typeName))
+                var relevantTypeNames = GetRelevantTypeNames(containingTypes);
+                if (relevantTypeNames.Count == 0)
                     continue;
 
                 var methodName = method.Identifier.ValueText;
-                if (HasLikelyMatchingTestFile(changedTestFileNames, typeName))
+                if (HasLikelyMatchingTestFile(changedTestFileNames, relevantTypeNames))
                     continue;
                 if (HasLikelyExistingRepositoryTest(
                         file,
                         repositoryTestFilesByRoot,
-                        typeName,
+                        relevantTypeNames,
                         methodName))
                 {
                     continue;
@@ -138,22 +139,24 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
         return false;
     }
 
-    private static bool HasLikelyMatchingTestFile(IReadOnlySet<string> changedTestFileNames, string typeName)
+    private static bool HasLikelyMatchingTestFile(IReadOnlySet<string> changedTestFileNames, IReadOnlyCollection<string> typeNames)
     {
-        if (changedTestFileNames == null || changedTestFileNames.Count == 0 || string.IsNullOrWhiteSpace(typeName))
+        if (changedTestFileNames == null || changedTestFileNames.Count == 0 || typeNames == null || typeNames.Count == 0)
             return false;
 
-        return changedTestFileNames.Any(fileName => IsLikelyMatchingTestFileName(fileName, typeName));
+        return changedTestFileNames.Any(fileName =>
+            typeNames.Any(typeName => IsLikelyMatchingTestFileName(fileName, typeName)));
     }
 
     private static bool HasLikelyExistingRepositoryTest(
         CodeReviewChangedFile file,
         IDictionary<string, IReadOnlyList<FileInfo>> repositoryTestFilesByRoot,
-        string typeName,
+        IReadOnlyCollection<string> typeNames,
         string methodName)
     {
         if (file == null ||
-            string.IsNullOrWhiteSpace(typeName) ||
+            typeNames == null ||
+            typeNames.Count == 0 ||
             string.IsNullOrWhiteSpace(methodName) ||
             !DuplicateCodeBlockUtilities.TryGetRepositoryRootPath(file, out var repositoryRootPath) ||
             string.IsNullOrWhiteSpace(repositoryRootPath))
@@ -168,8 +171,20 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
         }
 
         return repositoryTestFiles.Any(testFile =>
-            IsLikelyMatchingTestFileName(testFile.Name, typeName) &&
+            typeNames.Any(typeName => IsLikelyMatchingTestFileName(testFile.Name, typeName)) &&
             testFile.ReadAllText().Contains(methodName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IReadOnlyList<string> GetRelevantTypeNames(IEnumerable<TypeDeclarationSyntax> containingTypes)
+    {
+        if (containingTypes == null)
+            return [];
+
+        return containingTypes
+            .Select(type => type?.Identifier.ValueText)
+            .Where(typeName => !string.IsNullOrWhiteSpace(typeName))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static IReadOnlyList<FileInfo> EnumerateRepositoryTestFiles(string repositoryRootPath)

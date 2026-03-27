@@ -336,6 +336,54 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheckTests
         Assert.That(report.Findings[0].Message, Does.Contain("GetControllersData"));
     }
 
+    [Test]
+    public void AnalyzeWhenNestedPublicTypeMethodIsCoveredByOuterTypeTestsDoesNotReport()
+    {
+        using var tempRoot = new TempDirectory();
+        var productionFile = tempRoot.GetFile("SPC/MeteorOpc/MeteorInterface.cs");
+        productionFile.Directory!.Create();
+        productionFile.WriteAllText(
+            """
+            public sealed class MeteorInterface
+            {
+                public struct ControllerConfiguration
+                {
+                    public int GetControllersData()
+                    {
+                        return 0;
+                    }
+                }
+            }
+            """);
+
+        var testFile = tempRoot.GetFile("SPC/CSharp.UnitTests/MeteorOpc/MeteorInterfaceTests.cs");
+        testFile.Directory!.Create();
+        testFile.WriteAllText(
+            """
+            public sealed class MeteorInterfaceTests
+            {
+                public void GivenInvalidControllerEntriesCheckGetControllersDataFiltersThemOut()
+                {
+                }
+            }
+            """);
+
+        var changedFile = CreateChangedFile(
+            relativePath: "SPC/MeteorOpc/MeteorInterface.cs",
+            fullPath: productionFile.FullName,
+            status: "A",
+            source: productionFile.ReadAllText());
+        var context = new CodeReviewAnalysisContext(
+            [changedFile],
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        var report = new CodeSmellReport();
+        var check = new MissingTestsForNewPublicMethodsCodeReviewCheck();
+        check.Analyze(context, report);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
     private static CodeSmellReport Analyze(string productionSource, params (string Path, string Status, string Source)[] additionalFiles) =>
         AnalyzeWithProductionPath(productionSource, "Services/OrderService.cs", additionalFiles);
 
