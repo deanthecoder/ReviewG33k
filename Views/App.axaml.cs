@@ -12,11 +12,15 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using ReviewG33k.Services;
+using ReviewG33k.ViewModels;
 
 namespace ReviewG33k.Views;
 
 public class App : Application
 {
+    public App() =>
+        DataContext = new AppViewModel();
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
