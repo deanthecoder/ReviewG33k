@@ -99,6 +99,11 @@ internal sealed class ReviewResultsStateService
             row.IsIncluded = isIncluded;
     }
 
+    public void SetAllInFileIncludedState(IEnumerable<ReviewResultRow> rows, string filePath)
+    {
+        SetSameFileIncludedState(rows, filePath, isIncluded: true);
+    }
+
     public IReadOnlyList<ReviewCategorySummary> BuildCategorySummaries(IEnumerable<ReviewResultRow> rows)
     {
         return (rows ?? [])

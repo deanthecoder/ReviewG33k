@@ -86,6 +86,9 @@
                                                   Command="{Binding #ReviewResultsWindowRoot.TickSameTypeCommand}"
                                                   CommandParameter="{Binding .}" />
                                         <Separator />
+                                        <MenuItem Header="Select all issues in this file"
+                                                  Command="{Binding #ReviewResultsWindowRoot.TickSameFileCommand}"
+                                                  CommandParameter="{Binding .}" />
                                         <MenuItem Header="Deselect all issues in this file"
                                                   Command="{Binding #ReviewResultsWindowRoot.UntickSameFileCommand}"
                                                   CommandParameter="{Binding .}" />

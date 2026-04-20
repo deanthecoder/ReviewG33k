@@ -54,6 +54,7 @@ public partial class ReviewResultsWindow : Window
     private readonly IReadOnlyDictionary<CodeLocationOpenTarget, CodeLocationOpenTargetDefinition> m_openTargetDefinitionsByTarget;
     private readonly Dictionary<CodeLocationOpenTarget, MenuItem> m_openTargetMenuItems = [];
     private readonly CommandBase m_selectOpenTargetCommandImpl;
+    private readonly CommandBase m_tickSameFileCommandImpl;
     private readonly CommandBase m_untickSameFileCommandImpl;
     private CodeLocationOpenTarget m_selectedOpenTarget;
     private ReviewCategoryBreakdownWindow m_categoryBreakdownWindow;
@@ -68,6 +69,7 @@ public partial class ReviewResultsWindow : Window
     public ICommand CommentFindingCommand => m_viewModel.CommentFindingCommand;
     public ICommand TickSameTypeCommand => m_viewModel.TickSameTypeCommand;
     public ICommand UntickSameTypeCommand => m_viewModel.UntickSameTypeCommand;
+    public ICommand TickSameFileCommand => m_tickSameFileCommandImpl;
     public ICommand UntickSameFileCommand => m_untickSameFileCommandImpl;
 
     public ReviewResultsWindow(
@@ -110,6 +112,9 @@ public partial class ReviewResultsWindow : Window
                     SelectOpenTarget(target);
             },
             parameter => parameter is CodeLocationOpenTarget);
+        m_tickSameFileCommandImpl = new RelayCommand(
+            parameter => SetSameFileIncludedState(parameter as ReviewResultRow, isIncluded: true),
+            parameter => parameter is ReviewResultRow row && !string.IsNullOrWhiteSpace(row.Finding?.FilePath));
         m_untickSameFileCommandImpl = new RelayCommand(
             parameter => SetSameFileIncludedState(parameter as ReviewResultRow, isIncluded: false),
             parameter => parameter is ReviewResultRow row && !string.IsNullOrWhiteSpace(row.Finding?.FilePath));
