@@ -74,6 +74,8 @@ internal sealed class GitSingleCommitChangedFileSource : ICodeReviewChangedFileS
             m_repositoryPath,
             "diff",
             "--name-status",
+            "--ignore-cr-at-eol",
+            "--ignore-space-at-eol",
             "--find-renames",
             diffRange);
         if (!nameStatusResult.IsSuccess)
@@ -136,6 +138,8 @@ internal sealed class GitSingleCommitChangedFileSource : ICodeReviewChangedFileS
             "diff",
             "--unified=0",
             "--no-color",
+            "--ignore-cr-at-eol",
+            "--ignore-space-at-eol",
             diffRange,
             "--",
             relativePath);
@@ -238,3 +242,4 @@ internal sealed class GitSingleCommitChangedFileSource : ICodeReviewChangedFileS
     private static bool ShouldLogFileProgress(int filesProcessed, int totalFiles) =>
         filesProcessed == 1 || filesProcessed == totalFiles || filesProcessed % 25 == 0;
 }
+

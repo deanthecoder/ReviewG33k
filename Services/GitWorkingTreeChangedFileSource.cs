@@ -48,6 +48,8 @@ public sealed class GitWorkingTreeChangedFileSource : ICodeReviewChangedFileSour
             m_repositoryPath,
             "diff",
             "--name-status",
+            "--ignore-cr-at-eol",
+            "--ignore-space-at-eol",
             "--find-renames",
             "HEAD");
         if (!trackedChangesResult.IsSuccess)
@@ -125,6 +127,8 @@ public sealed class GitWorkingTreeChangedFileSource : ICodeReviewChangedFileSour
             "diff",
             "--unified=0",
             "--no-color",
+            "--ignore-cr-at-eol",
+            "--ignore-space-at-eol",
             diffRange,
             "--",
             relativePath);
@@ -260,3 +264,4 @@ public sealed class GitWorkingTreeChangedFileSource : ICodeReviewChangedFileSour
     private static bool ShouldLogFileProgress(int filesProcessed, int totalFiles) =>
         filesProcessed == 1 || filesProcessed == totalFiles || filesProcessed % 25 == 0;
 }
+

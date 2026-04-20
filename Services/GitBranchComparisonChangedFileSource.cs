@@ -96,6 +96,8 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             m_repositoryPath,
             "diff",
             "--name-status",
+            "--ignore-cr-at-eol",
+            "--ignore-space-at-eol",
             "--find-renames",
             diffRange);
         if (!nameStatusResult.IsSuccess)
@@ -240,6 +242,8 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             "diff",
             "--unified=0",
             "--no-color",
+            "--ignore-cr-at-eol",
+            "--ignore-space-at-eol",
             diffRange,
             "--",
             relativePath);
@@ -413,3 +417,4 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
     private static bool ShouldLogFileProgress(int filesProcessed, int totalFiles) =>
         filesProcessed == 1 || filesProcessed == totalFiles || filesProcessed % 25 == 0;
 }
+
