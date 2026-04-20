@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -19,6 +20,13 @@ namespace ReviewG33k.Services.Checks;
 
 public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
 {
+    private static readonly HashSet<string> ObviousBootstrapTypeNames = new(StringComparer.Ordinal)
+    {
+        "App",
+        "Program",
+        "Startup"
+    };
+
     public override string RuleId => "missing-xml-docs";
 
     public override string DisplayName => "XML docs on new public/internal types";
@@ -53,7 +61,7 @@ public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
         if (type == null)
             return false;
 
-        if (type.Identifier.ValueText == "Program")
+        if (ObviousBootstrapTypeNames.Contains(type.Identifier.ValueText))
             return false;
         if (type.Identifier.ValueText.EndsWith("Extensions", StringComparison.Ordinal) &&
             type.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.StaticKeyword)))

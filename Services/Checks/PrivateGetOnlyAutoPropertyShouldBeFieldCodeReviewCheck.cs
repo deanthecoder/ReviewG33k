@@ -34,6 +34,8 @@ public sealed class PrivateGetOnlyAutoPropertyShouldBeFieldCodeReviewCheck : Cod
                     continue;
                 if (!RoslynCodeReviewCheckUtilities.IsPrivateProperty(property))
                     continue;
+                if (property.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.StaticKeyword)))
+                    continue;
                 if (!IsPrivateGetOnlyAutoProperty(property))
                     continue;
 

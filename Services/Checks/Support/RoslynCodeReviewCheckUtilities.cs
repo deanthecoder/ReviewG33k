@@ -143,6 +143,28 @@ internal static class RoslynCodeReviewCheckUtilities
     public static bool TryGetSimplePropertyBackingField(PropertyDeclarationSyntax property, out string fieldName)
     {
         fieldName = null;
+        if (!TryGetSimplePropertyBackingFieldExpressions(property, out var getterTarget, out var setterTarget))
+            return false;
+
+        if (!TryExtractFieldName(getterTarget, out var getterFieldName))
+            return false;
+        if (!TryExtractFieldName(setterTarget, out var setterFieldName))
+            return false;
+        if (!string.Equals(getterFieldName, setterFieldName, StringComparison.Ordinal))
+            return false;
+
+        fieldName = getterFieldName;
+        return !string.IsNullOrWhiteSpace(fieldName);
+    }
+
+    public static bool TryGetSimplePropertyBackingFieldExpressions(
+        PropertyDeclarationSyntax property,
+        out ExpressionSyntax getterTarget,
+        out ExpressionSyntax setterTarget)
+    {
+        getterTarget = null;
+        setterTarget = null;
+
         if (property.AccessorList == null || property.ExpressionBody != null)
             return false;
 
@@ -151,15 +173,8 @@ internal static class RoslynCodeReviewCheckUtilities
         if (getAccessor == null || setAccessor == null)
             return false;
 
-        if (!TryGetGetterFieldName(getAccessor, out var getterFieldName))
-            return false;
-        if (!TryGetSetterFieldName(setAccessor, out var setterFieldName))
-            return false;
-        if (!string.Equals(getterFieldName, setterFieldName, StringComparison.Ordinal))
-            return false;
-
-        fieldName = getterFieldName;
-        return !string.IsNullOrWhiteSpace(fieldName);
+        return TryGetGetterTarget(getAccessor, out getterTarget) &&
+               TryGetSetterTarget(setAccessor, out setterTarget);
     }
 
     public static bool IsElseIf(IfStatementSyntax ifStatement) =>
@@ -191,22 +206,26 @@ internal static class RoslynCodeReviewCheckUtilities
         return count;
     }
 
-    private static bool TryGetGetterFieldName(AccessorDeclarationSyntax getAccessor, out string fieldName)
+    private static bool TryGetGetterTarget(AccessorDeclarationSyntax getAccessor, out ExpressionSyntax target)
     {
-        fieldName = null;
+        target = null;
 
         if (getAccessor.ExpressionBody != null)
-            return TryExtractFieldName(getAccessor.ExpressionBody.Expression, out fieldName);
+        {
+            target = getAccessor.ExpressionBody.Expression;
+            return target != null;
+        }
 
         if (getAccessor.Body?.Statements.Count != 1 || getAccessor.Body.Statements[0] is not ReturnStatementSyntax returnStatement)
             return false;
 
-        return TryExtractFieldName(returnStatement.Expression, out fieldName);
+        target = returnStatement.Expression;
+        return target != null;
     }
 
-    private static bool TryGetSetterFieldName(AccessorDeclarationSyntax setAccessor, out string fieldName)
+    private static bool TryGetSetterTarget(AccessorDeclarationSyntax setAccessor, out ExpressionSyntax target)
     {
-        fieldName = null;
+        target = null;
         AssignmentExpressionSyntax assignmentExpression;
 
         if (setAccessor.ExpressionBody != null)
@@ -231,7 +250,8 @@ internal static class RoslynCodeReviewCheckUtilities
         if (assignmentExpression.Right is not IdentifierNameSyntax rightIdentifier || !string.Equals(rightIdentifier.Identifier.ValueText, "value", StringComparison.Ordinal))
             return false;
 
-        return TryExtractFieldName(assignmentExpression.Left, out fieldName);
+        target = assignmentExpression.Left;
+        return target != null;
     }
 
     private static bool TryExtractFieldName(ExpressionSyntax expression, out string fieldName)

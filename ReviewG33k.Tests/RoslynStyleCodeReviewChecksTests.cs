@@ -39,6 +39,27 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void AutoPropertyCheckWhenPropertyMirrorsAnotherPropertyDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public bool OldProperty { get; set; }
+
+                public bool NewProperty
+                {
+                    get { return OldProperty; }
+                    set { OldProperty = value; }
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new PropertyCanBeAutoPropertyCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void PrivateGetOnlyAutoPropertyFieldCheckWhenSimplePrivateGetOnlyPropertyIsAddedReportsHint()
     {
         const string source = """
@@ -62,6 +83,21 @@ public sealed class RoslynStyleCodeReviewChecksTests
             public sealed class Sample
             {
                 private int Count { get; set; }
+            }
+            """;
+
+        var report = AnalyzeSource(new PrivateGetOnlyAutoPropertyShouldBeFieldCodeReviewCheck(), "A", source, Enumerable.Range(1, 5));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void PrivateGetOnlyAutoPropertyFieldCheckWhenPropertyIsStaticDoesNotReport()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                private static int Count { get; }
             }
             """;
 

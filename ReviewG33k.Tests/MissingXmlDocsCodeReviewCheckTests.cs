@@ -63,6 +63,34 @@ public sealed class MissingXmlDocsCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenAddedAppTypeHasNoXmlDocsDoesNotReport()
+    {
+        const string source = """
+            public class App
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile("Views/App.axaml.cs", source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenAddedStartupTypeHasNoXmlDocsDoesNotReport()
+    {
+        const string source = """
+            public sealed class Startup
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile("Startup.cs", source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void AnalyzeWhenAddedStaticExtensionsTypeHasNoXmlDocsDoesNotReport()
     {
         const string source = """
