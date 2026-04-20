@@ -90,6 +90,15 @@ internal sealed class ReviewResultsStateService
             row.IsIncluded = isIncluded;
     }
 
+    public void SetSameFileIncludedState(IEnumerable<ReviewResultRow> rows, string filePath, bool isIncluded)
+    {
+        if (rows == null || string.IsNullOrWhiteSpace(filePath))
+            return;
+
+        foreach (var row in rows.Where(row => RepositoryUtilities.AreSameRepoPath(row.Finding?.FilePath, filePath)))
+            row.IsIncluded = isIncluded;
+    }
+
     public IReadOnlyList<ReviewCategorySummary> BuildCategorySummaries(IEnumerable<ReviewResultRow> rows)
     {
         return (rows ?? [])

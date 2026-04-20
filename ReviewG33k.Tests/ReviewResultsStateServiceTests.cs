@@ -126,6 +126,24 @@ public sealed class ReviewResultsStateServiceTests
     }
 
     [Test]
+    public void SetSameFileIncludedStateMatchesFilePathIgnoringCase()
+    {
+        var service = new ReviewResultsStateService();
+        var rowA = CreateRow("RuleA", "src/A.cs", 1);
+        var rowB = CreateRow("RuleB", "SRC/A.cs", 2);
+        var rowC = CreateRow("RuleC", "src/C.cs", 3);
+
+        service.SetSameFileIncludedState([rowA, rowB, rowC], "src/a.cs", isIncluded: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rowA.IsIncluded, Is.False);
+            Assert.That(rowB.IsIncluded, Is.False);
+            Assert.That(rowC.IsIncluded, Is.True);
+        });
+    }
+
+    [Test]
     public void BuildExportTextReturnsExpectedCountAndOutput()
     {
         var service = new ReviewResultsStateService();

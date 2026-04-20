@@ -85,6 +85,10 @@
                                         <MenuItem Header="{Binding TickSameTypeMenuHeader}"
                                                   Command="{Binding #ReviewResultsWindowRoot.TickSameTypeCommand}"
                                                   CommandParameter="{Binding .}" />
+                                        <Separator />
+                                        <MenuItem Header="Deselect all issues in this file"
+                                                  Command="{Binding #ReviewResultsWindowRoot.UntickSameFileCommand}"
+                                                  CommandParameter="{Binding .}" />
                                     </ContextMenu>
                                 </Grid.ContextMenu>
                                 <CheckBox Grid.Column="0"

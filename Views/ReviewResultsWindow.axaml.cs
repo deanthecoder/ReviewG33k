@@ -54,6 +54,7 @@ public partial class ReviewResultsWindow : Window
     private readonly IReadOnlyDictionary<CodeLocationOpenTarget, CodeLocationOpenTargetDefinition> m_openTargetDefinitionsByTarget;
     private readonly Dictionary<CodeLocationOpenTarget, MenuItem> m_openTargetMenuItems = [];
     private readonly CommandBase m_selectOpenTargetCommandImpl;
+    private readonly CommandBase m_untickSameFileCommandImpl;
     private CodeLocationOpenTarget m_selectedOpenTarget;
     private ReviewCategoryBreakdownWindow m_categoryBreakdownWindow;
     private Cursor m_previousCursor;
@@ -67,6 +68,7 @@ public partial class ReviewResultsWindow : Window
     public ICommand CommentFindingCommand => m_viewModel.CommentFindingCommand;
     public ICommand TickSameTypeCommand => m_viewModel.TickSameTypeCommand;
     public ICommand UntickSameTypeCommand => m_viewModel.UntickSameTypeCommand;
+    public ICommand UntickSameFileCommand => m_untickSameFileCommandImpl;
 
     public ReviewResultsWindow(
         IEnumerable<CodeSmellFinding> findings,
@@ -108,6 +110,9 @@ public partial class ReviewResultsWindow : Window
                     SelectOpenTarget(target);
             },
             parameter => parameter is CodeLocationOpenTarget);
+        m_untickSameFileCommandImpl = new RelayCommand(
+            parameter => SetSameFileIncludedState(parameter as ReviewResultRow, isIncluded: false),
+            parameter => parameter is ReviewResultRow row && !string.IsNullOrWhiteSpace(row.Finding?.FilePath));
         OpenTargetMenuCommand = openTargetMenuCommandImpl;
         m_viewModel.ConfigureCommands(
             FixFindingAsync,
@@ -403,6 +408,15 @@ public partial class ReviewResultsWindow : Window
             return;
 
         m_stateService.SetSameTypeIncludedState(m_viewModel.GetVisibleRows(), sourceRow.RuleId, isIncluded);
+        UpdateBatchActionButtonStates();
+    }
+
+    private void SetSameFileIncludedState(ReviewResultRow sourceRow, bool isIncluded)
+    {
+        if (sourceRow == null || string.IsNullOrWhiteSpace(sourceRow.Finding?.FilePath))
+            return;
+
+        m_stateService.SetSameFileIncludedState(m_rows, sourceRow.Finding.FilePath, isIncluded);
         UpdateBatchActionButtonStates();
     }
 
