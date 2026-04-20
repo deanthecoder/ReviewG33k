@@ -23,6 +23,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using DTC.Core.Extensions;
 using DTC.Core.UI;
+using JetBrains.Annotations;
 using ReviewG33k.Models;
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks.Support;
@@ -51,11 +52,12 @@ public partial class MainWindow : Window
     private readonly MainWindowReviewWorkflowService m_reviewWorkflowService;
     private readonly Settings m_settings;
     private readonly MainWindowViewModel m_viewModel;
+    private readonly bool m_isInitializing;
     private CancellationTokenSource m_previewUpdateCancellation;
     private CancellationTokenSource m_busyActionCancellation;
     private string m_lastNonOpenPullRequestNoticeKey;
-    private bool m_isInitializing;
 
+    [UsedImplicitly]
     public MainWindow()
         : this(MainWindowCompositionRoot.CreateDependencies())
     {
@@ -98,7 +100,7 @@ public partial class MainWindow : Window
         m_uiService = new MainWindowUiService(
             m_viewModel,
             logFeedService,
-            () => Dispatcher.UIThread.CheckAccess(),
+            Dispatcher.UIThread.CheckAccess,
             action => Dispatcher.UIThread.Post(action),
             entry => LogListBox.ScrollIntoView(entry),
             (title, message) => DialogService.Instance.ShowMessage(title, message, null));

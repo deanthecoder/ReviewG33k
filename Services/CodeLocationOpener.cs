@@ -29,13 +29,11 @@ public sealed class CodeLocationOpener
     private bool m_riderDetectionAttempted;
     private bool m_riderUsesCommandShell;
     private string m_riderExecutablePath;
-    private readonly IReadOnlyList<CodeLocationOpenTargetDefinition> m_targetDefinitions;
     private readonly IReadOnlyDictionary<CodeLocationOpenTarget, CodeLocationOpenTargetDefinition> m_targetDefinitionsByTarget;
-    private readonly IReadOnlyList<CodeLocationOpenTarget> m_targets;
 
     public CodeLocationOpener()
     {
-        m_targetDefinitions =
+        TargetDefinitions =
         [
             new CodeLocationOpenTargetDefinition(
                 CodeLocationOpenTarget.VsCode,
@@ -92,15 +90,13 @@ public sealed class CodeLocationOpener
                 openAtLocation: (_, _) => (false, "Clipboard open is handled by UI."))
         ];
 
-        m_targetDefinitionsByTarget = m_targetDefinitions.ToDictionary(definition => definition.Target);
-        m_targets = m_targetDefinitions.Select(definition => definition.Target).ToArray();
+        m_targetDefinitionsByTarget = TargetDefinitions.ToDictionary(definition => definition.Target);
+        AllTargets = TargetDefinitions.Select(definition => definition.Target).ToArray();
     }
 
-    public IReadOnlyList<CodeLocationOpenTargetDefinition> TargetDefinitions =>
-        m_targetDefinitions;
+    public IReadOnlyList<CodeLocationOpenTargetDefinition> TargetDefinitions { get; }
 
-    public IReadOnlyList<CodeLocationOpenTarget> AllTargets =>
-        m_targets;
+    public IReadOnlyList<CodeLocationOpenTarget> AllTargets { get; }
 
     public bool TryGetTargetDefinition(CodeLocationOpenTarget target, out CodeLocationOpenTargetDefinition definition) =>
         m_targetDefinitionsByTarget.TryGetValue(target, out definition);
@@ -109,11 +105,6 @@ public sealed class CodeLocationOpener
         TryGetTargetDefinition(target, out var definition)
             ? definition.DisplayName
             : target.ToString();
-
-    public MaterialIconKind GetIconKind(CodeLocationOpenTarget target) =>
-        TryGetTargetDefinition(target, out var definition)
-            ? definition.IconKind
-            : MaterialIconKind.CodeTags;
 
     public bool IsTargetAvailable(CodeLocationOpenTarget target)
     {

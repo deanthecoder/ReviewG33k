@@ -373,13 +373,9 @@ public sealed class CodeReviewOrchestrator
         if (currentHeadResult.IsSuccess &&
             targetHeadResult.IsSuccess &&
             AreSameCommit(currentHeadResult.StandardOutput, targetHeadResult.StandardOutput))
-        {
             log($"Reusing existing review worktree at '{reviewFolder}' (already up to date).");
-        }
         else
-        {
             log($"Refreshing existing review worktree at '{reviewFolder}'...");
-        }
 
         var checkoutResult = await m_runGitAsync(reviewFolder, cancellationToken, ["checkout", "--detach", "--force", reviewRef]);
         EnsureSuccess(

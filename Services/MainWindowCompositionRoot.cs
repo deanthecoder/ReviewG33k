@@ -20,7 +20,7 @@ internal static class MainWindowCompositionRoot
         var gitCommandRunner = new GitCommandRunner();
         var inputValidationService = new MainWindowInputValidationService();
         var gitAvailabilityService = new GitAvailabilityService(
-            (workingDirectory, arguments) => gitCommandRunner.RunAsync(workingDirectory, arguments));
+            gitCommandRunner.RunAsync);
         var codeLocationOpener = new CodeLocationOpener();
         var reviewFindingCommentFormatter = new ReviewFindingCommentFormatter();
         var logNavigationService = new LogNavigationService();

@@ -118,7 +118,7 @@ public sealed class CodeReviewOrchestratorTests
         var solutionFile = reviewFolder.GetFile("SmartPrintController.sln");
         solutionFile.WriteAllText("Microsoft Visual Studio Solution File, Format Version 12.00");
 
-        var orchestrator = new CodeReviewOrchestrator((workingDirectory, _, arguments) =>
+        var orchestrator = new CodeReviewOrchestrator((_, _, arguments) =>
         {
             var commandText = string.Join(" ", arguments);
 

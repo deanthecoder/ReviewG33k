@@ -23,18 +23,13 @@ namespace ReviewG33k.ViewModels;
 public sealed class ReviewCategoryFilterItemViewModel : ViewModelBase
 {
     private bool m_isVisible;
-    private int m_count;
-
-    public ReviewCategoryFilterItemViewModel()
-    {
-    }
 
     public ReviewCategoryFilterItemViewModel(string categoryName, int count, string colorHex, bool isVisible)
     {
         CategoryName = string.IsNullOrWhiteSpace(categoryName)
             ? "Other"
             : categoryName.Trim();
-        m_count = count;
+        Count = count;
         var colorHex1 = string.IsNullOrWhiteSpace(colorHex)
             ? "#9FB0D0"
             : colorHex.Trim();
@@ -46,17 +41,7 @@ public sealed class ReviewCategoryFilterItemViewModel : ViewModelBase
 
     public IBrush ColorBrush { get; }
 
-    public int Count
-    {
-        get => m_count;
-        private set
-        {
-            if (!SetField(ref m_count, value))
-                return;
-
-            OnPropertyChanged(nameof(CountText));
-        }
-    }
+    public int Count { get; }
 
     public bool IsVisible
     {
@@ -73,6 +58,4 @@ public sealed class ReviewCategoryFilterItemViewModel : ViewModelBase
     public string CountText => $"{Count} issue(s)";
 
     public double RowOpacity => IsVisible ? 1.0 : 0.48;
-
-    public void UpdateCount(int count) => Count = count;
 }

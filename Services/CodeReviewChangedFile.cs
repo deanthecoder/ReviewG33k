@@ -41,18 +41,6 @@ public sealed class CodeReviewChangedFile
         string text,
         IReadOnlyList<string> lines,
         IReadOnlySet<int> addedLineNumbers,
-        object roslynCacheKey)
-        : this(status, path, fullPath, text, lines, addedLineNumbers, null, null, null, roslynCacheKey)
-    {
-    }
-
-    internal CodeReviewChangedFile(
-        string status,
-        string path,
-        string fullPath,
-        string text,
-        IReadOnlyList<string> lines,
-        IReadOnlySet<int> addedLineNumbers,
         string baselineText,
         byte[] currentBytes,
         byte[] baselineBytes,

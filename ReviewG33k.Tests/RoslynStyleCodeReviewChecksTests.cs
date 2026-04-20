@@ -1261,6 +1261,35 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void MethodCanBeStaticCheckWhenMethodUsesInstanceDelegateFieldDoesNotReport()
+    {
+        const string source = """
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                private readonly Func<string, CancellationToken, string[], Task<int>> runAsync;
+
+                public Sample(Func<string, CancellationToken, string[], Task<int>> runAsync)
+                {
+                    this.runAsync = runAsync;
+                }
+
+                private async Task<int> FindMatchingRepositoryAsync(string repositoryRoot, CancellationToken cancellationToken)
+                {
+                    return await this.runAsync(repositoryRoot, cancellationToken, ["x"]);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new MethodCanBeStaticCodeReviewCheck(), "A", source, Enumerable.Range(1, 16));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void MethodCanBeStaticCheckWhenMethodIsAlreadyStaticDoesNotReport()
     {
         const string source = """

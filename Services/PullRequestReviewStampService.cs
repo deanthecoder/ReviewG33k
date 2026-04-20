@@ -33,7 +33,7 @@ internal sealed class PullRequestReviewStampService
         BitbucketPullRequestMetadataClient pullRequestMetadataClient)
         : this(
             (workingDirectory, cancellationToken) => ResolveReviewerNameCoreAsync(gitCommandRunner, workingDirectory, cancellationToken),
-            (pullRequest, text, cancellationToken) => pullRequestMetadataClient.TryAddPullRequestCommentAsync(pullRequest, text, cancellationToken))
+            pullRequestMetadataClient.TryAddPullRequestCommentAsync)
     {
     }
 

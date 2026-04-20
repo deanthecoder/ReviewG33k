@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System;
+using System.Text.RegularExpressions;
 using System.Text;
 
 namespace ReviewG33k.Services.Checks.Support;
@@ -139,6 +140,39 @@ internal static class TextFileChangeUtilities
             StringComparison.Ordinal);
     }
 
+    public static string DetectPreferredNewline(string text)
+    {
+        var kind = DetectNewlineKind(text);
+        return kind switch
+        {
+            NewlineKind.CarriageReturnLineFeed => "\r\n",
+            NewlineKind.LineFeed => "\n",
+            NewlineKind.CarriageReturn => "\r",
+            _ => null
+        };
+    }
+
+    public static string NormalizeLineEndings(string text, string newline)
+    {
+        if (text == null)
+            return null;
+        if (string.IsNullOrEmpty(newline))
+            return text;
+
+        return text
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .Replace("\n", newline);
+    }
+
+    public static string RemoveTrailingWhitespace(string text)
+    {
+        if (text == null)
+            return null;
+
+        return TrailingWhitespaceRegex.Replace(text, string.Empty);
+    }
+
     private static string RemoveTrailingLineWhitespace(string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -172,6 +206,8 @@ internal static class TextFileChangeUtilities
 
         return builder.ToString();
     }
+
+    private static readonly Regex TrailingWhitespaceRegex = new(@"[ \t]+(?=\r?\n|$)", RegexOptions.Compiled);
 }
 
 internal enum TextEncodingKind

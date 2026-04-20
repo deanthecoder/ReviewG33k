@@ -34,10 +34,17 @@ public sealed class CodeSmellReport
             m_info.Add(message.Trim());
     }
 
-    public void AddFinding(CodeReviewFindingSeverity severity, string ruleId, string filePath, int lineNumber, string message)
+    public void AddFinding(
+        CodeReviewFindingSeverity severity,
+        string ruleId,
+        string filePath,
+        int lineNumber,
+        string message,
+        string currentText = null,
+        string baselineText = null)
     {
         lock (m_syncRoot)
-            m_findings.Add(new CodeSmellFinding(severity, ruleId, filePath, lineNumber, FormatMessage(message)));
+            m_findings.Add(new CodeSmellFinding(severity, ruleId, filePath, lineNumber, FormatMessage(message), currentText, baselineText));
     }
 
     private static string FormatMessage(string message)

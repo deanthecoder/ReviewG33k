@@ -20,6 +20,13 @@ public abstract class CodeReviewCheckBase : ICodeReviewCheck
 
     public abstract void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report);
 
-    protected void AddFinding(CodeSmellReport report, CodeReviewFindingSeverity severity, string filePath, int lineNumber, string message) =>
-        report.AddFinding(severity, RuleId, filePath, lineNumber, message);
+    protected void AddFinding(
+        CodeSmellReport report,
+        CodeReviewFindingSeverity severity,
+        string filePath,
+        int lineNumber,
+        string message,
+        string currentText = null,
+        string baselineText = null) =>
+        report.AddFinding(severity, RuleId, filePath, lineNumber, message, currentText, baselineText);
 }

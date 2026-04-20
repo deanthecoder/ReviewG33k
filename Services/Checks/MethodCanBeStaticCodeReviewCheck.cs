@@ -286,6 +286,16 @@ public sealed class MethodCanBeStaticCodeReviewCheck : RoslynSemanticCodeReviewC
         if (semanticModel == null || invocation == null || containingType == null)
             return false;
 
+        var targetSymbolInfo = semanticModel.GetSymbolInfo(invocation.Expression);
+        var targetSymbols = targetSymbolInfo.Symbol != null
+            ? [targetSymbolInfo.Symbol]
+            : targetSymbolInfo.CandidateSymbols;
+        foreach (var targetSymbol in targetSymbols)
+        {
+            if (RequiresInstance(targetSymbol, containingType))
+                return true;
+        }
+
         var symbolInfo = semanticModel.GetSymbolInfo(invocation);
         var candidateMethods = symbolInfo.Symbol != null
             ? [symbolInfo.Symbol]

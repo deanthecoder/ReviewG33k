@@ -8,6 +8,8 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System;
+using System.IO;
 using System.Linq;
 using ReviewG33k.Services.Checks.Support;
 
@@ -19,13 +21,44 @@ namespace ReviewG33k.Services.Checks;
 /// <remarks>
 /// Gives reviewers a low-noise signal when a file can be excluded from behavioral review.
 /// </remarks>
-public sealed class TrailingWhitespaceOnlyChangeCodeReviewCheck : CodeReviewCheckBase
+public sealed class TrailingWhitespaceOnlyChangeCodeReviewCheck : CodeReviewCheckBase, IFixableCodeReviewCheck
 {
     public override string RuleId => CodeReviewRuleIds.TrailingWhitespaceOnlyChange;
 
     public override string DisplayName => "Only trailing whitespace changed";
 
     public override CodeReviewCheckScope Scope => CodeReviewCheckScope.ChangedFileSet;
+
+    public bool CanFix(CodeSmellFinding finding) =>
+        finding != null &&
+        string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase) &&
+        finding.LineNumber > 0;
+
+    public bool TryFix(CodeSmellFinding finding, FileInfo resolvedFile, out string resultMessage)
+    {
+        if (!this.TryPrepareFix(
+                finding,
+                resolvedFile,
+                out var sourceText,
+                out _,
+                out resultMessage))
+        {
+            return false;
+        }
+
+        var updatedText = TextFileChangeUtilities.RemoveTrailingWhitespace(sourceText.ToString());
+        if (string.Equals(updatedText, sourceText.ToString(), StringComparison.Ordinal))
+        {
+            resultMessage = "File does not contain removable trailing whitespace.";
+            return false;
+        }
+
+        if (!this.TryWriteUpdatedText(resolvedFile, updatedText, out resultMessage))
+            return false;
+
+        resultMessage = "Removed trailing whitespace from the file.";
+        return true;
+    }
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
@@ -42,7 +75,9 @@ public sealed class TrailingWhitespaceOnlyChangeCodeReviewCheck : CodeReviewChec
                 CodeReviewFindingSeverity.Hint,
                 file.Path,
                 lineNumber,
-                "Only trailing whitespace appears to have changed in this file.");
+                "Only trailing whitespace appears to have changed in this file.",
+                currentText: file.Text,
+                baselineText: file.BaselineText);
         }
     }
 }

@@ -402,6 +402,57 @@ public sealed class FixableCodeReviewChecksTests
     }
 
     [Test]
+    public void FileNewlineChangedCheckTryFixRestoresBaselineLineEndings()
+    {
+        using var tempFile = new TempFile(".cs");
+        const string source = "public sealed class Sample\r\n{\r\n    public void Run()\r\n    {\r\n    }\r\n}\r\n";
+        const string baseline = "public sealed class Sample\n{\n    public void Run()\n    {\n    }\n}\n";
+
+        tempFile.WriteAllText(source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.FileNewlineChanged,
+            "Sample.cs",
+            1,
+            "File newline style changed from LF to CRLF.",
+            currentText: source,
+            baselineText: baseline);
+
+        var check = new FileNewlineChangedCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Is.EqualTo("Restored original line ending style (LF)."));
+        Assert.That(tempFile.ReadAllText(), Is.EqualTo(baseline));
+    }
+
+    [Test]
+    public void TrailingWhitespaceOnlyChangeCheckTryFixRemovesTrailingWhitespace()
+    {
+        using var tempFile = new TempFile(".cs");
+        const string source = "public sealed class Sample\r\n{\r\n    public void Run()\t \r\n}\r\n";
+
+        tempFile.WriteAllText(source);
+
+        var finding = new CodeSmellFinding(
+            CodeReviewFindingSeverity.Hint,
+            CodeReviewRuleIds.TrailingWhitespaceOnlyChange,
+            "Sample.cs",
+            1,
+            "Only trailing whitespace appears to have changed in this file.",
+            currentText: source,
+            baselineText: "public sealed class Sample\r\n{\r\n    public void Run()\r\n}\r\n");
+
+        var check = new TrailingWhitespaceOnlyChangeCodeReviewCheck();
+        var success = check.TryFix(finding, tempFile, out var message);
+
+        Assert.That(success, Is.True);
+        Assert.That(message, Is.EqualTo("Removed trailing whitespace from the file."));
+        Assert.That(tempFile.ReadAllText(), Is.EqualTo("public sealed class Sample\r\n{\r\n    public void Run()\r\n}\r\n"));
+    }
+
+    [Test]
     public void MissingBlankLineBetweenMethodsCheckTryFixInsertsBlankLineBeforeSecondMethod()
     {
         using var tempFile = new TempFile(".cs");

@@ -25,11 +25,7 @@ internal static class CodeReviewCheckUtilities
     private static readonly Regex DocumentableTypeDeclarationRegex = new(
         @"^\s*(?<modifiers>(?:(?:public|internal|sealed|abstract|partial|static)\s+)+)\b(class|interface|record|struct)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
         RegexOptions.Multiline | RegexOptions.Compiled);
-
-    public static bool LooksLikeEventHandlerSignature(string line) =>
-        line?.Contains("(object ", StringComparison.OrdinalIgnoreCase) == true &&
-        line.Contains("EventArgs", StringComparison.OrdinalIgnoreCase);
-
+    
     public static bool LooksLikePublicLockObject(IReadOnlyList<string> fileLines, string lockTarget)
     {
         var fieldPattern = $@"\bpublic\s+(?:static\s+)?(?:readonly\s+)?(?:object|System\.Object)\s+{Regex.Escape(lockTarget)}\b";
@@ -38,25 +34,7 @@ internal static class CodeReviewCheckUtilities
         return fileLines.Any(line => Regex.IsMatch(line, fieldPattern, RegexOptions.IgnoreCase)) ||
                fileLines.Any(line => Regex.IsMatch(line, propertyPattern, RegexOptions.IgnoreCase));
     }
-
-    public static bool TryGetDocumentableTypeDeclaration(string fileText, out string typeName, out int lineNumber)
-    {
-        typeName = null;
-        lineNumber = 0;
-
-        var match = DocumentableTypeDeclarationRegex.Match(fileText ?? string.Empty);
-        if (!match.Success)
-            return false;
-
-        var modifiers = match.Groups["modifiers"].Value;
-        if (!Regex.IsMatch(modifiers, @"\b(?:public|internal)\b", RegexOptions.CultureInvariant))
-            return false;
-
-        typeName = match.Groups["name"].Value;
-        lineNumber = (fileText ?? string.Empty)[..match.Index].Count(character => character == '\n') + 1;
-        return !string.IsNullOrWhiteSpace(typeName);
-    }
-
+    
     public static bool TryGetPublicTypeDeclaration(string fileText, out string typeName, out int lineNumber)
     {
         typeName = null;
@@ -74,44 +52,7 @@ internal static class CodeReviewCheckUtilities
         lineNumber = (fileText ?? string.Empty)[..match.Index].Count(character => character == '\n') + 1;
         return !string.IsNullOrWhiteSpace(typeName);
     }
-
-    public static bool HasXmlDocumentationAbove(IReadOnlyList<string> lines, int declarationLineNumber)
-    {
-        var index = declarationLineNumber - 2;
-        var encounteredAttribute = false;
-        var encounteredXmlDoc = false;
-        while (index >= 0)
-        {
-            var trimmed = lines[index].Trim();
-            if (string.IsNullOrWhiteSpace(trimmed))
-            {
-                index--;
-                continue;
-            }
-
-            if (trimmed.StartsWith("///", StringComparison.Ordinal))
-            {
-                encounteredXmlDoc = true;
-                index--;
-                continue;
-            }
-
-            if (trimmed.StartsWith("[", StringComparison.Ordinal))
-            {
-                encounteredAttribute = true;
-                index--;
-                continue;
-            }
-
-            if (encounteredAttribute)
-                return encounteredXmlDoc;
-
-            return encounteredXmlDoc;
-        }
-
-        return encounteredXmlDoc;
-    }
-
+    
     public static IEnumerable<CatchBlockInfo> EnumerateAddedCatchBlocks(CodeReviewChangedFile file)
     {
         if (file.AddedLineNumbers.Count == 0 || string.IsNullOrWhiteSpace(file.Text))

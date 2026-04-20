@@ -93,7 +93,7 @@ public sealed class BlankLineBetweenBracePairsCodeReviewCheck : CodeReviewCheckB
     private static bool HasAnyAddedLine(CodeReviewChangedFile file, int startLineNumberInclusive, int endLineNumberInclusive) =>
         file.IsAdded ||
         Enumerable.Range(startLineNumberInclusive, endLineNumberInclusive - startLineNumberInclusive + 1)
-            .Any(lineNumber => file.AddedLineNumbers.Contains(lineNumber));
+            .Any(file.AddedLineNumbers.Contains);
 
     private static bool TryFindBraceGap(int lineCount, Func<int, string> getLineText, int endIndex, out int blankLineStartIndex, out char braceKind)
     {

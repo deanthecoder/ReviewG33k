@@ -95,7 +95,10 @@ public sealed class StringConcatenationToSameTargetCodeReviewCheck : RoslynSeman
             return false;
 
         if (assignment.IsKind(SyntaxKind.AddAssignmentExpression))
-            return TryBuildTarget(semanticModel, assignment.Left, out targetKey, out displayName, out lineNumber);
+        {
+            BuildTarget(semanticModel, assignment.Left, out targetKey, out displayName, out lineNumber);
+            return true;
+        }
 
         if (!assignment.IsKind(SyntaxKind.SimpleAssignmentExpression))
             return false;
@@ -112,7 +115,8 @@ public sealed class StringConcatenationToSameTargetCodeReviewCheck : RoslynSeman
         if (!ExpressionContainsTarget(semanticModel, binaryExpression, assignment.Left))
             return false;
 
-        return TryBuildTarget(semanticModel, assignment.Left, out targetKey, out displayName, out lineNumber);
+        BuildTarget(semanticModel, assignment.Left, out targetKey, out displayName, out lineNumber);
+        return true;
     }
 
     private static bool ExpressionContainsTarget(SemanticModel semanticModel, ExpressionSyntax expression, ExpressionSyntax target)
@@ -133,7 +137,7 @@ public sealed class StringConcatenationToSameTargetCodeReviewCheck : RoslynSeman
         return false;
     }
 
-    private static bool TryBuildTarget(
+    private static void BuildTarget(
         SemanticModel semanticModel,
         ExpressionSyntax left,
         out string targetKey,
@@ -149,13 +153,12 @@ public sealed class StringConcatenationToSameTargetCodeReviewCheck : RoslynSeman
         if (targetSymbol == null)
         {
             targetKey = $"text::{displayName}";
-            return true;
+            return;
         }
 
         var symbolName = targetSymbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
         targetKey = $"symbol::{symbolName}";
         displayName = targetSymbol.Name;
-        return true;
     }
 
     private static ISymbol GetTargetSymbol(SemanticModel semanticModel, ExpressionSyntax expression)

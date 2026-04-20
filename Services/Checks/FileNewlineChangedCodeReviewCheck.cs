@@ -8,6 +8,8 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System;
+using System.IO;
 using ReviewG33k.Services.Checks.Support;
 
 namespace ReviewG33k.Services.Checks;
@@ -18,13 +20,51 @@ namespace ReviewG33k.Services.Checks;
 /// <remarks>
 /// Keeps file-wide LF/CRLF churn visible so reviewers can separate formatting noise from meaningful edits.
 /// </remarks>
-public sealed class FileNewlineChangedCodeReviewCheck : CodeReviewCheckBase
+public sealed class FileNewlineChangedCodeReviewCheck : CodeReviewCheckBase, IFixableCodeReviewCheck
 {
     public override string RuleId => CodeReviewRuleIds.FileNewlineChanged;
 
     public override string DisplayName => "File newline style changed";
 
     public override CodeReviewCheckScope Scope => CodeReviewCheckScope.ChangedFileSet;
+
+    public bool CanFix(CodeSmellFinding finding) =>
+        finding != null &&
+        string.Equals(finding.RuleId, RuleId, StringComparison.OrdinalIgnoreCase) &&
+        finding.LineNumber > 0;
+
+    public bool TryFix(CodeSmellFinding finding, FileInfo resolvedFile, out string resultMessage)
+    {
+        if (!this.TryPrepareFix(
+                finding,
+                resolvedFile,
+                out var sourceText,
+                out _,
+                out resultMessage))
+        {
+            return false;
+        }
+
+        var baselineNewline = TextFileChangeUtilities.DetectPreferredNewline(finding?.BaselineText);
+        if (string.IsNullOrEmpty(baselineNewline))
+        {
+            resultMessage = "Could not detect the original line ending style for this file.";
+            return false;
+        }
+
+        var updatedText = TextFileChangeUtilities.NormalizeLineEndings(sourceText.ToString(), baselineNewline);
+        if (string.Equals(updatedText, sourceText.ToString(), StringComparison.Ordinal))
+        {
+            resultMessage = "File already matches the original line ending style.";
+            return false;
+        }
+
+        if (!this.TryWriteUpdatedText(resolvedFile, updatedText, out resultMessage))
+            return false;
+
+        resultMessage = $"Restored original line ending style ({TextFileChangeUtilities.GetNewlineDisplayName(TextFileChangeUtilities.DetectNewlineKind(finding.BaselineText))}).";
+        return true;
+    }
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {
@@ -47,7 +87,9 @@ public sealed class FileNewlineChangedCodeReviewCheck : CodeReviewCheckBase
                 CodeReviewFindingSeverity.Hint,
                 file.Path,
                 1,
-                $"File newline style changed from {TextFileChangeUtilities.GetNewlineDisplayName(baselineNewlines)} to {TextFileChangeUtilities.GetNewlineDisplayName(currentNewlines)}.");
+                $"File newline style changed from {TextFileChangeUtilities.GetNewlineDisplayName(baselineNewlines)} to {TextFileChangeUtilities.GetNewlineDisplayName(currentNewlines)}.",
+                currentText: file.Text,
+                baselineText: file.BaselineText);
         }
     }
 }

@@ -12,13 +12,22 @@ namespace ReviewG33k.Services;
 
 public sealed class CodeSmellFinding
 {
-    public CodeSmellFinding(CodeReviewFindingSeverity severity, string ruleId, string filePath, int lineNumber, string message)
+    public CodeSmellFinding(
+        CodeReviewFindingSeverity severity,
+        string ruleId,
+        string filePath,
+        int lineNumber,
+        string message,
+        string currentText = null,
+        string baselineText = null)
     {
         Severity = severity;
         RuleId = ruleId ?? string.Empty;
         FilePath = filePath ?? string.Empty;
         LineNumber = lineNumber;
         Message = message ?? string.Empty;
+        CurrentText = currentText;
+        BaselineText = baselineText;
     }
 
     public CodeReviewFindingSeverity Severity { get; }
@@ -30,4 +39,8 @@ public sealed class CodeSmellFinding
     public int LineNumber { get; }
 
     public string Message { get; }
+
+    public string CurrentText { get; }
+
+    public string BaselineText { get; }
 }
