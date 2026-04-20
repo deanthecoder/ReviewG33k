@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,6 +20,9 @@ public sealed class GitCommandRunner
 {
     public async Task<GitCommandResult> RunAsync(string workingDirectory, params string[] arguments)
         => await RunAsync(workingDirectory, CancellationToken.None, arguments);
+
+    public async Task<GitCommandBinaryResult> RunBytesAsync(string workingDirectory, params string[] arguments)
+        => await RunBytesAsync(workingDirectory, CancellationToken.None, arguments);
 
     public async Task<GitCommandResult> RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
     {
@@ -54,5 +58,41 @@ public sealed class GitCommandRunner
         cancellationToken.ThrowIfCancellationRequested();
 
         return new GitCommandResult(process.ExitCode, outputBuilder.ToString(), errorBuilder.ToString(), string.Join(" ", arguments));
+    }
+
+    public async Task<GitCommandBinaryResult> RunBytesAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            UseShellExecute = false
+        };
+
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        await using var outputStream = new MemoryStream();
+        var errorBuilder = new StringBuilder();
+
+        using var process = new Process { StartInfo = startInfo };
+        process.Start();
+
+        var outputTask = process.StandardOutput.BaseStream.CopyToAsync(outputStream, cancellationToken);
+        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        await process.WaitForExitAsync(cancellationToken);
+
+        await outputTask;
+        errorBuilder.Append(await errorTask);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return new GitCommandBinaryResult(process.ExitCode, outputStream.ToArray(), errorBuilder.ToString(), string.Join(" ", arguments));
     }
 }

@@ -16,7 +16,21 @@ namespace ReviewG33k.Services;
 public sealed class CodeReviewChangedFile
 {
     public CodeReviewChangedFile(string status, string path, string fullPath, string text, IReadOnlyList<string> lines, IReadOnlySet<int> addedLineNumbers)
-        : this(status, path, fullPath, text, lines, addedLineNumbers, null)
+        : this(status, path, fullPath, text, lines, addedLineNumbers, null, null, null, null)
+    {
+    }
+
+    public CodeReviewChangedFile(
+        string status,
+        string path,
+        string fullPath,
+        string text,
+        IReadOnlyList<string> lines,
+        IReadOnlySet<int> addedLineNumbers,
+        string baselineText,
+        byte[] currentBytes,
+        byte[] baselineBytes)
+        : this(status, path, fullPath, text, lines, addedLineNumbers, baselineText, currentBytes, baselineBytes, null)
     {
     }
 
@@ -28,6 +42,21 @@ public sealed class CodeReviewChangedFile
         IReadOnlyList<string> lines,
         IReadOnlySet<int> addedLineNumbers,
         object roslynCacheKey)
+        : this(status, path, fullPath, text, lines, addedLineNumbers, null, null, null, roslynCacheKey)
+    {
+    }
+
+    internal CodeReviewChangedFile(
+        string status,
+        string path,
+        string fullPath,
+        string text,
+        IReadOnlyList<string> lines,
+        IReadOnlySet<int> addedLineNumbers,
+        string baselineText,
+        byte[] currentBytes,
+        byte[] baselineBytes,
+        object roslynCacheKey)
     {
         Status = status ?? string.Empty;
         Path = path ?? string.Empty;
@@ -35,6 +64,9 @@ public sealed class CodeReviewChangedFile
         Text = text ?? string.Empty;
         Lines = lines ?? [];
         AddedLineNumbers = addedLineNumbers ?? new HashSet<int>();
+        BaselineText = baselineText;
+        CurrentBytes = currentBytes;
+        BaselineBytes = baselineBytes;
         RoslynCacheKey = roslynCacheKey ?? this;
     }
 
@@ -50,7 +82,15 @@ public sealed class CodeReviewChangedFile
 
     public IReadOnlySet<int> AddedLineNumbers { get; }
 
+    public string BaselineText { get; }
+
+    public byte[] CurrentBytes { get; }
+
+    public byte[] BaselineBytes { get; }
+
     public bool IsAdded => Status.Equals("A", StringComparison.OrdinalIgnoreCase);
+
+    public bool HasComparableBaseline => BaselineText != null || BaselineBytes != null;
 
     internal object RoslynCacheKey { get; }
 }

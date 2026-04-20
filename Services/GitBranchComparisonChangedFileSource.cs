@@ -91,6 +91,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             info.Add($"Code review scan: Using local target branch '{targetBranch}' because origin/{targetBranch} was not available.");
 
         var diffRange = $"{baseRef}...HEAD";
+        var comparisonBaseRef = await ResolveMergeBaseAsync(baseRef) ?? baseRef;
         progressLogger?.Invoke($"Code review scan: Enumerating files changed since {baseRef}...");
         var nameStatusResult = await m_gitCommandRunner.RunAsync(
             m_repositoryPath,
@@ -138,8 +139,18 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             if (!fullPath.Exists())
                 continue;
 
-            var text = await File.ReadAllTextAsync(fullPath.FullName);
-            var lines = SplitLines(text);
+            var baselineRevision = entry.Status.Equals("A", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : baseDiffPaths.Contains(RepositoryUtilities.NormalizeRepoPath(entry.Path))
+                    ? comparisonBaseRef
+                    : "HEAD";
+            var content = await GitChangedFileContent.LoadAsync(
+                m_gitCommandRunner,
+                m_repositoryPath,
+                fullPath,
+                baselineRevision,
+                entry.Path);
+            var lines = SplitLines(content.Text);
             HashSet<int> addedLineNumbers;
             if (baseDiffPaths.Contains(RepositoryUtilities.NormalizeRepoPath(entry.Path)))
                 addedLineNumbers = await GetAddedLineNumbersAsync(diffRange, entry.Path);
@@ -148,7 +159,16 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
             else
                 addedLineNumbers = await GetAddedLineNumbersAsync("HEAD", entry.Path);
 
-            changedFiles.Add(new CodeReviewChangedFile(entry.Status, entry.Path, fullPath.FullName, text, lines, addedLineNumbers));
+            changedFiles.Add(new CodeReviewChangedFile(
+                entry.Status,
+                entry.Path,
+                fullPath.FullName,
+                content.Text,
+                lines,
+                addedLineNumbers,
+                content.BaselineText,
+                content.Bytes,
+                content.BaselineBytes));
 
             var filesProcessed = index + 1;
             if (ShouldLogFileProgress(filesProcessed, changedFileEntries.Length))
@@ -191,6 +211,18 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
         }
 
         return null;
+    }
+
+    private async Task<string> ResolveMergeBaseAsync(string baseRef)
+    {
+        if (string.IsNullOrWhiteSpace(baseRef))
+            return null;
+
+        var result = await m_gitCommandRunner.RunAsync(m_repositoryPath, "merge-base", baseRef, "HEAD");
+        if (!result.IsSuccess)
+            return null;
+
+        return NormalizeCommitHash(result.StandardOutput);
     }
 
     private async Task<string> TryGetOriginHeadBranchNameAsync()
@@ -413,6 +445,17 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
 
     private static IReadOnlyList<string> SplitLines(string text) =>
         (text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+
+    private static string NormalizeCommitHash(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var firstLine = value
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault() ?? string.Empty;
+        return firstLine.Trim();
+    }
 
     private static bool ShouldLogFileProgress(int filesProcessed, int totalFiles) =>
         filesProcessed == 1 || filesProcessed == totalFiles || filesProcessed % 25 == 0;

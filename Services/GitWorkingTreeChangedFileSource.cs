@@ -94,13 +94,28 @@ public sealed class GitWorkingTreeChangedFileSource : ICodeReviewChangedFileSour
             if (!fullPath.Exists())
                 continue;
 
-            var text = await File.ReadAllTextAsync(fullPath.FullName);
-            var lines = SplitLines(text);
+            var baselineRevision = entry.Status.Equals("A", StringComparison.OrdinalIgnoreCase) ? null : "HEAD";
+            var content = await GitChangedFileContent.LoadAsync(
+                m_gitCommandRunner,
+                m_repositoryPath,
+                fullPath,
+                baselineRevision,
+                entry.Path);
+            var lines = SplitLines(content.Text);
             var addedLineNumbers = entry.Status.Equals("A", StringComparison.OrdinalIgnoreCase)
                 ? new HashSet<int>(Enumerable.Range(1, lines.Count))
                 : await GetAddedLineNumbersAsync("HEAD", entry.Path);
 
-            changedFiles.Add(new CodeReviewChangedFile(entry.Status, entry.Path, fullPath.FullName, text, lines, addedLineNumbers));
+            changedFiles.Add(new CodeReviewChangedFile(
+                entry.Status,
+                entry.Path,
+                fullPath.FullName,
+                content.Text,
+                lines,
+                addedLineNumbers,
+                content.BaselineText,
+                content.Bytes,
+                content.BaselineBytes));
 
             var filesProcessed = index + 1;
             if (ShouldLogFileProgress(filesProcessed, changedFileEntries.Length))

@@ -259,7 +259,17 @@ public sealed class CodeSmellReportAnalyzer
             return null;
 
         var allLines = new HashSet<int>(Enumerable.Range(1, file.Lines.Count));
-        return new CodeReviewChangedFile(file.Status, file.Path, file.FullPath, file.Text, file.Lines, allLines, file.RoslynCacheKey);
+        return new CodeReviewChangedFile(
+            file.Status,
+            file.Path,
+            file.FullPath,
+            file.Text,
+            file.Lines,
+            allLines,
+            file.BaselineText,
+            file.CurrentBytes,
+            file.BaselineBytes,
+            file.RoslynCacheKey);
     }
 
     private sealed class CodeReviewCheckContextSet
