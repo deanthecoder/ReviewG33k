@@ -18,7 +18,7 @@ namespace ReviewG33k.Tests;
 public sealed class GitWhitespaceInsensitiveDiffTests
 {
     [Test]
-    public async Task GitWorkingTreeChangedFileSourceWhenOnlyLineEndingsDifferSkipsFile()
+    public async Task GitWorkingTreeChangedFileSourceWhenOnlyLineEndingsDifferIncludesFile()
     {
         using var tempRoot = new TempDirectory();
         var git = new GitCommandRunner();
@@ -29,11 +29,13 @@ public sealed class GitWhitespaceInsensitiveDiffTests
         var source = new GitWorkingTreeChangedFileSource(git, tempRoot.FullName);
         var result = await source.LoadAsync();
 
-        Assert.That(result.Files, Is.Empty);
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("src/App/Worker.cs"));
+        Assert.That(result.Files[0].BaselineText, Is.Not.Null);
     }
 
     [Test]
-    public async Task GitBranchComparisonChangedFileSourceWhenOnlyLineEndingsDifferSkipsFile()
+    public async Task GitBranchComparisonChangedFileSourceWhenOnlyLineEndingsDifferIncludesFile()
     {
         using var tempRoot = new TempDirectory();
         var git = new GitCommandRunner();
@@ -47,11 +49,13 @@ public sealed class GitWhitespaceInsensitiveDiffTests
         var source = new GitBranchComparisonChangedFileSource(git, tempRoot.FullName, "main", fetchTargetBranch: false);
         var result = await source.LoadAsync();
 
-        Assert.That(result.Files, Is.Empty);
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("src/App/Worker.cs"));
+        Assert.That(result.Files[0].BaselineText, Is.Not.Null);
     }
 
     [Test]
-    public async Task GitSingleCommitChangedFileSourceWhenOnlyLineEndingsDifferSkipsFile()
+    public async Task GitSingleCommitChangedFileSourceWhenOnlyLineEndingsDifferIncludesFile()
     {
         using var tempRoot = new TempDirectory();
         var git = new GitCommandRunner();
@@ -66,7 +70,9 @@ public sealed class GitWhitespaceInsensitiveDiffTests
         var source = new GitSingleCommitChangedFileSource(git, tempRoot.FullName, headResult.StandardOutput.Trim());
         var result = await source.LoadAsync();
 
-        Assert.That(result.Files, Is.Empty);
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("src/App/Worker.cs"));
+        Assert.That(result.Files[0].BaselineText, Is.Not.Null);
     }
 
     private static async Task<FileInfo> CreateRepositoryWithTrackedSourceFileAsync(TempDirectory tempRoot, GitCommandRunner git)

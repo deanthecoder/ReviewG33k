@@ -107,7 +107,10 @@ internal static class CodeReviewFindingCategoryResolver
 
             CodeReviewRuleIds.WarningSuppression or
             CodeReviewRuleIds.UnusedUsingsRoslyn or
-            CodeReviewRuleIds.MissingDisclaimerForNewSourceFile => RepoHygiene,
+            CodeReviewRuleIds.MissingDisclaimerForNewSourceFile or
+            CodeReviewRuleIds.FileEncodingChanged or
+            CodeReviewRuleIds.FileNewlineChanged or
+            CodeReviewRuleIds.TrailingWhitespaceOnlyChange => RepoHygiene,
 
             _ => Maintainability
         };

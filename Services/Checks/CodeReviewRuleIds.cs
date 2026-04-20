@@ -59,6 +59,9 @@ public static class CodeReviewRuleIds
     public const string ResxBritishEnglishInAmericanLocale = "resx-british-english-in-american-locale";
     public const string UnusedUsingsRoslyn = "unused-usings-roslyn";
     public const string WarningSuppression = "warning-suppression";
+    public const string FileEncodingChanged = "file-encoding-changed";
+    public const string FileNewlineChanged = "file-newline-changed";
+    public const string TrailingWhitespaceOnlyChange = "trailing-whitespace-only-change";
     public const string MissingTypedBindingContext = "missing-typed-binding-context";
     public const string FixedSizeLayoutContainer = "fixed-size-layout-container";
     public const string SingleChildWrapperContainer = "single-child-wrapper-container";

@@ -162,6 +162,9 @@ ReviewG33k labels each finding with one of these categories:
 | Nested same-panel wrappers | Redundant nested containers of the same panel type. |
 | Empty multi-child containers | Multi-child container elements declared with no children. |
 | Warning suppressions | New `#pragma warning disable` or `[SuppressMessage]` suppressions. |
+| File encoding changes | Changed text files whose detected encoding changed. |
+| File newline style changes | Changed text files whose newline style changed between LF, CRLF, CR, or mixed styles. |
+| Only trailing whitespace changed | Files where the diff appears to consist only of trailing whitespace changes. |
 
 ## License
 Licensed under the MIT License. See [LICENSE](LICENSE) for details.

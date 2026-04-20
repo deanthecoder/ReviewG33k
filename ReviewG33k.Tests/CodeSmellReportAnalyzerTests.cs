@@ -55,6 +55,9 @@ public sealed class CodeSmellReportAnalyzerTests
         var resxMissingLocaleKeysCheck = analyzer.Checks.OfType<ResxMissingLocaleKeysCodeReviewCheck>().Single();
         var resxUnexpectedExtraKeysCheck = analyzer.Checks.OfType<ResxUnexpectedExtraKeysCodeReviewCheck>().Single();
         var unusedUsingCheck = analyzer.Checks.OfType<UnusedUsingRoslynCodeReviewCheck>().Single();
+        var fileEncodingChangedCheck = analyzer.Checks.OfType<FileEncodingChangedCodeReviewCheck>().Single();
+        var fileNewlineChangedCheck = analyzer.Checks.OfType<FileNewlineChangedCodeReviewCheck>().Single();
+        var trailingWhitespaceOnlyChangeCheck = analyzer.Checks.OfType<TrailingWhitespaceOnlyChangeCodeReviewCheck>().Single();
         var localVariableCanBeConstCheck = analyzer.Checks.OfType<LocalVariableCanBeConstCodeReviewCheck>().Single();
         var unusedLocalVariableCheck = analyzer.Checks.OfType<UnusedLocalVariableCodeReviewCheck>().Single();
         var privateFieldUsedInSingleMethodCheck = analyzer.Checks.OfType<PrivateFieldUsedInSingleMethodCodeReviewCheck>().Single();
@@ -75,6 +78,9 @@ public sealed class CodeSmellReportAnalyzerTests
         Assert.That(resxMissingLocaleKeysCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
         Assert.That(resxUnexpectedExtraKeysCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
         Assert.That(unusedUsingCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
+        Assert.That(fileEncodingChangedCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
+        Assert.That(fileNewlineChangedCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
+        Assert.That(trailingWhitespaceOnlyChangeCheck.Scope, Is.EqualTo(CodeReviewCheckScope.ChangedFileSet));
         Assert.That(localVariableCanBeConstCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(unusedLocalVariableCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(privateFieldUsedInSingleMethodCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
