@@ -38,6 +38,7 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.ThrowExInCatch or
             CodeReviewRuleIds.PublicMethodArgumentGuards or
             CodeReviewRuleIds.ConstructorEventSubscriptionLifecycle or
+            CodeReviewRuleIds.PropertySetterIgnoresValue or
             CodeReviewRuleIds.NumericStringCultureForFileWrite => Correctness,
 
             CodeReviewRuleIds.AsyncVoid or

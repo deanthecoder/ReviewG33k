@@ -298,6 +298,7 @@ public sealed class CodeSmellReportAnalyzer
         new PropertyCanBeAutoPropertyCodeReviewCheck(),
         new PrivateGetOnlyAutoPropertyShouldBeFieldCodeReviewCheck(),
         new PrivatePropertyShouldBeFieldCodeReviewCheck(),
+        new PropertySetterIgnoresValueCodeReviewCheck(),
         new PrivateFieldCanBeReadonlyCodeReviewCheck(),
         new PrivateFieldUsedInSingleMethodCodeReviewCheck(),
         new MissingBlankLineBetweenMethodsCodeReviewCheck(),

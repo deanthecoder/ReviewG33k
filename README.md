@@ -93,6 +93,7 @@ ReviewG33k labels each finding with one of these categories:
 | Multiple enumeration | Re-enumerating deferred `IEnumerable` values unexpectedly. |
 | Eagerly materialized IEnumerable returns | `IEnumerable` methods that return `ToList()`/`ToArray()` results instead of a deferred sequence. |
 | LINQ Count compared to zero | `Count()`/`LongCount()` zero checks on sequences where `Any()` is clearer and cheaper. |
+| Property setter ignores value | Setters that do not read the implicit `value` parameter. |
 | Public method argument guards | Missing null guards in newly added public methods. |
 | Numeric formatting for file output | `double`/`float`/`decimal` converted to text for file writes without `InvariantCulture`. |
 

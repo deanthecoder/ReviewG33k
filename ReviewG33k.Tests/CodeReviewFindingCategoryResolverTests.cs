@@ -28,6 +28,9 @@ public sealed class CodeReviewFindingCategoryResolverTests
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.EmptyMethod),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Correctness));
             Assert.That(
+                CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.PropertySetterIgnoresValue),
+                Is.EqualTo(CodeReviewFindingCategoryResolver.Correctness));
+            Assert.That(
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.ResxMissingLocaleKeys),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Resources));
             Assert.That(
