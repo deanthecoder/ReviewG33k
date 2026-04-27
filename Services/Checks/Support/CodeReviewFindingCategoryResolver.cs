@@ -117,6 +117,7 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.MissingDisclaimerForNewSourceFile or
             CodeReviewRuleIds.FileEncodingChanged or
             CodeReviewRuleIds.FileNewlineChanged or
+            CodeReviewRuleIds.FormattingOnlyChange or
             CodeReviewRuleIds.TrailingWhitespaceOnlyChange => RepoHygiene,
 
             _ => Maintainability

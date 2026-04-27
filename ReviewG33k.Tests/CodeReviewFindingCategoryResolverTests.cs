@@ -40,6 +40,9 @@ public sealed class CodeReviewFindingCategoryResolverTests
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.LinqCountComparedToZero),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Performance));
             Assert.That(
+                CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.FormattingOnlyChange),
+                Is.EqualTo(CodeReviewFindingCategoryResolver.RepoHygiene));
+            Assert.That(
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.EmptyDispose),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Resources));
             Assert.That(

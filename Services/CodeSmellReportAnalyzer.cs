@@ -358,6 +358,7 @@ public sealed class CodeSmellReportAnalyzer
         new WarningSuppressionCodeReviewCheck(),
         new FileEncodingChangedCodeReviewCheck(),
         new FileNewlineChangedCodeReviewCheck(),
+        new FormattingOnlyChangeCodeReviewCheck(),
         new TrailingWhitespaceOnlyChangeCodeReviewCheck(),
         new UnusedUsingRoslynCodeReviewCheck(),
         new LocalVariableCanBeConstCodeReviewCheck(),

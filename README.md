@@ -171,6 +171,7 @@ ReviewG33k labels each finding with one of these categories:
 | Warning suppressions | New `#pragma warning disable` or `[SuppressMessage]` suppressions. |
 | File encoding changes | Changed text files whose detected encoding changed. |
 | File newline style changes | Changed text files whose newline style changed between LF, CRLF, CR, or mixed styles. |
+| Only formatting changed | Production C# files where only whitespace formatting changed. |
 | Only trailing whitespace changed | Files where the diff appears to consist only of trailing whitespace changes. |
 
 ## License
