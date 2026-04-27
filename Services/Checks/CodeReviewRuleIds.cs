@@ -16,6 +16,7 @@ public static class CodeReviewRuleIds
     public const string AsyncMethodNameSuffix = "async-method-name-suffix";
     public const string PublicMethodArgumentGuards = "public-method-argument-guards";
     public const string EmptyCatch = "empty-catch";
+    public const string EmptyMethod = "empty-method";
     public const string SwallowingCatch = "swallowing-catch";
     public const string LockThisOrPublic = "lock-this-or-public";
     public const string TaskRunAsync = "task-run-async";
@@ -51,6 +52,7 @@ public static class CodeReviewRuleIds
     public const string MultipleEnumeration = "multiple-enumeration";
     public const string PublicMutableStaticState = "public-mutable-static-state";
     public const string UnusedPrivateMember = "unused-private-member";
+    public const string UnusedMethodParameter = "unused-method-parameter";
     public const string ResxMissingLocaleKeys = "resx-missing-locale-keys";
     public const string ResxUnexpectedExtraKeys = "resx-unexpected-extra-keys";
     public const string ResxEmptyTranslationValues = "resx-empty-translation-values";
@@ -69,6 +71,7 @@ public static class CodeReviewRuleIds
     public const string NestedSamePanelWrapper = "nested-same-panel-wrapper";
     public const string EmptyContainer = "empty-container";
     public const string MultipleClassesPerFile = "multiple-classes-per-file";
+    public const string SourceFileNameMismatch = "source-file-name-mismatch";
     public const string MissingReadmeForNewProject = "missing-readme-for-new-project";
     public const string MissingDisclaimerForNewSourceFile = "missing-disclaimer-for-new-source-file";
     public const string UnusedLocalVariable = "unused-local-variable";

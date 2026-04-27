@@ -25,6 +25,9 @@ public sealed class CodeReviewFindingCategoryResolverTests
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.TaskRunAsync),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Threading));
             Assert.That(
+                CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.EmptyMethod),
+                Is.EqualTo(CodeReviewFindingCategoryResolver.Correctness));
+            Assert.That(
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.ResxMissingLocaleKeys),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Resources));
             Assert.That(
@@ -42,6 +45,12 @@ public sealed class CodeReviewFindingCategoryResolverTests
             Assert.That(
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.PrivateBooleanMethodAlwaysReturnsSameValue),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Maintainability));
+            Assert.That(
+                CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.UnusedMethodParameter),
+                Is.EqualTo(CodeReviewFindingCategoryResolver.Maintainability));
+            Assert.That(
+                CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.SourceFileNameMismatch),
+                Is.EqualTo(CodeReviewFindingCategoryResolver.ApiDesign));
         });
     }
 

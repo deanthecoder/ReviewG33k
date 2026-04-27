@@ -33,6 +33,7 @@ internal static class CodeReviewFindingCategoryResolver
         return normalizedRuleId switch
         {
             CodeReviewRuleIds.EmptyCatch or
+            CodeReviewRuleIds.EmptyMethod or
             CodeReviewRuleIds.SwallowingCatch or
             CodeReviewRuleIds.ThrowExInCatch or
             CodeReviewRuleIds.PublicMethodArgumentGuards or
@@ -67,7 +68,8 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.GenericTypeNameSuffix or
             CodeReviewRuleIds.MethodCanBeStatic or
             CodeReviewRuleIds.PublicMutableStaticState or
-            CodeReviewRuleIds.MultipleClassesPerFile => ApiDesign,
+            CodeReviewRuleIds.MultipleClassesPerFile or
+            CodeReviewRuleIds.SourceFileNameMismatch => ApiDesign,
 
             CodeReviewRuleIds.AsyncMethodNameSuffix or
             CodeReviewRuleIds.MissingBlankLineBetweenMethods or
@@ -91,6 +93,7 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.PrivateBooleanMethodAlwaysReturnsSameValue or
             CodeReviewRuleIds.PrivateFieldUsedInSingleMethod or
             CodeReviewRuleIds.UnusedLocalVariable or
+            CodeReviewRuleIds.UnusedMethodParameter or
             CodeReviewRuleIds.UnusedPrivateMember => Maintainability,
 
             CodeReviewRuleIds.MissingTests or

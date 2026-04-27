@@ -83,6 +83,7 @@ ReviewG33k labels each finding with one of these categories:
 | Check | What it flags |
 | --- | --- |
 | Empty catch blocks | `catch` blocks with no real handling logic. |
+| Empty methods | Newly added ordinary methods with no implementation statements. |
 | Swallowing catch blocks | `catch` blocks that silently consume exceptions. |
 | `throw ex;` in catch blocks | Re-throw patterns that lose original stack trace context. |
 | `IDisposable` not disposed | Disposable objects created without clear disposal. |
@@ -107,7 +108,9 @@ ReviewG33k labels each finding with one of these categories:
 | Bool methods with constant returns | Non-private `bool` methods whose control flow always returns the same literal value. |
 | Private bool methods with constant returns | Private `bool` methods whose callers can likely be simplified because they always return the same literal value. |
 | Unused local variables | Local variables that are declared/assigned but never read. |
+| Unused method parameters | Method parameters that are never read by newly added ordinary methods. |
 | Multiple classes per file | Files that define more than one class (prefer one class per file). |
+| Source filename mismatch | Single-type `.cs` files whose filename does not match the contained type. |
 | Redundant self lookup | Needlessly resolving an object from itself (or equivalent redundant lookup). |
 | Public mutable static state | Exposed mutable static fields/properties. |
 | Unused private members | Newly added private code that is never used. |
