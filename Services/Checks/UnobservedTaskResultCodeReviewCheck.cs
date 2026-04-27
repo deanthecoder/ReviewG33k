@@ -42,10 +42,13 @@ public sealed class UnobservedTaskResultCodeReviewCheck : RoslynSemanticCodeRevi
                 continue;
 
             var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(statement);
-            var invokedMethodName = (semanticModel.GetSymbolInfo(invocation).Symbol as IMethodSymbol)?.Name;
+            var invokedMethod = semanticModel.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+            var invokedMethodName = invokedMethod?.Name;
             var methodHint = string.IsNullOrWhiteSpace(invokedMethodName)
                 ? "Result of async call is ignored."
-                : $"Result of async call `{invokedMethodName}` is ignored.";
+                : IsTaskRunMethod(invokedMethod)
+                    ? "`Task.Run` result is ignored."
+                    : $"Result of async call `{invokedMethodName}` is ignored.";
             AddFinding(
                 report,
                 CodeReviewFindingSeverity.Suggestion,
@@ -66,5 +69,15 @@ public sealed class UnobservedTaskResultCodeReviewCheck : RoslynSemanticCodeRevi
         return string.Equals(namespaceName, "System.Threading.Tasks", StringComparison.Ordinal) &&
                (string.Equals(typeName, "Task", StringComparison.Ordinal) ||
                 string.Equals(typeName, "ValueTask", StringComparison.Ordinal));
+    }
+
+    private static bool IsTaskRunMethod(IMethodSymbol methodSymbol)
+    {
+        if (methodSymbol == null || !string.Equals(methodSymbol.Name, "Run", StringComparison.Ordinal))
+            return false;
+
+        var containingType = methodSymbol.ContainingType;
+        return string.Equals(containingType?.Name, "Task", StringComparison.Ordinal) &&
+               string.Equals(containingType.ContainingNamespace?.ToDisplayString(), "System.Threading.Tasks", StringComparison.Ordinal);
     }
 }

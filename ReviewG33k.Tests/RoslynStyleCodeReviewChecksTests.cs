@@ -1800,6 +1800,32 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void UnobservedTaskResultCheckWhenTaskRunIsIgnoredReportsSuggestion()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public void Run()
+                {
+                    Task.Run(() => DoWork());
+                }
+
+                private static void DoWork()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnobservedTaskResultCodeReviewCheck(), "A", source, Enumerable.Range(1, 14));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("`Task.Run`"));
+    }
+
+    [Test]
     public void UnobservedTaskResultCheckWhenValueTaskCallIsIgnoredReportsSuggestion()
     {
         const string source = """
