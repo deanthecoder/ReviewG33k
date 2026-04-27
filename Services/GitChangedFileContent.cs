@@ -21,14 +21,18 @@ internal static class GitChangedFileContent
         string repositoryPath,
         FileInfo fullPath,
         string baselineRevision,
-        string relativePath)
+        string relativePath,
+        string currentRevision = null)
     {
-        var currentBytes = fullPath != null && fullPath.Exists
+        var currentBytes = !string.IsNullOrWhiteSpace(currentRevision)
+            ? await TryLoadRevisionBytesAsync(gitCommandRunner, repositoryPath, currentRevision, relativePath)
+            : null;
+        currentBytes ??= fullPath != null && fullPath.Exists
             ? await File.ReadAllBytesAsync(fullPath.FullName)
             : [];
         var currentText = DecodeText(currentBytes) ?? string.Empty;
 
-        var baselineBytes = await TryLoadBaselineBytesAsync(gitCommandRunner, repositoryPath, baselineRevision, relativePath);
+        var baselineBytes = await TryLoadRevisionBytesAsync(gitCommandRunner, repositoryPath, baselineRevision, relativePath);
         var baselineText = DecodeText(baselineBytes);
 
         return new ChangedFileContent(currentText, currentBytes, baselineText, baselineBytes);
@@ -50,21 +54,21 @@ internal static class GitChangedFileContent
         }
     }
 
-    private static async Task<byte[]> TryLoadBaselineBytesAsync(
+    private static async Task<byte[]> TryLoadRevisionBytesAsync(
         GitCommandRunner gitCommandRunner,
         string repositoryPath,
-        string baselineRevision,
+        string revision,
         string relativePath)
     {
         if (gitCommandRunner == null ||
             string.IsNullOrWhiteSpace(repositoryPath) ||
-            string.IsNullOrWhiteSpace(baselineRevision) ||
+            string.IsNullOrWhiteSpace(revision) ||
             string.IsNullOrWhiteSpace(relativePath))
         {
             return null;
         }
 
-        var result = await gitCommandRunner.RunBytesAsync(repositoryPath, "show", $"{baselineRevision}:{relativePath}");
+        var result = await gitCommandRunner.RunBytesAsync(repositoryPath, "show", $"{revision}:{relativePath}");
         return result.IsSuccess ? result.StandardOutput : null;
     }
 

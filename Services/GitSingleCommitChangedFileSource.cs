@@ -111,7 +111,8 @@ internal sealed class GitSingleCommitChangedFileSource : ICodeReviewChangedFileS
                 m_repositoryPath,
                 fullPath,
                 baselineRevision,
-                entry.Path);
+                entry.Path,
+                m_commitHash);
             var lines = SplitLines(content.Text);
             var addedLineNumbers = entry.Status.Equals("A", StringComparison.OrdinalIgnoreCase)
                 ? new HashSet<int>(Enumerable.Range(1, lines.Count))
@@ -257,4 +258,3 @@ internal sealed class GitSingleCommitChangedFileSource : ICodeReviewChangedFileS
     private static bool ShouldLogFileProgress(int filesProcessed, int totalFiles) =>
         filesProcessed == 1 || filesProcessed == totalFiles || filesProcessed % 25 == 0;
 }
-

@@ -140,6 +140,19 @@ internal static class TextFileChangeUtilities
             StringComparison.Ordinal);
     }
 
+    public static bool IsOnlyNewlineStyleChange(string baselineText, string currentText)
+    {
+        if (string.IsNullOrEmpty(baselineText) && string.IsNullOrEmpty(currentText))
+            return false;
+        if (string.Equals(baselineText, currentText, StringComparison.Ordinal))
+            return false;
+
+        return string.Equals(
+            NormalizeLineEndings(baselineText, "\n"),
+            NormalizeLineEndings(currentText, "\n"),
+            StringComparison.Ordinal);
+    }
+
     public static string DetectPreferredNewline(string text)
     {
         var kind = DetectNewlineKind(text);

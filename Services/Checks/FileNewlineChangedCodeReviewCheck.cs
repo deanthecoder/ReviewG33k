@@ -77,7 +77,8 @@ public sealed class FileNewlineChangedCodeReviewCheck : CodeReviewCheckBase, IFi
             var currentNewlines = TextFileChangeUtilities.DetectNewlineKind(currentText);
             if (baselineNewlines == currentNewlines ||
                 baselineNewlines == NewlineKind.None ||
-                currentNewlines == NewlineKind.None)
+                currentNewlines == NewlineKind.None ||
+                !TextFileChangeUtilities.IsOnlyNewlineStyleChange(baselineText, currentText))
             {
                 continue;
             }

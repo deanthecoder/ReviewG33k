@@ -54,6 +54,26 @@ public sealed class GitWhitespaceInsensitiveDiffTests
     }
 
     [Test]
+    public async Task GitBranchComparisonChangedFileSourceWithAutocrlfLoadsCommittedCurrentText()
+    {
+        using var tempRoot = new TempDirectory();
+        var git = new GitCommandRunner();
+        var sourceFile = await CreateRepositoryWithTrackedSourceFileAsync(tempRoot, git, enableAutoCrlf: true);
+
+        Assert.That((await git.RunAsync(tempRoot.FullName, "checkout", "-b", "feature/content")).IsSuccess, Is.True);
+        File.WriteAllText(sourceFile.FullName, CreateCrLfSourceWithContentChange());
+        Assert.That((await git.RunAsync(tempRoot.FullName, "add", ".")).IsSuccess, Is.True);
+        Assert.That((await git.RunAsync(tempRoot.FullName, "commit", "-m", "Content change")).IsSuccess, Is.True);
+
+        var source = new GitBranchComparisonChangedFileSource(git, tempRoot.FullName, "main", fetchTargetBranch: false);
+        var result = await source.LoadAsync();
+
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Text, Does.Not.Contain("\r\n"));
+        Assert.That(result.Files[0].CurrentBytes, Does.Not.Contain((byte)'\r'));
+    }
+
+    [Test]
     public async Task GitSingleCommitChangedFileSourceWhenOnlyLineEndingsDifferIncludesFile()
     {
         using var tempRoot = new TempDirectory();
@@ -74,7 +94,31 @@ public sealed class GitWhitespaceInsensitiveDiffTests
         Assert.That(result.Files[0].BaselineText, Is.Not.Null);
     }
 
-    private static async Task<FileInfo> CreateRepositoryWithTrackedSourceFileAsync(TempDirectory tempRoot, GitCommandRunner git)
+    [Test]
+    public async Task GitSingleCommitChangedFileSourceWithAutocrlfLoadsCommittedCurrentText()
+    {
+        using var tempRoot = new TempDirectory();
+        var git = new GitCommandRunner();
+        var sourceFile = await CreateRepositoryWithTrackedSourceFileAsync(tempRoot, git, enableAutoCrlf: true);
+
+        File.WriteAllText(sourceFile.FullName, CreateCrLfSourceWithContentChange());
+        Assert.That((await git.RunAsync(tempRoot.FullName, "add", ".")).IsSuccess, Is.True);
+        Assert.That((await git.RunAsync(tempRoot.FullName, "commit", "-m", "Content change")).IsSuccess, Is.True);
+        var headResult = await git.RunAsync(tempRoot.FullName, "rev-parse", "HEAD");
+        Assert.That(headResult.IsSuccess, Is.True);
+
+        var source = new GitSingleCommitChangedFileSource(git, tempRoot.FullName, headResult.StandardOutput.Trim());
+        var result = await source.LoadAsync();
+
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Text, Does.Not.Contain("\r\n"));
+        Assert.That(result.Files[0].CurrentBytes, Does.Not.Contain((byte)'\r'));
+    }
+
+    private static async Task<FileInfo> CreateRepositoryWithTrackedSourceFileAsync(
+        TempDirectory tempRoot,
+        GitCommandRunner git,
+        bool enableAutoCrlf = false)
     {
         tempRoot.GetDir("src/App").Create();
         var sourceFile = tempRoot.GetFile("src/App/Worker.cs");
@@ -83,7 +127,7 @@ public sealed class GitWhitespaceInsensitiveDiffTests
         Assert.That((await git.RunAsync(tempRoot.FullName, "checkout", "-b", "main")).IsSuccess, Is.True);
         Assert.That((await git.RunAsync(tempRoot.FullName, "config", "user.email", "reviewg33k@example.com")).IsSuccess, Is.True);
         Assert.That((await git.RunAsync(tempRoot.FullName, "config", "user.name", "ReviewG33k Tests")).IsSuccess, Is.True);
-        Assert.That((await git.RunAsync(tempRoot.FullName, "config", "core.autocrlf", "false")).IsSuccess, Is.True);
+        Assert.That((await git.RunAsync(tempRoot.FullName, "config", "core.autocrlf", enableAutoCrlf ? "true" : "false")).IsSuccess, Is.True);
 
         File.WriteAllText(sourceFile.FullName, CreateLfSource());
         Assert.That((await git.RunAsync(tempRoot.FullName, "add", ".")).IsSuccess, Is.True);
@@ -104,6 +148,14 @@ public sealed class GitWhitespaceInsensitiveDiffTests
         "public sealed class Worker  \r\n" +
         "{\r\n" +
         "    public void Run()\r\n" +
+        "    {\r\n" +
+        "    }\r\n" +
+        "}\r\n";
+
+    private static string CreateCrLfSourceWithContentChange() =>
+        "public sealed class Worker\r\n" +
+        "{\r\n" +
+        "    public void RunFast()\r\n" +
         "    {\r\n" +
         "    }\r\n" +
         "}\r\n";

@@ -144,12 +144,16 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
                 : baseDiffPaths.Contains(RepositoryUtilities.NormalizeRepoPath(entry.Path))
                     ? comparisonBaseRef
                     : "HEAD";
+            var currentRevision = baseDiffPaths.Contains(RepositoryUtilities.NormalizeRepoPath(entry.Path))
+                ? "HEAD"
+                : null;
             var content = await GitChangedFileContent.LoadAsync(
                 m_gitCommandRunner,
                 m_repositoryPath,
                 fullPath,
                 baselineRevision,
-                entry.Path);
+                entry.Path,
+                currentRevision);
             var lines = SplitLines(content.Text);
             HashSet<int> addedLineNumbers;
             if (baseDiffPaths.Contains(RepositoryUtilities.NormalizeRepoPath(entry.Path)))
@@ -460,4 +464,3 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
     private static bool ShouldLogFileProgress(int filesProcessed, int totalFiles) =>
         filesProcessed == 1 || filesProcessed == totalFiles || filesProcessed % 25 == 0;
 }
-

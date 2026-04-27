@@ -51,6 +51,18 @@ public sealed class TextFileChangeCodeReviewChecksTests
     }
 
     [Test]
+    public void NewlineCheckWhenContentChangesWithDifferentCheckoutNewlinesDoesNotReport()
+    {
+        const string baselineText = "public sealed class Sample\n{\n}\n";
+        const string currentText = "public sealed class RenamedSample\r\n{\r\n}\r\n";
+        var file = CreateChangedFile(currentText, baselineText);
+
+        var report = Analyze(new FileNewlineChangedCodeReviewCheck(), file);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void TrailingWhitespaceOnlyCheckWhenOnlyTrailingSpacesChangeReportsHint()
     {
         const string baselineText = "public sealed class Sample\n{\n}\n";
