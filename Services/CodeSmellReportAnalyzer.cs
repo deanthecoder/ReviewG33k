@@ -320,6 +320,7 @@ public sealed class CodeSmellReportAnalyzer
         new ConsecutiveNullArgumentsCodeReviewCheck(),
         new LambdaCanBeMethodGroupCodeReviewCheck(),
         new DuplicateCodeBlockCodeReviewCheck(gitCommandRunner),
+        new EagerMaterializedEnumerableReturnCodeReviewCheck(),
         new NumericStringCultureForFileWriteCodeReviewCheck(),
         new UnnecessaryCastCodeReviewCheck(),
         new UnnecessaryEnumMemberValueCodeReviewCheck(),

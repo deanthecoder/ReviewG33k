@@ -47,7 +47,8 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.UnobservedTaskResult => Threading,
 
             CodeReviewRuleIds.StringConcatSameTarget or
-            CodeReviewRuleIds.MultipleEnumeration => Performance,
+            CodeReviewRuleIds.MultipleEnumeration or
+            CodeReviewRuleIds.EagerMaterializedEnumerableReturn => Performance,
 
             CodeReviewRuleIds.DisposableNotDisposed or
             CodeReviewRuleIds.DisposeWithoutIDisposable or

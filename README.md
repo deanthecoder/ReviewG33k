@@ -91,6 +91,7 @@ ReviewG33k labels each finding with one of these categories:
 | Empty Dispose method | `Dispose()` methods with no cleanup statements. |
 | Constructor event subscription lifecycle | Constructors that subscribe to events without clear unsubscribe/disposal lifecycle. |
 | Multiple enumeration | Re-enumerating deferred `IEnumerable` values unexpectedly. |
+| Eagerly materialized IEnumerable returns | `IEnumerable` methods that return `ToList()`/`ToArray()` results instead of a deferred sequence. |
 | Public method argument guards | Missing null guards in newly added public methods. |
 | Numeric formatting for file output | `double`/`float`/`decimal` converted to text for file writes without `InvariantCulture`. |
 
