@@ -50,6 +50,7 @@ internal static class CodeReviewFindingCategoryResolver
 
             CodeReviewRuleIds.DisposableNotDisposed or
             CodeReviewRuleIds.DisposeWithoutIDisposable or
+            CodeReviewRuleIds.EmptyDispose or
             CodeReviewRuleIds.ResxMissingLocaleKeys or
             CodeReviewRuleIds.ResxUnexpectedExtraKeys or
             CodeReviewRuleIds.ResxEmptyTranslationValues or

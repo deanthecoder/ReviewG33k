@@ -1905,6 +1905,94 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void EmptyDisposeCheckWhenDisposeBodyIsEmptyReportsSuggestion()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample : IDisposable
+            {
+                public void Dispose()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new EmptyDisposeCodeReviewCheck(), "A", source, Enumerable.Range(1, 9));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].RuleId, Is.EqualTo(CodeReviewRuleIds.EmptyDispose));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("`Dispose()`"));
+    }
+
+    [Test]
+    public void EmptyDisposeCheckWhenDisposeBodyContainsOnlyCommentReportsSuggestion()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample : IDisposable
+            {
+                public void Dispose()
+                {
+                    // Nothing to dispose.
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new EmptyDisposeCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void EmptyDisposeCheckWhenDisposeContainsCleanupDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample : IDisposable
+            {
+                private readonly IDisposable m_dependency;
+
+                public Sample(IDisposable dependency)
+                {
+                    m_dependency = dependency;
+                }
+
+                public void Dispose()
+                {
+                    m_dependency.Dispose();
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new EmptyDisposeCodeReviewCheck(), "A", source, Enumerable.Range(1, 17));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void EmptyDisposeCheckWhenDisposeMethodWasNotAddedDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample : IDisposable
+            {
+                public void Dispose()
+                {
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new EmptyDisposeCodeReviewCheck(), "M", source, [1]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void DisposableNotDisposedCheckWhenDisposableCreatedWithoutUsingReportsSuggestion()
     {
         const string source = """

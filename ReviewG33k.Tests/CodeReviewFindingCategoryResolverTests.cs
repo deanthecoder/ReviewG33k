@@ -28,6 +28,9 @@ public sealed class CodeReviewFindingCategoryResolverTests
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.ResxMissingLocaleKeys),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Resources));
             Assert.That(
+                CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.EmptyDispose),
+                Is.EqualTo(CodeReviewFindingCategoryResolver.Resources));
+            Assert.That(
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.MissingTypedBindingContext),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Ui));
             Assert.That(

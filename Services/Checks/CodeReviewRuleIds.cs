@@ -47,6 +47,7 @@ public static class CodeReviewRuleIds
     public const string UnobservedTaskResult = "unobserved-task-result";
     public const string DisposableNotDisposed = "disposable-not-disposed";
     public const string DisposeWithoutIDisposable = "dispose-without-idisposable";
+    public const string EmptyDispose = "empty-dispose";
     public const string MultipleEnumeration = "multiple-enumeration";
     public const string PublicMutableStaticState = "public-mutable-static-state";
     public const string UnusedPrivateMember = "unused-private-member";

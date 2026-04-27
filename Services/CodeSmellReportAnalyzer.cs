@@ -324,6 +324,7 @@ public sealed class CodeSmellReportAnalyzer
         new UnnecessaryEnumMemberValueCodeReviewCheck(),
         new UnnecessaryVerbatimStringPrefixCodeReviewCheck(),
         new UnobservedTaskResultCodeReviewCheck(),
+        new EmptyDisposeCodeReviewCheck(),
         new DisposeMethodWithoutIDisposableCodeReviewCheck(),
         new DisposableNotDisposedCodeReviewCheck(),
         new MultipleEnumerationCodeReviewCheck(),
