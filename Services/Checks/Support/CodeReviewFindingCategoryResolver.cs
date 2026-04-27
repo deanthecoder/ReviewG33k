@@ -48,7 +48,8 @@ internal static class CodeReviewFindingCategoryResolver
 
             CodeReviewRuleIds.StringConcatSameTarget or
             CodeReviewRuleIds.MultipleEnumeration or
-            CodeReviewRuleIds.EagerMaterializedEnumerableReturn => Performance,
+            CodeReviewRuleIds.EagerMaterializedEnumerableReturn or
+            CodeReviewRuleIds.LinqCountComparedToZero => Performance,
 
             CodeReviewRuleIds.DisposableNotDisposed or
             CodeReviewRuleIds.DisposeWithoutIDisposable or

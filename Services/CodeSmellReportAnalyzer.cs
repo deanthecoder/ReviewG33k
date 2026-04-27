@@ -321,6 +321,7 @@ public sealed class CodeSmellReportAnalyzer
         new LambdaCanBeMethodGroupCodeReviewCheck(),
         new DuplicateCodeBlockCodeReviewCheck(gitCommandRunner),
         new EagerMaterializedEnumerableReturnCodeReviewCheck(),
+        new LinqCountComparedToZeroCodeReviewCheck(),
         new NumericStringCultureForFileWriteCodeReviewCheck(),
         new UnnecessaryCastCodeReviewCheck(),
         new UnnecessaryEnumMemberValueCodeReviewCheck(),
