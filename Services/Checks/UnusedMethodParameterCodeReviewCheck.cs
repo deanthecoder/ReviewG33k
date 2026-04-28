@@ -44,6 +44,8 @@ public sealed class UnusedMethodParameterCodeReviewCheck : RoslynSemanticCodeRev
                 continue;
             if (!IsEligibleMethod(semanticModel, method, out var methodSymbol))
                 continue;
+            if (IsEventHandlerLikeMethod(method, methodSymbol))
+                continue;
 
             foreach (var parameter in method.ParameterList.Parameters)
             {
@@ -141,6 +143,60 @@ public sealed class UnusedMethodParameterCodeReviewCheck : RoslynSemanticCodeRev
         }
 
         return false;
+    }
+
+    private static bool IsEventHandlerLikeMethod(MethodDeclarationSyntax method, IMethodSymbol methodSymbol)
+    {
+        if (method?.ParameterList?.Parameters.Count != 2 || methodSymbol?.Parameters.Length != 2)
+            return false;
+
+        var senderParameter = method.ParameterList.Parameters[0];
+        if (!string.Equals(senderParameter.Identifier.ValueText, "sender", StringComparison.Ordinal))
+            return false;
+        if (!IsObjectType(senderParameter.Type, methodSymbol.Parameters[0].Type))
+            return false;
+
+        return IsEventArgsLikeType(method.ParameterList.Parameters[1].Type, methodSymbol.Parameters[1].Type);
+    }
+
+    private static bool IsObjectType(TypeSyntax typeSyntax, ITypeSymbol typeSymbol)
+    {
+        if (typeSymbol?.SpecialType == SpecialType.System_Object)
+            return true;
+
+        var typeText = typeSyntax?.ToString().TrimEnd('?');
+        return string.Equals(typeText, "object", StringComparison.Ordinal) ||
+               string.Equals(typeText, "Object", StringComparison.Ordinal) ||
+               string.Equals(typeText, "System.Object", StringComparison.Ordinal) ||
+               string.Equals(typeText, "global::System.Object", StringComparison.Ordinal);
+    }
+
+    private static bool IsEventArgsLikeType(TypeSyntax typeSyntax, ITypeSymbol typeSymbol)
+    {
+        for (var current = typeSymbol; current != null; current = current.BaseType)
+        {
+            if (string.Equals(current.Name, "EventArgs", StringComparison.Ordinal) &&
+                string.Equals(current.ContainingNamespace?.ToDisplayString(), "System", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (current.Name?.EndsWith("EventArgs", StringComparison.Ordinal) == true)
+                return true;
+        }
+
+        var typeName = GetSimpleTypeName(typeSyntax);
+        return typeName?.EndsWith("EventArgs", StringComparison.Ordinal) == true;
+    }
+
+    private static string GetSimpleTypeName(TypeSyntax typeSyntax)
+    {
+        if (typeSyntax == null)
+            return null;
+
+        var typeText = typeSyntax.ToString().TrimEnd('?');
+        var dotIndex = typeText.LastIndexOf('.');
+        return dotIndex >= 0 ? typeText[(dotIndex + 1)..] : typeText;
     }
 
     private static bool CouldBeImplicitInterfaceImplementationWithoutResolution(

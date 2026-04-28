@@ -158,6 +158,74 @@ public sealed class UnusedMethodParameterCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenEventHandlerDoesNotUseSenderDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void ButtonClicked(object sender, EventArgs e)
+                {
+                    Handle(e);
+                }
+
+                private static void Handle(EventArgs e)
+                {
+                    _ = e.GetType();
+                }
+            }
+            """;
+
+        var report = Analyze("A", source, Enumerable.Range(1, 13));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenEventHandlerUsesNeitherParameterDoesNotReport()
+    {
+        const string source = """
+            using System;
+
+            public sealed class Sample
+            {
+                public void ButtonClicked(object sender, EventArgs e)
+                {
+                    Handle();
+                }
+
+                private static void Handle()
+                {
+                }
+            }
+            """;
+
+        var report = Analyze("A", source, Enumerable.Range(1, 13));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenOrdinarySenderParameterIsUnusedStillReportsHint()
+    {
+        const string source = """
+            public sealed class Sample
+            {
+                public int Run(object sender)
+                {
+                    return 1;
+                }
+            }
+            """;
+
+        var report = Analyze("A", source, Enumerable.Range(1, 7));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].Message, Does.Contain("`sender`"));
+    }
+
+    [Test]
     public void AnalyzeWhenMethodLineWasNotAddedDoesNotReport()
     {
         const string source = """
