@@ -139,6 +139,53 @@ public sealed class MissingXmlDocsCodeReviewCheckTests
     }
 
     [Test]
+    public void AnalyzeWhenAddedTypeHasDescriptionAttributeDoesNotReport()
+    {
+        const string source = """
+            [Description("Meteor-specific control and status for the active print run.")]
+            public class OpcMeteor
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile("SPC/SmartRip/OPC/OpcMeteor.cs", source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenAddedTypeHasDescriptionAttributeSuffixDoesNotReport()
+    {
+        const string source = """
+            [System.ComponentModel.DescriptionAttribute("Meteor-specific control and status for the active print run.")]
+            public class OpcMeteor
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile("SPC/SmartRip/OPC/OpcMeteor.cs", source);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void AnalyzeWhenAddedTypeHasEmptyDescriptionAttributeReportsHint()
+    {
+        const string source = """
+            [Description(" ")]
+            public class OpcMeteor
+            {
+            }
+            """;
+
+        var report = AnalyzeAddedFile("SPC/SmartRip/OPC/OpcMeteor.cs", source);
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].RuleId, Is.EqualTo(CodeReviewRuleIds.MissingXmlDocs));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Hint));
+    }
+
+    [Test]
     public void AnalyzeWhenAddedTypeHasXmlDocsAboveMultilineAttributesDoesNotReport()
     {
         const string source = """

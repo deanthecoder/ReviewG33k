@@ -48,7 +48,7 @@ public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
                     continue;
 
                 var declarationLineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(type);
-                if (HasXmlDocumentation(type))
+                if (HasXmlDocumentation(type) || HasDescriptionAttributeDocumentation(type))
                     continue;
 
                 AddFinding(report, CodeReviewFindingSeverity.Hint, file.Path, declarationLineNumber, "Missing XML docs on new public/internal type.");
@@ -79,4 +79,35 @@ public sealed class MissingXmlDocsCodeReviewCheck : CodeReviewCheckBase
         type.GetLeadingTrivia().Any(trivia =>
             trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
             trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia));
+
+    private static bool HasDescriptionAttributeDocumentation(TypeDeclarationSyntax type) =>
+        type != null &&
+        type.AttributeLists
+            .SelectMany(attributeList => attributeList.Attributes)
+            .Any(IsNonEmptyDescriptionAttribute);
+
+    private static bool IsNonEmptyDescriptionAttribute(AttributeSyntax attribute)
+    {
+        if (!IsDescriptionAttributeName(attribute.Name))
+            return false;
+
+        return attribute.ArgumentList?.Arguments.Any(argument =>
+            argument.Expression is LiteralExpressionSyntax literal &&
+            literal.IsKind(SyntaxKind.StringLiteralExpression) &&
+            !string.IsNullOrWhiteSpace(literal.Token.ValueText)) == true;
+    }
+
+    private static bool IsDescriptionAttributeName(NameSyntax name)
+    {
+        var nameText = name switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            QualifiedNameSyntax qualifiedName => qualifiedName.Right.Identifier.ValueText,
+            AliasQualifiedNameSyntax aliasQualifiedName => aliasQualifiedName.Name.Identifier.ValueText,
+            _ => name?.ToString()
+        };
+
+        return string.Equals(nameText, "Description", StringComparison.Ordinal) ||
+            string.Equals(nameText, "DescriptionAttribute", StringComparison.Ordinal);
+    }
 }
