@@ -56,7 +56,7 @@ public sealed class UnusedMethodParameterCodeReviewCheck : RoslynSemanticCodeRev
                     continue;
                 }
 
-                if (semanticModel.GetDeclaredSymbol(parameter) is not IParameterSymbol parameterSymbol)
+                if (semanticModel.GetDeclaredSymbol(parameter) is not { } parameterSymbol)
                     continue;
                 if (IsParameterReferenced(method.Body, semanticModel, parameterSymbol))
                     continue;

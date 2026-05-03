@@ -10,6 +10,7 @@
 
 using System;
 using Avalonia;
+using ReviewG33k.Services;
 using ReviewG33k.Views;
 
 namespace ReviewG33k;
@@ -17,7 +18,19 @@ namespace ReviewG33k;
 public static class Program
 {
     [STAThread]
-    public static void Main(string[] args) => BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    public static int Main(string[] args)
+    {
+        if (CommandLineReviewOptions.IsCommandLineReview(args))
+        {
+            return new CommandLineReviewService(
+                    MainWindowCompositionRoot.CreateDependencies().ReviewWorkflowService)
+                .RunAsync(args)
+                .GetAwaiter()
+                .GetResult();
+        }
+
+        return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
 
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<App>()

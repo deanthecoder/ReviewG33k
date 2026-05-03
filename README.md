@@ -42,6 +42,33 @@ A compact pie-chart view with live category toggles, so you can hide whole issue
 - **Local uncommitted review**: choose **Local uncommitted changes**, pick a repo, then click **Review Local**.
 - **Whole-repository review**: choose **Entire local repository**, pick a repo, then click **Review Local**.
 
+## Command-line usage
+ReviewG33k can also run without the UI for local-review automation, including post-coding checks from Codex or scripts.
+
+```bash
+ReviewG33k --cli --repo <path> --mode uncommitted
+ReviewG33k --cli --repo <path> --mode committed --base main
+ReviewG33k --cli --repo <path> --mode tree
+```
+
+Windows-style switches are supported too:
+
+```powershell
+ReviewG33k /cli /repo <path> /mode uncommitted
+```
+
+Modes:
+- `uncommitted` reviews working-tree changes against `HEAD`.
+- `committed` reviews committed local changes against `origin/<base>`.
+- `tree` reviews all analyzable files in the local repository.
+
+Exit codes:
+- `0`: no findings.
+- `1`: findings were reported.
+- `2`: the review failed.
+
+Run `ReviewG33k --help` or `ReviewG33k /?` for usage.
+
 ## Build and run
 Prereqs: .NET 8 SDK and `git`.
 
