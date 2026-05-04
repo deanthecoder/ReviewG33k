@@ -10,6 +10,7 @@
 
 using ReviewG33k.Services;
 using ReviewG33k.Services.Checks;
+using ReviewG33k.ViewModels;
 
 namespace ReviewG33k.Tests;
 
@@ -194,6 +195,40 @@ public sealed class CodeSmellReportAnalyzerTests
                                     info.Contains("[throwing-test-check]", StringComparison.OrdinalIgnoreCase)),
             Is.True);
         Assert.That(report.Findings.Any(finding => finding.RuleId == "finding-test-check"), Is.True);
+    }
+
+    [Test]
+    public void AnalyzeFilesWhenCheckIsDisabledSkipsThatCheck()
+    {
+        var settings = new Settings
+        {
+            DisabledCodeReviewRuleIds = ["finding-test-check"]
+        };
+        var analyzer = new CodeSmellReportAnalyzer(
+            new GitCommandRunner(),
+            [new FindingTestCheck()],
+            new CodeReviewRulePreferenceService(settings));
+        var changedFile = CreateChangedFile("public sealed class Sample { }", [1]);
+
+        var report = analyzer.AnalyzeFiles([changedFile]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(report.Findings, Is.Empty);
+            Assert.That(analyzer.AllChecks, Has.Count.EqualTo(1));
+            Assert.That(analyzer.Checks, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void RulePreferenceNormalizationRemovesBlankAndDuplicateRuleIds()
+    {
+        var normalizedRuleIds = CodeReviewRulePreferenceService.NormalizeRuleIds(
+            [" missing-tests ", "", "MISSING-TESTS", null, "public-method-argument-guards"]);
+
+        Assert.That(
+            normalizedRuleIds,
+            Is.EqualTo(new[] { "missing-tests", "public-method-argument-guards" }));
     }
 
     [Test]

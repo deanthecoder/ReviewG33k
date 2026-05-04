@@ -28,7 +28,7 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
 
     public override string RuleId => "missing-tests-public-methods";
 
-    public override string DisplayName => "new public methods have test changes";
+    public override string DisplayName => "New public methods have test changes";
 
     public override CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
 

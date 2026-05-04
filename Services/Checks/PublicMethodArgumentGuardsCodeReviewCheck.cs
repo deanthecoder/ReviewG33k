@@ -55,7 +55,7 @@ public sealed class PublicMethodArgumentGuardsCodeReviewCheck : CodeReviewCheckB
 
     public override string RuleId => "public-method-argument-guards";
 
-    public override string DisplayName => "new public methods guard nullable/reference args";
+    public override string DisplayName => "New public methods guard nullable/reference args";
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {

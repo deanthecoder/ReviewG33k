@@ -22,7 +22,7 @@ public sealed class MissingReadmeForNewProjectCodeReviewCheck : CodeReviewCheckB
 {
     public override string RuleId => CodeReviewRuleIds.MissingReadmeForNewProject;
 
-    public override string DisplayName => "new project has README";
+    public override string DisplayName => "New project has README";
 
     public override CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
 

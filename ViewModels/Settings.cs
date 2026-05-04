@@ -27,6 +27,7 @@ public sealed class Settings : UserSettingsBase
         ReviewModeIndex = DefaultReviewModeIndex;
         UseLocalCommittedReview = false;
         IncludeFullModifiedFiles = false;
+        DisabledCodeReviewRuleIds = [];
     }
 
     public string RepositoryRootPath
@@ -75,5 +76,11 @@ public sealed class Settings : UserSettingsBase
     {
         get => Get<bool>();
         set => Set(value);
+    }
+
+    public string[] DisabledCodeReviewRuleIds
+    {
+        get => Get<string[]>() ?? [];
+        set => Set(value ?? []);
     }
 }

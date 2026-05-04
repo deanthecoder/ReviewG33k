@@ -28,7 +28,7 @@ public sealed class MissingDisclaimerForNewSourceFileCodeReviewCheck : CodeRevie
 
     public override string RuleId => CodeReviewRuleIds.MissingDisclaimerForNewSourceFile;
 
-    public override string DisplayName => "new source file disclaimer/header";
+    public override string DisplayName => "New source file disclaimer/header";
 
     public override CodeReviewCheckScope Scope => CodeReviewCheckScope.ChangedFileSet;
 

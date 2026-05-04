@@ -20,7 +20,7 @@ public sealed class AsyncVoidCodeReviewCheck : CodeReviewCheckBase
 {
     public override string RuleId => "async-void";
 
-    public override string DisplayName => "async void (non-event handlers)";
+    public override string DisplayName => "Async void (non-event handlers)";
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {

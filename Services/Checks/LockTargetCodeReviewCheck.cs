@@ -21,7 +21,7 @@ public sealed class LockTargetCodeReviewCheck : CodeReviewCheckBase
 
     public override string RuleId => "lock-this-or-public";
 
-    public override string DisplayName => "lock(this) / lock on public objects";
+    public override string DisplayName => "Lock(this) / lock on public objects";
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {

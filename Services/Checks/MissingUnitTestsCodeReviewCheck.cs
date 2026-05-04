@@ -18,7 +18,7 @@ public sealed class MissingUnitTestsCodeReviewCheck : CodeReviewCheckBase
 {
     public override string RuleId => "missing-tests";
 
-    public override string DisplayName => "new non-UI type has new test file";
+    public override string DisplayName => "New non-UI type has new test file";
 
     public override CodeReviewCheckScope Scope => CodeReviewCheckScope.AddedLinesOnly;
 

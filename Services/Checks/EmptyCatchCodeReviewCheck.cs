@@ -16,7 +16,7 @@ public sealed class EmptyCatchCodeReviewCheck : CodeReviewCheckBase
 {
     public override string RuleId => "empty-catch";
 
-    public override string DisplayName => "empty catch blocks";
+    public override string DisplayName => "Empty catch blocks";
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {

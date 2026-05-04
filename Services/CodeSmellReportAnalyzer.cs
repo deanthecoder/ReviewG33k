@@ -24,21 +24,38 @@ public sealed class CodeSmellReportAnalyzer
     private const string CheckErrorInfoPrefix = "CHECK ERROR:";
     private readonly GitCommandRunner m_gitCommandRunner;
     private readonly IReadOnlyList<ICodeReviewCheck> m_checks;
+    private readonly CodeReviewRulePreferenceService m_rulePreferenceService;
 
     public CodeSmellReportAnalyzer(GitCommandRunner gitCommandRunner)
-        : this(gitCommandRunner, CreateChecks(gitCommandRunner))
+        : this(gitCommandRunner, CreateChecks(gitCommandRunner), null)
+    {
+    }
+
+    public CodeSmellReportAnalyzer(GitCommandRunner gitCommandRunner, CodeReviewRulePreferenceService rulePreferenceService)
+        : this(gitCommandRunner, CreateChecks(gitCommandRunner), rulePreferenceService)
     {
     }
 
     internal CodeSmellReportAnalyzer(GitCommandRunner gitCommandRunner, IReadOnlyList<ICodeReviewCheck> checks)
+        : this(gitCommandRunner, checks, null)
+    {
+    }
+
+    internal CodeSmellReportAnalyzer(
+        GitCommandRunner gitCommandRunner,
+        IReadOnlyList<ICodeReviewCheck> checks,
+        CodeReviewRulePreferenceService rulePreferenceService)
     {
         m_gitCommandRunner = gitCommandRunner ?? throw new ArgumentNullException(nameof(gitCommandRunner));
         m_checks = (checks ?? throw new ArgumentNullException(nameof(checks)))
             .Where(check => check != null)
             .ToArray();
+        m_rulePreferenceService = rulePreferenceService;
     }
 
-    public IReadOnlyList<ICodeReviewCheck> Checks => m_checks;
+    public IReadOnlyList<ICodeReviewCheck> Checks => GetEnabledChecks();
+
+    public IReadOnlyList<ICodeReviewCheck> AllChecks => m_checks;
 
     public async Task<CodeSmellReport> AnalyzeAsync(
         string reviewWorktreePath,
@@ -109,11 +126,16 @@ public sealed class CodeSmellReportAnalyzer
 
         progressLogger?.Invoke($"Code review scan: Building analysis context for {changedFiles.Length} file(s)...");
         var scopedContexts = BuildScopedContexts(changedFiles, sourceResult?.IsEntireRepositoryScan == true);
-        var totalChecks = m_checks.Count;
+        var enabledChecks = GetEnabledChecks();
+        var disabledCheckCount = m_checks.Count - enabledChecks.Count;
+        if (disabledCheckCount > 0)
+            progressLogger?.Invoke($"Code review scan: {disabledCheckCount} check(s) disabled by settings.");
+
+        var totalChecks = enabledChecks.Count;
         progressReporter?.Invoke(0, totalChecks, null);
         progressLogger?.Invoke($"Code review scan: Running {totalChecks} checks...");
 
-        var pendingCheckTasks = m_checks
+        var pendingCheckTasks = enabledChecks
             .Select(check => Task.Run(() => AnalyzeCheck(
                 check,
                 scopedContexts,
@@ -148,7 +170,7 @@ public sealed class CodeSmellReportAnalyzer
             return report;
 
         var scopedContexts = BuildScopedContexts(files, isEntireRepositoryScan: false);
-        var checkReports = m_checks
+        var checkReports = GetEnabledChecks()
             .AsParallel()
             .Select(check => AnalyzeCheck(
                 check,
@@ -161,6 +183,16 @@ public sealed class CodeSmellReportAnalyzer
             MergeReport(report, checkReport);
 
         return report;
+    }
+
+    private IReadOnlyList<ICodeReviewCheck> GetEnabledChecks()
+    {
+        if (m_rulePreferenceService == null)
+            return m_checks;
+
+        return m_checks
+            .Where(check => m_rulePreferenceService.IsRuleEnabled(check.RuleId))
+            .ToArray();
     }
 
     private static void MergeReport(CodeSmellReport destination, CodeSmellReport source)

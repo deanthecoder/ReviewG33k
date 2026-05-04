@@ -143,6 +143,22 @@ public partial class MainWindow : Window
             await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
     }
 
+    private async void ReviewSettingsButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var rulePreferenceService = new CodeReviewRulePreferenceService(m_settings);
+        var settingsViewModel = new ReviewSettingsWindowViewModel(
+            m_codeSmellReportAnalyzer.AllChecks,
+            rulePreferenceService);
+        var settingsWindow = new ReviewSettingsWindow(settingsViewModel);
+        var didSave = await settingsWindow.ShowDialog<bool>(this);
+        if (!didSave)
+            return;
+
+        InvalidateLocalReviewChangedFilesCache();
+        SetStatus("Review settings saved.");
+        AppendLog("Review settings updated. The next scan will use the selected issue types.");
+    }
+
     private static string BuildWindowTitle()
     {
         var assembly = Assembly.GetEntryAssembly() ?? typeof(MainWindow).Assembly;

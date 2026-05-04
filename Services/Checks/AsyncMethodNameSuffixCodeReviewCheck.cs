@@ -25,7 +25,7 @@ public sealed class AsyncMethodNameSuffixCodeReviewCheck : CodeReviewCheckBase
 
     public override string RuleId => "async-method-name-suffix";
 
-    public override string DisplayName => "async method name ends with Async";
+    public override string DisplayName => "Async method name ends with Async";
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {

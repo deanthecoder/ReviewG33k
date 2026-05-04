@@ -26,7 +26,7 @@ public sealed class BooleanMethodAlwaysReturnsSameValueCodeReviewCheck : RoslynS
 {
     public override string RuleId => CodeReviewRuleIds.BooleanMethodAlwaysReturnsSameValue;
 
-    public override string DisplayName => "bool methods that always return the same value";
+    public override string DisplayName => "Bool methods that always return the same value";
 
     protected override void AnalyzeFile(
         CodeReviewAnalysisContext context,

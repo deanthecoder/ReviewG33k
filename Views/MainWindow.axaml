@@ -36,22 +36,39 @@
                                        OverlayBackground="#AA02070D">
             <Grid Margin="28"
                   RowDefinitions="Auto,Auto,*">
-                <StackPanel Grid.Row="0"
-                            Margin="0,8,0,22"
-                            Spacing="8">
-                    <TextBlock Classes="mainHeroEyebrow"
-                               Text="BITBUCKET REVIEW WORKFLOW" />
-                    <TextBlock Classes="mainHeroTitle"
-                               Text="ReviewG33k" />
-                    <TextBlock Classes="mainHeroBody"
-                               TextWrapping="Wrap">
-                        <Run Text="Prepare " />
-                        <Run Text="pull requests" Foreground="#7CEB8B" />
-                        <Run Text=" and " />
-                        <Run Text="local repository reviews" Foreground="#7CEB8B" />
-                        <Run Text=" without disturbing your existing codebases." />
-                    </TextBlock>
-                </StackPanel>
+                <Grid Grid.Row="0"
+                      Margin="0,8,0,22"
+                      ColumnDefinitions="*,Auto">
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="mainHeroEyebrow"
+                                   Text="BITBUCKET REVIEW WORKFLOW" />
+                        <TextBlock Classes="mainHeroTitle"
+                                   Text="ReviewG33k" />
+                        <TextBlock Classes="mainHeroBody"
+                                   TextWrapping="Wrap">
+                            <Run Text="Prepare " />
+                            <Run Text="pull requests" Foreground="#7CEB8B" />
+                            <Run Text=" and " />
+                            <Run Text="local repository reviews" Foreground="#7CEB8B" />
+                            <Run Text=" without disturbing your existing codebases." />
+                        </TextBlock>
+                    </StackPanel>
+
+                    <Button x:Name="ReviewSettingsButton"
+                            Grid.Column="1"
+                            Width="38"
+                            Height="38"
+                            Classes="neon"
+                            Padding="8"
+                            VerticalAlignment="Top"
+                            HorizontalAlignment="Right"
+                            Click="ReviewSettingsButton_OnClick"
+                            ToolTip.Tip="Choose review issue types">
+                        <materialIcons:MaterialIcon Width="20"
+                                                    Height="20"
+                                                    Kind="CogOutline" />
+                    </Button>
+                </Grid>
 
                 <Border Grid.Row="1"
                         Margin="0,0,0,18"

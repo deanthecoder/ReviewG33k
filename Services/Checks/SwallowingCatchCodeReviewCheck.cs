@@ -26,7 +26,7 @@ public sealed class SwallowingCatchCodeReviewCheck : CodeReviewCheckBase
 
     public override string RuleId => "swallowing-catch";
 
-    public override string DisplayName => "exception swallowing in catch";
+    public override string DisplayName => "Exception swallowing in catch";
 
     public override void Analyze(CodeReviewAnalysisContext context, CodeSmellReport report)
     {

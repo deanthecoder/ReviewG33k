@@ -38,7 +38,8 @@ internal static class MainWindowCompositionRoot
         var actionStateService = new MainWindowActionStateService(inputValidationService);
         var localBaseBranchService = new LocalBaseBranchService(gitCommandRunner);
         var orchestrator = new CodeReviewOrchestrator(gitCommandRunner);
-        var codeSmellReportAnalyzer = new CodeSmellReportAnalyzer(gitCommandRunner);
+        var rulePreferenceService = new CodeReviewRulePreferenceService(settings);
+        var codeSmellReportAnalyzer = new CodeSmellReportAnalyzer(gitCommandRunner, rulePreferenceService);
         var localFindingResampleService = new LocalFindingResampleService(gitCommandRunner, codeSmellReportAnalyzer);
         var pullRequestPreviewService = new PullRequestPreviewService(pullRequestMetadataClient);
         var startupService = new MainWindowStartupService(gitAvailabilityService, orchestrator);

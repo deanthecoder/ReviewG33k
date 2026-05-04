@@ -26,7 +26,7 @@ public sealed class PrivateBooleanMethodAlwaysReturnsSameValueCodeReviewCheck : 
 {
     public override string RuleId => CodeReviewRuleIds.PrivateBooleanMethodAlwaysReturnsSameValue;
 
-    public override string DisplayName => "private bool methods that always return the same value";
+    public override string DisplayName => "Private bool methods that always return the same value";
 
     protected override void AnalyzeFile(
         CodeReviewAnalysisContext context,

@@ -20,6 +20,9 @@ A compact pie-chart view with live category toggles, so you can hide whole issue
 
 ![Issue categories screenshot](img/ReviewCategoryBreakdownWindow.png)
 
+### Review Settings
+Persistent issue-type preferences for future scans. Use the cog button in the top-right of the main window to choose which checks ReviewG33k should run, such as disabling missing-test suggestions or public argument-guard hints when they are not useful for your review style.
+
 ## What it can do
 - Review **Bitbucket pull requests** by pasting or dropping a PR URL.
 - Review **local committed changes**, **local uncommitted changes**, an **entire local repository**, or an **entire local folder** without Git.
@@ -42,6 +45,7 @@ A compact pie-chart view with live category toggles, so you can hide whole issue
 - **Local uncommitted review**: choose **Local Uncommitted Changes**, pick a repo, then click **Review Local**.
 - **Whole-repository review**: choose **Entire Local Repository**, pick a repo, then click **Review Local**.
 - **Whole-folder review**: choose **Entire Local Folder**, pick any source folder, then click **Review Local**.
+- **Issue-type preferences**: click the cog button in the top-right of the main window, enable or disable checks, then save. Changes apply to the next scan.
 
 ## Command-line usage
 ReviewG33k can also run without the UI for local-review automation, including post-coding checks from Codex or scripts.
@@ -85,6 +89,8 @@ dotnet run --project ReviewG33k.csproj
 ```
 
 ## Supported checks
+All checks are enabled by default. The review settings dialog lets you disable individual issue types without changing the live category filters used in an already-open results window.
+
 ### Finding categories (results view)
 ReviewG33k labels each finding with one of these categories:
 - `Correctness`
