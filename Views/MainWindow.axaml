@@ -64,7 +64,7 @@
                                        Text="Choose the repository scope, review mode, and launch the isolated review workspace." />
                         </StackPanel>
 
-                        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" Grid.IsSharedSizeScope="True">
+                        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" Grid.IsSharedSizeScope="True">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"
                                                   SharedSizeGroup="FormLabelColumn" />
@@ -97,42 +97,25 @@
                             <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
                                        Margin="0,0,12,0"
-                                       Text="Scan Scope:" />
-
-                            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,8,0,4">
-                                <ComboBox x:Name="ScanScopeComboBox"
-                                          MinWidth="260"
-                                          SelectedIndex="{Binding ScanScopeIndex, Mode=TwoWay}">
-                                    <ComboBoxItem Content="Changed lines" />
-                                    <ComboBoxItem Content="Full modified files" />
-                                </ComboBox>
-                                <Button x:Name="ScanScopeInfoButton"
-                                        Margin="4,0"
-                                        Width="28" Height="28"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        ToolTip.Tip="{Binding ScanScopeInfoTooltip}">
-                                    <materialIcons:MaterialIcon Width="18" Height="18"
-                                                                Foreground="#7DBFFF"
-                                                                Kind="InformationOutline" />
-                                </Button>
-                            </StackPanel>
-
-                            <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"
-                                       HorizontalAlignment="Right"
-                                       Margin="0,0,12,0"
                                        Text="Review Mode:" />
 
-                            <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                            <Grid Grid.Row="1"
+                                  Grid.Column="1"
+                                  Grid.ColumnSpan="2"
+                                  Margin="0,8,0,4"
+                                  ColumnDefinitions="Auto,Auto,24,Auto,Auto,Auto">
                                 <ComboBox x:Name="ReviewModeComboBox"
+                                          Grid.Column="0"
                                           MinWidth="260"
                                           SelectedIndex="{Binding ReviewModeIndex, Mode=TwoWay}">
                                     <ComboBoxItem Content="Pull Request" />
-                                    <ComboBoxItem Content="Local committed changes" />
-                                    <ComboBoxItem Content="Local uncommitted changes" />
-                                    <ComboBoxItem Content="Entire local repository" />
+                                    <ComboBoxItem Content="Local Committed Changes" />
+                                    <ComboBoxItem Content="Local Uncommitted Changes" />
+                                    <ComboBoxItem Content="Entire Local Repository" />
+                                    <ComboBoxItem Content="Entire Local Folder" />
                                 </ComboBox>
                                 <Button x:Name="ReviewModeInfoButton"
+                                        Grid.Column="1"
                                         Margin="4,0"
                                         Width="28" Height="28"
                                         Background="Transparent"
@@ -142,10 +125,35 @@
                                                                 Foreground="#7DBFFF"
                                                                 Kind="InformationOutline" />
                                 </Button>
-                            </StackPanel>
+                                <TextBlock Grid.Column="3"
+                                           Margin="0,0,12,0"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding ShowScanScopeOptions}"
+                                           Text="Scan Scope:" />
+                                <ComboBox x:Name="ScanScopeComboBox"
+                                          Grid.Column="4"
+                                          MinWidth="220"
+                                          IsVisible="{Binding ShowScanScopeOptions}"
+                                          SelectedIndex="{Binding ScanScopeIndex, Mode=TwoWay}">
+                                    <ComboBoxItem Content="Changed lines" />
+                                    <ComboBoxItem Content="Full modified files" />
+                                </ComboBox>
+                                <Button x:Name="ScanScopeInfoButton"
+                                        Grid.Column="5"
+                                        Margin="4,0"
+                                        Width="28" Height="28"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        IsVisible="{Binding ShowScanScopeOptions}"
+                                        ToolTip.Tip="{Binding ScanScopeInfoTooltip}">
+                                    <materialIcons:MaterialIcon Width="18" Height="18"
+                                                                Foreground="#7DBFFF"
+                                                                Kind="InformationOutline" />
+                                </Button>
+                            </Grid>
 
                             <TextBlock x:Name="PullRequestUrlLabelTextBlock"
-                                       Grid.Row="3"
+                                       Grid.Row="2"
                                        Grid.Column="0"
                                        Margin="0,10,12,0"
                                        HorizontalAlignment="Right"
@@ -153,7 +161,7 @@
                                        IsVisible="{Binding ShowPullRequestInputs}"
                                        Text="Pull Request:" />
                             <TextBox x:Name="PullRequestUrlTextBox"
-                                     Grid.Row="3"
+                                     Grid.Row="2"
                                      Grid.Column="1"
                                      Margin="0,8,0,0"
                                      DragDrop.AllowDrop="True"
@@ -161,7 +169,7 @@
                                      Text="{Binding PullRequestUrl, Mode=TwoWay}"
                                      Watermark="Paste or drop a Bitbucket PR URL" />
                             <Button x:Name="OpenPullRequestButton"
-                                    Grid.Row="3"
+                                    Grid.Row="2"
                                     Grid.Column="2"
                                     Margin="10,10,0,0"
                                     Classes="neon"
@@ -176,7 +184,7 @@
                             </Button>
 
                             <TextBlock x:Name="PullRequestMetadataTextBlock"
-                                       Grid.Row="4"
+                                       Grid.Row="3"
                                        Grid.Column="1"
                                        Grid.ColumnSpan="2"
                                        Margin="0,4,0,0"
@@ -185,7 +193,7 @@
                                        TextWrapping="Wrap" />
 
                             <Grid x:Name="LocalReviewOptionsGrid"
-                                  Grid.Row="5"
+                                  Grid.Row="4"
                                   Grid.Column="0"
                                   Grid.ColumnSpan="3"
                                   Margin="0,12,0,0"
@@ -202,12 +210,12 @@
                                            Margin="0,0,12,0"
                                            HorizontalAlignment="Right"
                                            VerticalAlignment="Center"
-                                           Text="Local Repo:" />
+                                           Text="{Binding LocalReviewPathLabel}" />
                                 <TextBox x:Name="LocalRepositoryFolderTextBox"
                                          Grid.Column="1"
                                          MinWidth="360"
                                          Text="{Binding LocalRepositoryPath, Mode=TwoWay}"
-                                         Watermark="Example: C:\source\MyRepo" />
+                                         Watermark="{Binding LocalReviewPathWatermark}" />
                                 <Button Grid.Column="2"
                                         Margin="10,0,0,0"
                                         Classes="neon"
@@ -231,7 +239,7 @@
                                           SelectedItem="{Binding LocalBaseBranch, Mode=TwoWay}" />
                             </Grid>
 
-                            <Grid Grid.Row="6"
+                            <Grid Grid.Row="5"
                                   Grid.Column="1"
                                   Grid.ColumnSpan="2"
                                   Margin="0,12,0,0"

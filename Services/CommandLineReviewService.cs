@@ -60,6 +60,7 @@ internal sealed class CommandLineReviewService
                 isPullRequestReviewMode: false,
                 isLocalCommittedReviewMode: options.Mode == CommandLineReviewMode.Committed,
                 isLocalRepositoryReviewMode: options.Mode == CommandLineReviewMode.Tree,
+                isLocalFolderReviewMode: false,
                 repositoryRootPath: null,
                 pullRequestUrl: null,
                 localRepositoryPath: options.RepositoryPath,

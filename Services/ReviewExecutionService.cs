@@ -210,6 +210,40 @@ internal sealed class ReviewExecutionService
             report);
     }
 
+    public async Task<LocalReviewExecutionResult> ExecuteLocalFolderReviewAsync(
+        string localFolderPath,
+        bool includeFullModifiedFiles,
+        Action<string> appendLog,
+        Action<int, int, string> updateBusyProgress,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var solutionPath = RepositoryUtilities.FindTopLevelSolutionFile(localFolderPath);
+        appendLog?.Invoke($"Local review folder: {localFolderPath}");
+        appendLog?.Invoke("Reviewing all analyzable source files in the local folder.");
+        appendLog?.Invoke(string.IsNullOrWhiteSpace(solutionPath)
+            ? "No .sln file found in local folder."
+            : $"Solution selected: {solutionPath}");
+
+        var changedFileSource = new LocalRepositoryChangedFileSource(localFolderPath);
+        var sourceResult = await changedFileSource.LoadAsync(appendLog);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var report = await RunCodeSmellScanAsync(
+            sourceResult,
+            includeFullModifiedFiles,
+            appendLog,
+            updateBusyProgress,
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return new LocalReviewExecutionResult(
+            localFolderPath,
+            solutionPath,
+            sourceResult,
+            report);
+    }
+
     private async Task<CodeSmellReport> RunCodeSmellScanAsync(
         string reviewWorktreePath,
         string targetBranch,

@@ -131,12 +131,16 @@ public partial class MainWindow : Window
 
     private async Task BrowseLocalRepositoryAsync()
     {
-        var path = await BrowseFolderAsync("Choose local repository folder", m_viewModel.LocalRepositoryPath);
+        var browseTitle = m_viewModel.IsLocalFolderReviewMode
+            ? "Choose local folder"
+            : "Choose local repository folder";
+        var path = await BrowseFolderAsync(browseTitle, m_viewModel.LocalRepositoryPath);
         if (string.IsNullOrWhiteSpace(path))
             return;
 
         m_viewModel.LocalRepositoryPath = path;
-        await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
+        if (!m_viewModel.IsLocalFolderReviewMode)
+            await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
     }
 
     private static string BuildWindowTitle()
@@ -183,7 +187,8 @@ public partial class MainWindow : Window
             m_reviewWorkflowService.GetPrepareReviewStatusText(
                 m_viewModel.IsPullRequestReviewMode,
                 m_viewModel.IsLocalCommittedReviewMode,
-                m_viewModel.IsLocalRepositoryReviewMode),
+                m_viewModel.IsLocalRepositoryReviewMode,
+                m_viewModel.IsLocalFolderReviewMode),
             async cancellationToken =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -192,6 +197,7 @@ public partial class MainWindow : Window
                     m_viewModel.IsPullRequestReviewMode,
                     m_viewModel.IsLocalCommittedReviewMode,
                     m_viewModel.IsLocalRepositoryReviewMode,
+                    m_viewModel.IsLocalFolderReviewMode,
                     m_viewModel.RepositoryRootPath?.Trim(),
                     m_viewModel.PullRequestUrl?.Trim(),
                     m_viewModel.LocalRepositoryPath?.Trim(),
@@ -607,17 +613,19 @@ public partial class MainWindow : Window
 
     private async void LocalRepositoryFolderTextBox_OnLostFocus(object sender, RoutedEventArgs e)
     {
-        await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
+        if (!m_viewModel.IsLocalFolderReviewMode)
+            await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
     }
 
     private async void MainWindow_OnOpened(object sender, EventArgs e)
     {
         await EnsureGitIsAvailableOnStartupAsync();
-        if (!m_viewModel.IsGitAvailable)
-            return;
+        if (m_viewModel.IsGitAvailable)
+        {
+            await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: false);
+            await RunStartupCodeReviewCleanupAsync();
+        }
 
-        await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: false);
-        await RunStartupCodeReviewCleanupAsync();
         await TryPrefillPullRequestUrlFromClipboardAsync();
     }
 

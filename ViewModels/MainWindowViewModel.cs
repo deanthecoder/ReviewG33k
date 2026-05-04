@@ -32,6 +32,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     private const int LocalCommittedReviewModeIndex = 1;
     private const int LocalUncommittedReviewModeIndex = 2;
     private const int LocalRepositoryReviewModeIndex = 3;
+    private const int LocalFolderReviewModeIndex = 4;
 
     private readonly Settings m_settings;
     private string m_repositoryRootPath;
@@ -145,7 +146,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         get => m_reviewModeIndex;
         set
         {
-            var normalizedValue = value is >= 0 and <= 3 ? value : 0;
+            var normalizedValue = value is >= 0 and <= LocalFolderReviewModeIndex ? value : 0;
             if (!SetField(ref m_reviewModeIndex, normalizedValue))
                 return;
 
@@ -267,12 +268,24 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public bool IsLocalRepositoryReviewMode => m_reviewModeIndex == LocalRepositoryReviewModeIndex;
 
+    public bool IsLocalFolderReviewMode => m_reviewModeIndex == LocalFolderReviewModeIndex;
+
     public bool IsAnyLocalReviewMode => !IsPullRequestReviewMode;
+
+    public bool CanChooseScanScope => !IsLocalRepositoryReviewMode && !IsLocalFolderReviewMode;
+
+    public bool ShowScanScopeOptions => CanChooseScanScope;
 
     public bool ShowPullRequestMetadata =>
         ShowPullRequestInputs && !string.IsNullOrWhiteSpace(m_pullRequestMetadataText);
 
     public bool ShowLocalBaseBranch => m_reviewModeIndex == LocalCommittedReviewModeIndex;
+
+    public string LocalReviewPathLabel => IsLocalFolderReviewMode ? "Local Folder:" : "Local Repo:";
+
+    public string LocalReviewPathWatermark => IsLocalFolderReviewMode
+        ? "Example: C:\\source\\CodeFolder"
+        : "Example: C:\\source\\MyRepo";
 
     public string PrepareReviewButtonText => m_reviewModeIndex == PullRequestReviewModeIndex
         ? "Review PR"
@@ -286,15 +299,19 @@ public sealed class MainWindowViewModel : ViewModelBase
             "Reviews your uncommitted working tree changes, without requiring commits.",
         LocalRepositoryReviewModeIndex =>
             "Reviews all analyzable files in your local repository folder, regardless of Git change state.",
+        LocalFolderReviewModeIndex =>
+            "Reviews all analyzable source files in a local folder without requiring Git.",
         _ =>
             "Reviews a Bitbucket pull request by preparing an isolated local worktree for that PR."
     };
 
-    public string ScanScopeInfoTooltip => m_scanScopeIndex == 1
-        ? "Runs checks across entire modified files. More thorough, but slower."
-        : "Runs checks only on newly added lines. Faster for targeted reviews.";
+    public string ScanScopeInfoTooltip => CanChooseScanScope
+        ? m_scanScopeIndex == 1
+            ? "Runs checks across entire modified files. More thorough, but slower."
+            : "Runs checks only on newly added lines. Faster for targeted reviews."
+        : "Whole-tree scans always review every analyzable line, so scan scope does not apply.";
 
-    public bool IncludeFullModifiedFiles => m_scanScopeIndex == 1;
+    public bool IncludeFullModifiedFiles => CanChooseScanScope && m_scanScopeIndex == 1;
 
     internal bool MarkGitAvailabilityChecked()
     {
@@ -306,7 +323,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     }
 
     public bool CanPrepareReview => !m_isBusy &&
-                                    m_isGitAvailable &&
+                                    (m_isGitAvailable || IsLocalFolderReviewMode) &&
                                     (ShowPullRequestInputs
                                         ? m_canReviewCurrentPullRequest && m_hasValidPullRequestPrepareInputs
                                         : m_hasValidLocalPrepareInputs);
@@ -571,6 +588,7 @@ public sealed class MainWindowViewModel : ViewModelBase
             PullRequestUrl,
             IsAnyLocalReviewMode,
             IsLocalCommittedReviewMode,
+            requiresGitRepository: !IsLocalFolderReviewMode,
             PreviewPullRequestIsOpen,
             PreviewPullRequestState,
             m_latestSolutionPath,
@@ -673,7 +691,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     private static int ResolveInitialReviewModeIndex(Settings settings)
     {
         var configuredIndex = settings.ReviewModeIndex;
-        if (configuredIndex is >= PullRequestReviewModeIndex and <= LocalRepositoryReviewModeIndex)
+        if (configuredIndex is >= PullRequestReviewModeIndex and <= LocalFolderReviewModeIndex)
             return configuredIndex;
 
         return settings.UseLocalCommittedReview ? 1 : 0;
@@ -739,11 +757,18 @@ public sealed class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsLocalCommittedReviewMode));
         OnPropertyChanged(nameof(IsLocalUncommittedReviewMode));
         OnPropertyChanged(nameof(IsLocalRepositoryReviewMode));
+        OnPropertyChanged(nameof(IsLocalFolderReviewMode));
         OnPropertyChanged(nameof(IsAnyLocalReviewMode));
+        OnPropertyChanged(nameof(CanChooseScanScope));
+        OnPropertyChanged(nameof(ShowScanScopeOptions));
         OnPropertyChanged(nameof(ShowPullRequestMetadata));
         OnPropertyChanged(nameof(ShowLocalBaseBranch));
+        OnPropertyChanged(nameof(LocalReviewPathLabel));
+        OnPropertyChanged(nameof(LocalReviewPathWatermark));
         OnPropertyChanged(nameof(PrepareReviewButtonText));
         OnPropertyChanged(nameof(ReviewModeInfoTooltip));
+        OnPropertyChanged(nameof(ScanScopeInfoTooltip));
+        OnPropertyChanged(nameof(IncludeFullModifiedFiles));
         RaiseCommandCanExecuteChanged();
     }
 

@@ -201,6 +201,27 @@ public sealed class MainWindowViewModelTests
     }
 
     [Test]
+    public void ReviewModeFlagsWhenLocalFolderSelectedReflectState()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 4
+        };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(viewModel.IsPullRequestReviewMode, Is.False);
+            Assert.That(viewModel.IsLocalCommittedReviewMode, Is.False);
+            Assert.That(viewModel.IsLocalUncommittedReviewMode, Is.False);
+            Assert.That(viewModel.IsLocalRepositoryReviewMode, Is.False);
+            Assert.That(viewModel.IsLocalFolderReviewMode, Is.True);
+            Assert.That(viewModel.IsAnyLocalReviewMode, Is.True);
+            Assert.That(viewModel.ShowLocalBaseBranch, Is.False);
+            Assert.That(viewModel.LocalReviewPathLabel, Is.EqualTo("Local Folder:"));
+        });
+    }
+
+    [Test]
     public void ShowPullRequestMetadataDependsOnModeAndMetadataText()
     {
         var viewModel = new MainWindowViewModel(new Settings())
@@ -268,7 +289,7 @@ public sealed class MainWindowViewModelTests
     }
 
     [Test]
-    public void IsGitAvailableWhenFalseDisablesPrepareReview()
+    public void IsGitAvailableWhenFalseDisablesGitBackedPrepareReview()
     {
         var viewModel = new MainWindowViewModel(new Settings())
         {
@@ -287,6 +308,27 @@ public sealed class MainWindowViewModelTests
 
         viewModel.IsGitAvailable = false;
         Assert.That(viewModel.CanPrepareReview, Is.False);
+    }
+
+    [Test]
+    public void IsGitAvailableWhenFalseStillAllowsLocalFolderPrepareReview()
+    {
+        var viewModel = new MainWindowViewModel(new Settings())
+        {
+            ReviewModeIndex = 4
+        };
+
+        viewModel.UpdateActionStateInputs(
+            canReviewCurrentPullRequest: true,
+            hasValidPullRequestInput: false,
+            hasValidPullRequestPrepareInputs: false,
+            hasValidLocalPrepareInputs: true,
+            hasAvailableSolution: false,
+            canCancelCurrentOperation: false,
+            isCancellationRequested: false);
+        viewModel.IsGitAvailable = false;
+
+        Assert.That(viewModel.CanPrepareReview, Is.True);
     }
 
     [Test]
@@ -359,6 +401,9 @@ public sealed class MainWindowViewModelTests
 
         viewModel.ReviewModeIndex = 2;
         Assert.That(viewModel.ReviewModeInfoTooltip, Does.Contain("uncommitted"));
+
+        viewModel.ReviewModeIndex = 4;
+        Assert.That(viewModel.ReviewModeInfoTooltip, Does.Contain("without requiring Git"));
     }
 
     [Test]
@@ -374,6 +419,17 @@ public sealed class MainWindowViewModelTests
         viewModel.ScanScopeIndex = 1;
         Assert.That(viewModel.ScanScopeInfoTooltip, Does.Contain("entire modified files"));
         Assert.That(viewModel.IncludeFullModifiedFiles, Is.True);
+
+        viewModel.ReviewModeIndex = 3;
+        Assert.That(viewModel.CanChooseScanScope, Is.False);
+        Assert.That(viewModel.ShowScanScopeOptions, Is.False);
+        Assert.That(viewModel.IncludeFullModifiedFiles, Is.False);
+
+        viewModel.ReviewModeIndex = 4;
+        Assert.That(viewModel.CanChooseScanScope, Is.False);
+        Assert.That(viewModel.ShowScanScopeOptions, Is.False);
+        Assert.That(viewModel.ScanScopeInfoTooltip, Does.Contain("does not apply"));
+        Assert.That(viewModel.IncludeFullModifiedFiles, Is.False);
     }
 
     [Test]

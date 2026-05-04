@@ -30,10 +30,11 @@ public sealed class MainWindowReviewWorkflowServiceTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: true, isLocalCommittedReviewMode: false, isLocalRepositoryReviewMode: false), Is.EqualTo("Reviewing pull request..."));
-            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: false, isLocalCommittedReviewMode: true, isLocalRepositoryReviewMode: false), Is.EqualTo("Reviewing local committed changes..."));
-            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: false, isLocalCommittedReviewMode: false, isLocalRepositoryReviewMode: false), Is.EqualTo("Reviewing local uncommitted changes..."));
-            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: false, isLocalCommittedReviewMode: false, isLocalRepositoryReviewMode: true), Is.EqualTo("Reviewing local repository files..."));
+            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: true, isLocalCommittedReviewMode: false, isLocalRepositoryReviewMode: false, isLocalFolderReviewMode: false), Is.EqualTo("Reviewing pull request..."));
+            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: false, isLocalCommittedReviewMode: true, isLocalRepositoryReviewMode: false, isLocalFolderReviewMode: false), Is.EqualTo("Reviewing local committed changes..."));
+            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: false, isLocalCommittedReviewMode: false, isLocalRepositoryReviewMode: false, isLocalFolderReviewMode: false), Is.EqualTo("Reviewing local uncommitted changes..."));
+            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: false, isLocalCommittedReviewMode: false, isLocalRepositoryReviewMode: true, isLocalFolderReviewMode: false), Is.EqualTo("Reviewing local repository files..."));
+            Assert.That(service.GetPrepareReviewStatusText(isPullRequestReviewMode: false, isLocalCommittedReviewMode: false, isLocalRepositoryReviewMode: false, isLocalFolderReviewMode: true), Is.EqualTo("Reviewing local folder files..."));
         });
     }
 
@@ -138,6 +139,35 @@ public sealed class MainWindowReviewWorkflowServiceTests
         {
             Assert.That(applyResult.Mode, Is.EqualTo(MainWindowReviewPreparationMode.LocalRepository));
             Assert.That(applyResult.StatusMessage, Is.EqualTo("Repository review complete."));
+            Assert.That(applyResult.LocalFindingCacheUpdate, Is.Null);
+            Assert.That(applyResult.ResolvedLocalBaseBranch, Is.Null);
+        });
+    }
+
+    [Test]
+    public void BuildApplyResultWhenLocalFolderUsesFolderCompleteStatus()
+    {
+        var service = CreateService();
+        var report = new CodeSmellReport();
+        var sourceResult = new CodeReviewChangedFileSourceResult([], []);
+        var localExecutionResult = new LocalReviewExecutionResult(
+            @"C:\folder",
+            @"C:\folder\App.sln",
+            sourceResult,
+            report);
+        var preparationResult = MainWindowReviewPreparationResult.Success(
+            MainWindowReviewPreparationMode.LocalFolder,
+            pullRequest: null,
+            resolvedBaseBranch: null,
+            pullRequestExecutionResult: null,
+            localExecutionResult);
+
+        var applyResult = service.BuildApplyResult(preparationResult, @"C:\folder");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(applyResult.Mode, Is.EqualTo(MainWindowReviewPreparationMode.LocalFolder));
+            Assert.That(applyResult.StatusMessage, Is.EqualTo("Folder review complete."));
             Assert.That(applyResult.LocalFindingCacheUpdate, Is.Null);
             Assert.That(applyResult.ResolvedLocalBaseBranch, Is.Null);
         });

@@ -42,6 +42,7 @@ public sealed class MainWindowActionStateServiceTests
                 pullRequestUrl: "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/19",
                 isAnyLocalReviewMode: true,
                 requiresLocalBaseBranch: false,
+                requiresGitRepository: true,
                 previewPullRequestIsOpen: true,
                 previewPullRequestState: "OPEN",
                 latestSolutionPath: null,
@@ -77,6 +78,7 @@ public sealed class MainWindowActionStateServiceTests
             pullRequestUrl: " ",
             isAnyLocalReviewMode: true,
             requiresLocalBaseBranch: true,
+            requiresGitRepository: true,
             previewPullRequestIsOpen: false,
             previewPullRequestState: "DECLINED",
             latestSolutionPath: null,
@@ -102,6 +104,7 @@ public sealed class MainWindowActionStateServiceTests
             pullRequestUrl: "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/19",
             isAnyLocalReviewMode: false,
             requiresLocalBaseBranch: false,
+            requiresGitRepository: true,
             previewPullRequestIsOpen: false,
             previewPullRequestState: "MERGED",
             latestSolutionPath: null,
@@ -110,5 +113,31 @@ public sealed class MainWindowActionStateServiceTests
             isCancellationRequested: false);
 
         Assert.That(snapshot.CanReviewCurrentPullRequest, Is.True);
+    }
+
+    [Test]
+    public void BuildSnapshotWhenGitlessLocalFolderExistsMarksLocalInputsValid()
+    {
+        using var tempRoot = new TempDirectory();
+        var localFolder = tempRoot.GetDir("plain-folder");
+        localFolder.Create();
+
+        var service = new MainWindowActionStateService(new MainWindowInputValidationService());
+        var snapshot = service.BuildSnapshot(
+            repositoryRootPath: null,
+            localRepositoryPath: localFolder.FullName,
+            localBaseBranch: null,
+            pullRequestUrl: null,
+            isAnyLocalReviewMode: true,
+            requiresLocalBaseBranch: false,
+            requiresGitRepository: false,
+            previewPullRequestIsOpen: null,
+            previewPullRequestState: null,
+            latestSolutionPath: null,
+            latestReviewWorktreePath: null,
+            canCancelCurrentOperation: false,
+            isCancellationRequested: false);
+
+        Assert.That(snapshot.HasValidLocalPrepareInputs, Is.True);
     }
 }

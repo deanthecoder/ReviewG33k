@@ -39,7 +39,7 @@ internal readonly record struct GitStartupStatus(
 /// </remarks>
 internal sealed class MainWindowStartupService
 {
-    private const string GitMissingActionText = "Install Git for Windows (https://git-scm.com/download/win), ensure git.exe is on PATH, then restart ReviewG33k.";
+    private const string GitMissingActionText = "Install Git for Windows (https://git-scm.com/download/win) and ensure git.exe is on PATH to enable pull request and Git-backed local reviews. Entire Local Folder review can still run without Git.";
     private readonly Func<string, Task<GitAvailabilityCheckResult>> m_checkGitAvailabilityAsync;
     private readonly Func<string, Action<string>, CancellationToken, Task> m_clearCodeReviewFolderAsync;
 
@@ -82,7 +82,7 @@ internal sealed class MainWindowStartupService
 
         return new GitStartupStatus(
             IsGitAvailable: false,
-            StatusMessage: "Git is missing. Install Git and restart ReviewG33k.",
+            StatusMessage: "Git is missing. Git-backed review modes are unavailable.",
             LogMessages: logs,
             DialogTitle: "Git not found",
             DialogMessage: dialogDetail);

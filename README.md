@@ -22,7 +22,7 @@ A compact pie-chart view with live category toggles, so you can hide whole issue
 
 ## What it can do
 - Review **Bitbucket pull requests** by pasting or dropping a PR URL.
-- Review **local committed changes**, **local uncommitted changes**, or an **entire local repository**.
+- Review **local committed changes**, **local uncommitted changes**, an **entire local repository**, or an **entire local folder** without Git.
 - Switch between **changed lines** and **full modified files** depending on how thorough you want the scan to be.
 - Prepare isolated review worktrees so your normal working tree stays untouched.
 - See findings grouped into clear categories like `Correctness`, `Threading`, `UI`, and `Repo Hygiene`.
@@ -38,9 +38,10 @@ A compact pie-chart view with live category toggles, so you can hide whole issue
 
 ## Quick start
 - **Pull request review**: choose a repo root, paste or drop a PR URL, then click **Review PR**.
-- **Local committed review**: choose **Local committed changes**, pick a repo and base branch, then click **Review Local**.
-- **Local uncommitted review**: choose **Local uncommitted changes**, pick a repo, then click **Review Local**.
-- **Whole-repository review**: choose **Entire local repository**, pick a repo, then click **Review Local**.
+- **Local committed review**: choose **Local Committed Changes**, pick a repo and base branch, then click **Review Local**.
+- **Local uncommitted review**: choose **Local Uncommitted Changes**, pick a repo, then click **Review Local**.
+- **Whole-repository review**: choose **Entire Local Repository**, pick a repo, then click **Review Local**.
+- **Whole-folder review**: choose **Entire Local Folder**, pick any source folder, then click **Review Local**.
 
 ## Command-line usage
 ReviewG33k can also run without the UI for local-review automation, including post-coding checks from Codex or scripts.
@@ -70,7 +71,9 @@ Exit codes:
 Run `ReviewG33k --help` or `ReviewG33k /?` for usage.
 
 ## Build and run
-Prereqs: .NET 8 SDK and `git`.
+Prereq: .NET 8 SDK.
+
+Optional: `git` for Bitbucket pull requests and Git-backed local review modes.
 
 Optional tools:
 - VS Code `code` CLI for opening findings in VS Code

@@ -69,12 +69,13 @@ public sealed class MainWindowStartupServiceTests
         Assert.Multiple(() =>
         {
             Assert.That(result.IsGitAvailable, Is.False);
-            Assert.That(result.StatusMessage, Is.EqualTo("Git is missing. Install Git and restart ReviewG33k."));
+            Assert.That(result.StatusMessage, Is.EqualTo("Git is missing. Git-backed review modes are unavailable."));
             Assert.That(result.LogMessages, Has.Count.EqualTo(2));
             Assert.That(result.LogMessages[0], Is.EqualTo("ERROR: Git is not available."));
             Assert.That(result.LogMessages[1], Does.Contain("command not found"));
             Assert.That(result.DialogTitle, Is.EqualTo("Git not found"));
             Assert.That(result.DialogMessage, Does.Contain("Install Git for Windows"));
+            Assert.That(result.DialogMessage, Does.Contain("Entire Local Folder review can still run without Git"));
             Assert.That(result.DialogMessage, Does.Contain("Details: git: command not found"));
         });
     }

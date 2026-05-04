@@ -29,6 +29,7 @@ internal sealed class MainWindowActionStateService
         string pullRequestUrl,
         bool isAnyLocalReviewMode,
         bool requiresLocalBaseBranch,
+        bool requiresGitRepository,
         bool? previewPullRequestIsOpen,
         string previewPullRequestState,
         string latestSolutionPath,
@@ -46,7 +47,11 @@ internal sealed class MainWindowActionStateService
         var hasValidPullRequestPrepareInputs =
             m_inputValidationService.ValidatePullRequestPrepareInputs(repositoryRootPath?.Trim(), pullRequestUrl?.Trim()).IsValid &&
             hasValidPullRequestInput;
-        var hasValidLocalPrepareInputs = IsValidLocalPrepareInputs(localRepositoryPath, localBaseBranch, requiresLocalBaseBranch);
+        var hasValidLocalPrepareInputs = IsValidLocalPrepareInputs(
+            localRepositoryPath,
+            localBaseBranch,
+            requiresLocalBaseBranch,
+            requiresGitRepository);
         var hasAvailableSolution = !string.IsNullOrWhiteSpace(resolvedSolutionPath) && resolvedSolutionPath.ToFile().Exists();
         var canReviewCurrentPullRequest = previewPullRequestIsOpen != false || IsMergedState(previewPullRequestState);
 
@@ -62,9 +67,16 @@ internal sealed class MainWindowActionStateService
             isCancellationRequested);
     }
 
-    private bool IsValidLocalPrepareInputs(string localRepositoryPath, string localBaseBranch, bool requiresLocalBaseBranch)
+    private bool IsValidLocalPrepareInputs(
+        string localRepositoryPath,
+        string localBaseBranch,
+        bool requiresLocalBaseBranch,
+        bool requiresGitRepository)
     {
-        if (!m_inputValidationService.ValidateLocalRepositoryInput(localRepositoryPath?.Trim()).IsValid)
+        var validation = requiresGitRepository
+            ? m_inputValidationService.ValidateLocalRepositoryInput(localRepositoryPath?.Trim())
+            : m_inputValidationService.ValidateLocalFolderInput(localRepositoryPath?.Trim());
+        if (!validation.IsValid)
             return false;
 
         return !requiresLocalBaseBranch || !string.IsNullOrWhiteSpace(localBaseBranch);

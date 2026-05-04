@@ -73,6 +73,29 @@ public sealed class MainWindowReviewPreparationServiceTests
         });
     }
 
+    [Test]
+    public async Task PrepareLocalFolderReviewAsyncWhenFolderDoesNotContainGitReturnsSuccess()
+    {
+        using var tempRoot = new TempDirectory();
+        tempRoot.GetFile("Example.cs").WriteAllText("public sealed class Example { }");
+        var service = CreateService();
+
+        var result = await service.PrepareLocalFolderReviewAsync(
+            tempRoot.FullName,
+            includeFullModifiedFiles: false,
+            appendLog: _ => { },
+            updateBusyProgress: (_, _, _) => { },
+            cancellationToken: default);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsSuccess, Is.True);
+            Assert.That(result.Mode, Is.EqualTo(MainWindowReviewPreparationMode.LocalFolder));
+            Assert.That(result.LocalExecutionResult?.ChangedFileSourceResult?.IsEntireRepositoryScan, Is.True);
+            Assert.That(result.LocalExecutionResult?.ChangedFileSourceResult?.Files.Count, Is.EqualTo(1));
+        });
+    }
+
     private static MainWindowReviewPreparationService CreateService() =>
         new(
             new MainWindowInputValidationService(),

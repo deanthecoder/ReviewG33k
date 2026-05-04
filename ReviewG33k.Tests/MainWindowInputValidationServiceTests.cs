@@ -8,6 +8,7 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using DTC.Core;
 using DTC.Core.Extensions;
 using ReviewG33k.Services;
 
@@ -61,6 +62,17 @@ public sealed class MainWindowInputValidationServiceTests
             Assert.That(result.StatusMessage, Is.EqualTo("Enter a base branch (for example: main)."));
             Assert.That(result.DialogTitle, Is.EqualTo("Base branch required"));
         });
+    }
+
+    [Test]
+    public void ValidateLocalFolderInputWhenFolderExistsWithoutGitReturnsSuccess()
+    {
+        using var tempRoot = new TempDirectory();
+        var service = new MainWindowInputValidationService();
+
+        var result = service.ValidateLocalFolderInput(tempRoot.FullName);
+
+        Assert.That(result.IsValid, Is.True);
     }
 
     private static string FindRepositoryRoot()
