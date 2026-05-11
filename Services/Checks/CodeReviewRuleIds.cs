@@ -24,6 +24,7 @@ public static class CodeReviewRuleIds
     public const string EmptyXmlDocContent = "empty-xml-doc-content";
     public const string MissingTests = "missing-tests";
     public const string MissingTestsForPublicMethods = "missing-tests-public-methods";
+    public const string MissingTestsForPublicProperties = "missing-tests-public-properties";
     public const string PropertyCanBeAutoProperty = "property-can-be-auto-property";
     public const string PrivatePropertyShouldBeField = "private-property-should-be-field";
     public const string PropertySetterIgnoresValue = "property-setter-ignores-value";

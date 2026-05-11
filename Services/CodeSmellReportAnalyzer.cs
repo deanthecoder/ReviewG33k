@@ -371,6 +371,7 @@ public sealed class CodeSmellReportAnalyzer
         new EmptyXmlDocContentCodeReviewCheck(),
         new MissingUnitTestsCodeReviewCheck(),
         new MissingTestsForNewPublicMethodsCodeReviewCheck(),
+        new MissingTestsForNewPublicPropertiesCodeReviewCheck(),
         new MissingReadmeForNewProjectCodeReviewCheck(),
         new MissingDisclaimerForNewSourceFileCodeReviewCheck(),
         new MissingTypedBindingContextCodeReviewCheck(),

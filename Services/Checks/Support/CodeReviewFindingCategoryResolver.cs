@@ -100,7 +100,8 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.UnusedPrivateMember => Maintainability,
 
             CodeReviewRuleIds.MissingTests or
-            CodeReviewRuleIds.MissingTestsForPublicMethods => Testing,
+            CodeReviewRuleIds.MissingTestsForPublicMethods or
+            CodeReviewRuleIds.MissingTestsForPublicProperties => Testing,
 
             CodeReviewRuleIds.MissingXmlDocs or
             CodeReviewRuleIds.EmptyXmlDocContent or

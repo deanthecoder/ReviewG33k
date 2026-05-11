@@ -43,6 +43,7 @@ public sealed class CodeSmellReportAnalyzerTests
         var missingXmlDocsCheck = analyzer.Checks.OfType<MissingXmlDocsCodeReviewCheck>().Single();
         var missingUnitTestsCheck = analyzer.Checks.OfType<MissingUnitTestsCodeReviewCheck>().Single();
         var missingTestsForPublicMethodsCheck = analyzer.Checks.OfType<MissingTestsForNewPublicMethodsCodeReviewCheck>().Single();
+        var missingTestsForPublicPropertiesCheck = analyzer.Checks.OfType<MissingTestsForNewPublicPropertiesCodeReviewCheck>().Single();
         var missingReadmeCheck = analyzer.Checks.OfType<MissingReadmeForNewProjectCodeReviewCheck>().Single();
         var missingTypedBindingContextCheck = analyzer.Checks.OfType<MissingTypedBindingContextCodeReviewCheck>().Single();
         var missingBlankLineCheck = analyzer.Checks.OfType<MissingBlankLineBetweenMethodsCodeReviewCheck>().Single();
@@ -66,6 +67,7 @@ public sealed class CodeSmellReportAnalyzerTests
         Assert.That(missingXmlDocsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(missingUnitTestsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(missingTestsForPublicMethodsCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
+        Assert.That(missingTestsForPublicPropertiesCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(missingReadmeCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(missingTypedBindingContextCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
         Assert.That(missingBlankLineCheck.Scope, Is.EqualTo(CodeReviewCheckScope.AddedLinesOnly));
