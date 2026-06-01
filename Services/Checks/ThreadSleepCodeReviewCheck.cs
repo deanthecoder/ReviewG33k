@@ -35,6 +35,8 @@ public sealed class ThreadSleepCodeReviewCheck : CodeReviewCheckBase
                     continue;
                 if (!IsThreadSleepInvocation(invocation, hasStaticThreadUsing))
                     continue;
+                if (!IsInsideAsyncMethod(invocation))
+                    continue;
 
                 var lineNumber = RoslynCodeReviewCheckUtilities.GetStartLine(invocation);
                 AddFinding(
@@ -67,6 +69,12 @@ public sealed class ThreadSleepCodeReviewCheck : CodeReviewCheckBase
         }
 
         return false;
+    }
+
+    private static bool IsInsideAsyncMethod(InvocationExpressionSyntax invocation)
+    {
+        var method = invocation.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+        return method?.Modifiers.Any(modifier => string.Equals(modifier.ValueText, "async", StringComparison.Ordinal)) == true;
     }
 
     private static bool IsStaticThreadUsingDirective(UsingDirectiveSyntax usingDirective)

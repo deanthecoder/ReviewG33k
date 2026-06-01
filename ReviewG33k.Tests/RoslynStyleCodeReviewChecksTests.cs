@@ -783,10 +783,11 @@ public sealed class RoslynStyleCodeReviewChecksTests
     {
         const string source = """
             using System.Threading;
+            using System.Threading.Tasks;
 
             public sealed class Sample
             {
-                public void Run()
+                public async Task Run()
                 {
                     Thread.Sleep(20);
                 }
@@ -801,14 +802,35 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
-    public void ThreadSleepCheckWhenUsingStaticThreadReportsSuggestion()
+    public void ThreadSleepCheckWhenThreadSleepIsUsedInSynchronousMethodDoesNotReport()
     {
         const string source = """
-            using static System.Threading.Thread;
+            using System.Threading;
 
             public sealed class Sample
             {
                 public void Run()
+                {
+                    Thread.Sleep(20);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new ThreadSleepCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void ThreadSleepCheckWhenUsingStaticThreadReportsSuggestion()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+            using static System.Threading.Thread;
+
+            public sealed class Sample
+            {
+                public async Task Run()
                 {
                     Sleep(20);
                 }
