@@ -44,6 +44,7 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.AsyncVoid or
             CodeReviewRuleIds.LockThisOrPublic or
             CodeReviewRuleIds.TaskRunAsync or
+            CodeReviewRuleIds.UnnecessaryTaskCompletion or
             CodeReviewRuleIds.ThreadSleep or
             CodeReviewRuleIds.UnobservedTaskResult => Threading,
 

@@ -327,6 +327,7 @@ public sealed class CodeSmellReportAnalyzer
         new SwallowingCatchCodeReviewCheck(),
         new LockTargetCodeReviewCheck(),
         new TaskRunAsyncCodeReviewCheck(),
+        new UnnecessaryTaskCompletionCodeReviewCheck(),
         new PropertyCanBeAutoPropertyCodeReviewCheck(),
         new PrivateGetOnlyAutoPropertyShouldBeFieldCodeReviewCheck(),
         new PrivatePropertyShouldBeFieldCodeReviewCheck(),

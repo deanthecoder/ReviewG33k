@@ -1220,6 +1220,159 @@ public sealed class RoslynStyleCodeReviewChecksTests
     }
 
     [Test]
+    public void UnnecessaryTaskCompletionCheckWhenMethodReturnsTaskFromResultReportsSuggestion()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public static Task<bool> GetResultAsync(int a, int b)
+                {
+                    return Task.FromResult(true);
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryTaskCompletionCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].RuleId, Is.EqualTo(CodeReviewRuleIds.UnnecessaryTaskCompletion));
+        Assert.That(report.Findings[0].Severity, Is.EqualTo(CodeReviewFindingSeverity.Suggestion));
+        Assert.That(report.Findings[0].Message, Does.Contain("without doing asynchronous work"));
+    }
+
+    [Test]
+    public void UnnecessaryTaskCompletionCheckWhenMethodReturnsCompletedTaskReportsSuggestion()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public Task SaveAsync()
+                {
+                    return Task.CompletedTask;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryTaskCompletionCodeReviewCheck(), "A", source, Enumerable.Range(1, 10));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].RuleId, Is.EqualTo(CodeReviewRuleIds.UnnecessaryTaskCompletion));
+    }
+
+    [Test]
+    public void UnnecessaryTaskCompletionCheckWhenExpressionBodiedMethodReturnsTaskFromResultReportsSuggestion()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public Task<int> CountAsync() => Task.FromResult(1);
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryTaskCompletionCodeReviewCheck(), "A", source, Enumerable.Range(1, 6));
+
+        Assert.That(report.Findings, Has.Count.EqualTo(1));
+        Assert.That(report.Findings[0].LineNumber, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void UnnecessaryTaskCompletionCheckWhenMethodIsAsyncDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public async Task<bool> GetResultAsync()
+                {
+                    await Task.Delay(1);
+                    return true;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryTaskCompletionCodeReviewCheck(), "A", source, Enumerable.Range(1, 11));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnnecessaryTaskCompletionCheckWhenOverrideReturnsCompletedTaskDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public abstract class CommandBase
+            {
+                public abstract Task ExecuteAsync();
+            }
+
+            public sealed class SampleCommand : CommandBase
+            {
+                public override Task ExecuteAsync()
+                {
+                    return Task.CompletedTask;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryTaskCompletionCodeReviewCheck(), "A", source, Enumerable.Range(1, 15));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnnecessaryTaskCompletionCheckWhenInterfaceImplementationReturnsCompletedTaskDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public interface ICommand
+            {
+                Task ExecuteAsync();
+            }
+
+            public sealed class SampleCommand : ICommand
+            {
+                public Task ExecuteAsync()
+                {
+                    return Task.CompletedTask;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryTaskCompletionCodeReviewCheck(), "A", source, Enumerable.Range(1, 15));
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
+    public void UnnecessaryTaskCompletionCheckWhenReturnLineIsUnchangedDoesNotReport()
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public sealed class Sample
+            {
+                public Task SaveAsync()
+                {
+                    return Task.CompletedTask;
+                }
+            }
+            """;
+
+        var report = AnalyzeSource(new UnnecessaryTaskCompletionCodeReviewCheck(), "M", source, [1]);
+
+        Assert.That(report.Findings, Is.Empty);
+    }
+
+    [Test]
     public void MethodCanBeStaticCheckWhenPrivateMethodDoesNotUseInstanceStateReportsHint()
     {
         const string source = """
@@ -2679,4 +2832,3 @@ public sealed class RoslynStyleCodeReviewChecksTests
         return report;
     }
 }
-

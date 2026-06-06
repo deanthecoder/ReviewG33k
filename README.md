@@ -112,6 +112,7 @@ ReviewG33k labels each finding with one of these categories:
 | Async void (non-event handlers) | `async void` methods that are likely to hide failures. |
 | Async method naming | `async` methods that do not end with `Async`. |
 | Task.Run(async ...) | Async work wrapped in `Task.Run(...)` where it may be unnecessary or risky. |
+| Unnecessary task completion | Synchronous methods that return `Task.FromResult(...)` or `Task.CompletedTask` without doing asynchronous work. |
 | Unobserved task results | Fire-and-forget task calls whose result is ignored. |
 | Thread.Sleep usage | Blocking sleeps in newly added code paths. |
 | Lock targets | `lock(this)` or locks on likely public objects. |

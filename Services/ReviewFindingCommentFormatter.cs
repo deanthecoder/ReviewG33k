@@ -53,6 +53,7 @@ internal sealed class ReviewFindingCommentFormatter
             CodeReviewRuleIds.UnnecessaryCast => "This cast looks unnecessary and may be safe to remove.",
             CodeReviewRuleIds.RedundantSelfLookup => "This lookup appears to resolve the current instance again, which looks redundant.",
             CodeReviewRuleIds.UnnecessaryVerbatimStringPrefix => "The verbatim string prefix here looks unnecessary.",
+            CodeReviewRuleIds.UnnecessaryTaskCompletion => "This method returns an already-completed Task without doing asynchronous work. Returning a plain value may keep the caller chain simpler.",
             _ => finding.Message ?? string.Empty
         };
     }

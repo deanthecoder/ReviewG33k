@@ -20,6 +20,7 @@ public static class CodeReviewRuleIds
     public const string SwallowingCatch = "swallowing-catch";
     public const string LockThisOrPublic = "lock-this-or-public";
     public const string TaskRunAsync = "task-run-async";
+    public const string UnnecessaryTaskCompletion = "unnecessary-task-completion";
     public const string MissingXmlDocs = "missing-xml-docs";
     public const string EmptyXmlDocContent = "empty-xml-doc-content";
     public const string MissingTests = "missing-tests";
