@@ -39,6 +39,7 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.PublicMethodArgumentGuards or
             CodeReviewRuleIds.ConstructorEventSubscriptionLifecycle or
             CodeReviewRuleIds.PropertySetterIgnoresValue or
+            CodeReviewRuleIds.JsonTrailingComma or
             CodeReviewRuleIds.NumericStringCultureForFileWrite => Correctness,
 
             CodeReviewRuleIds.AsyncVoid or
@@ -95,6 +96,7 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.DuplicateCodeBlock or
             CodeReviewRuleIds.BooleanMethodAlwaysReturnsSameValue or
             CodeReviewRuleIds.PrivateBooleanMethodAlwaysReturnsSameValue or
+            CodeReviewRuleIds.NamedReflectionMemberLookup or
             CodeReviewRuleIds.PrivateFieldUsedInSingleMethod or
             CodeReviewRuleIds.UnusedLocalVariable or
             CodeReviewRuleIds.UnusedMethodParameter or

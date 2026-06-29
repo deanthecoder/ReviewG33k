@@ -90,4 +90,6 @@ public static class CodeReviewRuleIds
     public const string NumericStringCultureForFileWrite = "numeric-string-culture-for-file-write";
     public const string BooleanMethodAlwaysReturnsSameValue = "bool-method-always-returns-same-value";
     public const string PrivateBooleanMethodAlwaysReturnsSameValue = "private-bool-method-always-returns-same-value";
+    public const string NamedReflectionMemberLookup = "named-reflection-member-lookup";
+    public const string JsonTrailingComma = "json-trailing-comma";
 }

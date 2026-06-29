@@ -17,13 +17,14 @@ namespace ReviewG33k.Tests;
 public sealed class GitWhitespaceInsensitiveDiffTests
 {
     [Test]
+    [Platform(Exclude = "Win", Reason = "Line-ending-only git diffs are normalized away on Windows hosts.")]
     public async Task GitWorkingTreeChangedFileSourceWhenOnlyLineEndingsDifferIncludesFile()
     {
         using var tempRoot = new TempDirectory();
         var git = new GitCommandRunner();
         var sourceFile = await CreateRepositoryWithTrackedSourceFileAsync(tempRoot, git);
 
-        File.WriteAllText(sourceFile.FullName, CreateCrLfSourceWithTrailingWhitespace());
+        sourceFile.WriteAllText(CreateCrLfSourceWithTrailingWhitespace());
 
         var source = new GitWorkingTreeChangedFileSource(git, tempRoot.FullName);
         var result = await source.LoadAsync();
@@ -34,6 +35,7 @@ public sealed class GitWhitespaceInsensitiveDiffTests
     }
 
     [Test]
+    [Platform(Exclude = "Win", Reason = "Line-ending-only git diffs are normalized away on Windows hosts.")]
     public async Task GitBranchComparisonChangedFileSourceWhenOnlyLineEndingsDifferIncludesFile()
     {
         using var tempRoot = new TempDirectory();
@@ -41,7 +43,7 @@ public sealed class GitWhitespaceInsensitiveDiffTests
         var sourceFile = await CreateRepositoryWithTrackedSourceFileAsync(tempRoot, git);
 
         Assert.That((await git.RunAsync(tempRoot.FullName, "checkout", "-b", "feature/whitespace")).IsSuccess, Is.True);
-        File.WriteAllText(sourceFile.FullName, CreateCrLfSourceWithTrailingWhitespace());
+        sourceFile.WriteAllText(CreateCrLfSourceWithTrailingWhitespace());
         Assert.That((await git.RunAsync(tempRoot.FullName, "add", ".")).IsSuccess, Is.True);
         Assert.That((await git.RunAsync(tempRoot.FullName, "commit", "-m", "Whitespace only")).IsSuccess, Is.True);
 
@@ -61,7 +63,7 @@ public sealed class GitWhitespaceInsensitiveDiffTests
         var sourceFile = await CreateRepositoryWithTrackedSourceFileAsync(tempRoot, git, enableAutoCrlf: true);
 
         Assert.That((await git.RunAsync(tempRoot.FullName, "checkout", "-b", "feature/content")).IsSuccess, Is.True);
-        File.WriteAllText(sourceFile.FullName, CreateCrLfSourceWithContentChange());
+        sourceFile.WriteAllText(CreateCrLfSourceWithContentChange());
         Assert.That((await git.RunAsync(tempRoot.FullName, "add", ".")).IsSuccess, Is.True);
         Assert.That((await git.RunAsync(tempRoot.FullName, "commit", "-m", "Content change")).IsSuccess, Is.True);
 
@@ -74,13 +76,14 @@ public sealed class GitWhitespaceInsensitiveDiffTests
     }
 
     [Test]
+    [Platform(Exclude = "Win", Reason = "Line-ending-only git diffs are normalized away on Windows hosts.")]
     public async Task GitSingleCommitChangedFileSourceWhenOnlyLineEndingsDifferIncludesFile()
     {
         using var tempRoot = new TempDirectory();
         var git = new GitCommandRunner();
         var sourceFile = await CreateRepositoryWithTrackedSourceFileAsync(tempRoot, git);
 
-        File.WriteAllText(sourceFile.FullName, CreateCrLfSourceWithTrailingWhitespace());
+        sourceFile.WriteAllText(CreateCrLfSourceWithTrailingWhitespace());
         Assert.That((await git.RunAsync(tempRoot.FullName, "add", ".")).IsSuccess, Is.True);
         Assert.That((await git.RunAsync(tempRoot.FullName, "commit", "-m", "Whitespace only")).IsSuccess, Is.True);
         var headResult = await git.RunAsync(tempRoot.FullName, "rev-parse", "HEAD");
@@ -101,7 +104,7 @@ public sealed class GitWhitespaceInsensitiveDiffTests
         var git = new GitCommandRunner();
         var sourceFile = await CreateRepositoryWithTrackedSourceFileAsync(tempRoot, git, enableAutoCrlf: true);
 
-        File.WriteAllText(sourceFile.FullName, CreateCrLfSourceWithContentChange());
+        sourceFile.WriteAllText(CreateCrLfSourceWithContentChange());
         Assert.That((await git.RunAsync(tempRoot.FullName, "add", ".")).IsSuccess, Is.True);
         Assert.That((await git.RunAsync(tempRoot.FullName, "commit", "-m", "Content change")).IsSuccess, Is.True);
         var headResult = await git.RunAsync(tempRoot.FullName, "rev-parse", "HEAD");
@@ -129,7 +132,7 @@ public sealed class GitWhitespaceInsensitiveDiffTests
         Assert.That((await git.RunAsync(tempRoot.FullName, "config", "user.name", "ReviewG33k Tests")).IsSuccess, Is.True);
         Assert.That((await git.RunAsync(tempRoot.FullName, "config", "core.autocrlf", enableAutoCrlf ? "true" : "false")).IsSuccess, Is.True);
 
-        File.WriteAllText(sourceFile.FullName, CreateLfSource());
+        sourceFile.WriteAllText(CreateLfSource());
         Assert.That((await git.RunAsync(tempRoot.FullName, "add", ".")).IsSuccess, Is.True);
         Assert.That((await git.RunAsync(tempRoot.FullName, "commit", "-m", "Initial")).IsSuccess, Is.True);
 

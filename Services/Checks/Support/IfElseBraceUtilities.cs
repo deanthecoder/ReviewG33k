@@ -29,6 +29,8 @@ internal static class IfElseBraceUtilities
             return false;
         if (!HasSafeBraceTrivia(block))
             return false;
+        if (ContainsCommentTrivia(block))
+            return false;
 
         var statement = block.Statements[0];
         if (!CanUseWithoutBraces(statement))
@@ -54,6 +56,15 @@ internal static class IfElseBraceUtilities
 
         return true;
     }
+
+    private static bool ContainsCommentTrivia(BlockSyntax block) =>
+        block.DescendantTrivia(descendIntoTrivia: true).Any(IsCommentTrivia);
+
+    private static bool IsCommentTrivia(SyntaxTrivia trivia) =>
+        trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) ||
+        trivia.IsKind(SyntaxKind.MultiLineCommentTrivia) ||
+        trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
+        trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia);
 
     private static bool StatementSpansSingleLine(StatementSyntax statement)
     {

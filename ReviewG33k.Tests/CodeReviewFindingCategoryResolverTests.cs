@@ -31,6 +31,9 @@ public sealed class CodeReviewFindingCategoryResolverTests
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.PropertySetterIgnoresValue),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Correctness));
             Assert.That(
+                CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.JsonTrailingComma),
+                Is.EqualTo(CodeReviewFindingCategoryResolver.Correctness));
+            Assert.That(
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.ResxMissingLocaleKeys),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Resources));
             Assert.That(
@@ -56,6 +59,9 @@ public sealed class CodeReviewFindingCategoryResolverTests
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Maintainability));
             Assert.That(
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.PrivateBooleanMethodAlwaysReturnsSameValue),
+                Is.EqualTo(CodeReviewFindingCategoryResolver.Maintainability));
+            Assert.That(
+                CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.NamedReflectionMemberLookup),
                 Is.EqualTo(CodeReviewFindingCategoryResolver.Maintainability));
             Assert.That(
                 CodeReviewFindingCategoryResolver.ResolveCategory(CodeReviewRuleIds.UnusedMethodParameter),
