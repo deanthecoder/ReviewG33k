@@ -67,7 +67,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
                 "fetch",
                 "--prune",
                 "origin",
-                $"+refs/heads/{targetBranch}:{remoteBaseRef}");
+                $"+refs/heads/{targetBranch}:{remoteBaseRefName}");
             if (!fetchTargetResult.IsSuccess)
             {
                 info.Add($"Code review scan: Unable to fetch target branch '{targetBranch}' from origin. Trying local branch.");
