@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review with ReviewG33k"
+  short_description: "Review code changes with ReviewG33k"
+  default_prompt: "Use $reviewg33k to review my uncommitted code changes."

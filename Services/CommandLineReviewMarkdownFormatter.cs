@@ -30,7 +30,7 @@ internal sealed class CommandLineReviewMarkdownFormatter
         Run ReviewG33k without opening the UI.
 
         ```text
-        ReviewG33k --cli --repo <path> [--mode uncommitted|committed|tree] [--base <branch>]
+        ReviewG33k --cli --repo <path> [--mode uncommitted|committed|tree] [--base <branch>] [--json]
         ReviewG33k /cli /repo <path> [/mode uncommitted|committed|tree] [/base <branch>]
         ```
 
@@ -42,6 +42,8 @@ internal sealed class CommandLineReviewMarkdownFormatter
         - `--mode`, `/mode` accepts `uncommitted`, `committed`, or `tree`. Defaults to `uncommitted`.
         - `--base`, `/base` sets the base branch for committed mode. Defaults to `main`.
         - `--full`, `/full` includes full modified file contents in checks that support it.
+        - `--format`, `/format` accepts `console` or `json`. Defaults to `console`.
+        - `--json`, `/json` is shorthand for `--format json`.
 
         Exit code `0` means no findings, `1` means findings were reported, and `2` means the run failed.
         """;

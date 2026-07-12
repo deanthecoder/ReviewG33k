@@ -30,6 +30,7 @@ internal sealed class CommandLineReviewOptions
         string repositoryPath,
         string baseBranch,
         bool includeFullModifiedFiles,
+        CommandLineOutputFormat outputFormat,
         string error)
     {
         ShouldRun = shouldRun;
@@ -38,6 +39,7 @@ internal sealed class CommandLineReviewOptions
         RepositoryPath = repositoryPath;
         BaseBranch = baseBranch;
         IncludeFullModifiedFiles = includeFullModifiedFiles;
+        OutputFormat = outputFormat;
         Error = error;
     }
 
@@ -53,13 +55,15 @@ internal sealed class CommandLineReviewOptions
 
     internal bool IncludeFullModifiedFiles { get; }
 
+    internal CommandLineOutputFormat OutputFormat { get; }
+
     internal string Error { get; }
 
     internal static bool IsCommandLineReview(string[] args)
     {
         foreach (var arg in args ?? [])
         {
-            if (IsAny(arg, "--cli", "/cli", "--help", "/help", "/?"))
+            if (IsAny(arg, "--cli", "/cli", "--json", "/json", "--help", "/help", "/?"))
                 return true;
         }
 
@@ -69,13 +73,14 @@ internal sealed class CommandLineReviewOptions
     internal static CommandLineReviewOptions Parse(string[] args)
     {
         if (!IsCommandLineReview(args))
-            return new CommandLineReviewOptions(false, false, CommandLineReviewMode.Uncommitted, null, "main", false, null);
+            return new CommandLineReviewOptions(false, false, CommandLineReviewMode.Uncommitted, null, "main", false, CommandLineOutputFormat.Console, null);
 
         var values = new Queue<string>(args ?? []);
         var mode = CommandLineReviewMode.Uncommitted;
         var repositoryPath = Directory.GetCurrentDirectory();
         var baseBranch = "main";
         var includeFullModifiedFiles = false;
+        var outputFormat = CommandLineOutputFormat.Console;
 
         while (values.Count > 0)
         {
@@ -84,11 +89,24 @@ internal sealed class CommandLineReviewOptions
                 continue;
 
             if (IsAny(arg, "--help", "/help", "/?"))
-                return new CommandLineReviewOptions(true, true, mode, repositoryPath, baseBranch, includeFullModifiedFiles, null);
+                return new CommandLineReviewOptions(true, true, mode, repositoryPath, baseBranch, includeFullModifiedFiles, outputFormat, null);
 
             if (IsAny(arg, "--full", "/full"))
             {
                 includeFullModifiedFiles = true;
+                continue;
+            }
+
+            if (IsAny(arg, "--json", "/json"))
+            {
+                outputFormat = CommandLineOutputFormat.Json;
+                continue;
+            }
+
+            if (TryConsumeValue(arg, values, ["--format", "/format"], out var formatValue))
+            {
+                if (!TryParseOutputFormat(formatValue, out outputFormat))
+                    return Failed($"Unknown output format `{formatValue}`. Use `console` or `json`.");
                 continue;
             }
 
@@ -127,10 +145,11 @@ internal sealed class CommandLineReviewOptions
             Path.GetFullPath(Environment.ExpandEnvironmentVariables(repositoryPath.Trim())),
             string.IsNullOrWhiteSpace(baseBranch) ? null : baseBranch.Trim(),
             includeFullModifiedFiles,
+            outputFormat,
             null);
 
-        static CommandLineReviewOptions Failed(string error) =>
-            new(true, false, CommandLineReviewMode.Uncommitted, null, "main", false, error);
+        CommandLineReviewOptions Failed(string error) =>
+            new(true, false, CommandLineReviewMode.Uncommitted, null, "main", false, outputFormat, error);
     }
 
     private static bool TryConsumeValue(string arg, Queue<string> values, string[] optionNames, out string value)
@@ -165,6 +184,23 @@ internal sealed class CommandLineReviewOptions
             "tree" => SetMode(CommandLineReviewMode.Tree, out mode),
             _ => false
         };
+    }
+
+    private static bool TryParseOutputFormat(string value, out CommandLineOutputFormat format)
+    {
+        format = CommandLineOutputFormat.Console;
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            "console" => true,
+            "json" => SetOutputFormat(CommandLineOutputFormat.Json, out format),
+            _ => false
+        };
+    }
+
+    private static bool SetOutputFormat(CommandLineOutputFormat value, out CommandLineOutputFormat format)
+    {
+        format = value;
+        return true;
     }
 
     private static bool SetMode(CommandLineReviewMode value, out CommandLineReviewMode mode)

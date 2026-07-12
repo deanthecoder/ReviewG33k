@@ -31,6 +31,7 @@ internal sealed class CommandLineReviewService
 
     private readonly MainWindowReviewWorkflowService m_reviewWorkflowService;
     private readonly CommandLineReviewMarkdownFormatter m_formatter = new();
+    private readonly CommandLineReviewJsonFormatter m_jsonFormatter = new();
     private readonly ConsoleMarkdown m_consoleMarkdown = new();
 
     internal CommandLineReviewService(MainWindowReviewWorkflowService reviewWorkflowService)
@@ -49,7 +50,7 @@ internal sealed class CommandLineReviewService
 
         if (!string.IsNullOrWhiteSpace(options.Error))
         {
-            m_consoleMarkdown.Write(m_formatter.FormatError(options.Error));
+            WriteError(options, options.Error);
             return FailureExitCode;
         }
 
@@ -79,25 +80,41 @@ internal sealed class CommandLineReviewService
                 var error = preparationResult.Error?.DialogMessage ??
                             preparationResult.Error?.StatusMessage ??
                             "Review preparation failed.";
-                m_consoleMarkdown.Write(m_formatter.FormatError(error));
+                WriteError(options, error);
                 return FailureExitCode;
             }
 
             var applyResult = m_reviewWorkflowService.BuildApplyResult(preparationResult, options.RepositoryPath);
-            m_consoleMarkdown.Write(m_formatter.FormatResult(options, applyResult));
+            WriteResult(options, applyResult);
             return applyResult.Report?.Findings.Count > 0
                 ? FindingsExitCode
                 : SuccessExitCode;
         }
         catch (OperationCanceledException)
         {
-            m_consoleMarkdown.Write(m_formatter.FormatError("Review was cancelled."));
+            WriteError(options, "Review was cancelled.");
             return FailureExitCode;
         }
         catch (Exception ex)
         {
-            m_consoleMarkdown.Write(m_formatter.FormatError(ex.Message));
+            WriteError(options, ex.Message);
             return FailureExitCode;
         }
+    }
+
+    private void WriteResult(CommandLineReviewOptions options, MainWindowReviewWorkflowApplyResult result)
+    {
+        if (options.OutputFormat == CommandLineOutputFormat.Json)
+            Console.WriteLine(m_jsonFormatter.FormatResult(options, result));
+        else
+            m_consoleMarkdown.Write(m_formatter.FormatResult(options, result));
+    }
+
+    private void WriteError(CommandLineReviewOptions options, string message)
+    {
+        if (options.OutputFormat == CommandLineOutputFormat.Json)
+            Console.Error.WriteLine(m_jsonFormatter.FormatError(message));
+        else
+            m_consoleMarkdown.Write(m_formatter.FormatError(message));
     }
 }

@@ -98,10 +98,44 @@ public sealed class CommandLineReviewOptionsTests
     }
 
     [Test]
+    public void ParseWhenJsonRequestHasAnErrorRetainsJsonOutput()
+    {
+        var options = CommandLineReviewOptions.Parse(["--json", "--mode", "surprise"]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(options.Error, Does.Contain("Unknown review mode"));
+            Assert.That(options.OutputFormat, Is.EqualTo(CommandLineOutputFormat.Json));
+        });
+    }
+
+    [Test]
     public void ParseWhenTreeModeIsProvidedReturnsTreeMode()
     {
         var options = CommandLineReviewOptions.Parse(["--cli", "--mode", "tree"]);
 
         Assert.That(options.Mode, Is.EqualTo(CommandLineReviewMode.Tree));
+    }
+
+    [Test]
+    public void ParseWhenJsonSwitchIsProvidedReturnsJsonOutput()
+    {
+        var options = CommandLineReviewOptions.Parse(["--json"]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(options.ShouldRun, Is.True);
+            Assert.That(options.OutputFormat, Is.EqualTo(CommandLineOutputFormat.Json));
+            Assert.That(options.Mode, Is.EqualTo(CommandLineReviewMode.Uncommitted));
+        });
+    }
+
+    [TestCase("console", "Console")]
+    [TestCase("json", "Json")]
+    public void ParseWhenOutputFormatIsProvidedReturnsRequestedFormat(string value, string expected)
+    {
+        var options = CommandLineReviewOptions.Parse(["--cli", "--format", value]);
+
+        Assert.That(options.OutputFormat.ToString(), Is.EqualTo(expected));
     }
 }

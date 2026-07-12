@@ -55,6 +55,7 @@ ReviewG33k can also run without the UI for local-review automation, including po
 ReviewG33k --cli --repo <path> --mode uncommitted
 ReviewG33k --cli --repo <path> --mode committed --base main
 ReviewG33k --cli --repo <path> --mode tree
+ReviewG33k --cli --repo <path> --mode uncommitted --json
 ```
 
 Windows-style switches are supported too:
@@ -64,9 +65,11 @@ ReviewG33k /cli /repo <path> /mode uncommitted
 ```
 
 Modes:
-- `uncommitted` reviews working-tree changes against `HEAD`.
-- `committed` reviews committed local changes against `origin/<base>`.
+- `uncommitted` reviews working-tree changes against `HEAD`, making it useful before committing or during development.
+- `committed` reviews committed feature-branch changes against `origin/<base>`, making it useful at the end of a development cycle before opening a pull request.
 - `tree` reviews all analyzable files in the local repository.
+
+Console output is the default and uses DTC.Core's Markdown console renderer. Pass `--json` (or `--format json`) for a versioned machine-readable result suitable for Codex and other automation.
 
 Exit codes:
 - `0`: no findings.
@@ -74,6 +77,29 @@ Exit codes:
 - `2`: the review failed.
 
 Run `ReviewG33k --help` or `ReviewG33k /?` for usage.
+
+## Codex skill
+
+The repository includes a ReviewG33k skill for Codex at [`skills/reviewg33k`](skills/reviewg33k). Ask Codex to install the skill from:
+
+```text
+https://github.com/deanthecoder/ReviewG33k/tree/main/skills/reviewg33k
+```
+
+After installation, natural prompts include:
+
+- `Review my uncommitted changes using ReviewG33k.`
+- `Check my work with ReviewG33k before I commit.`
+- `Review this feature branch using ReviewG33k before I open a PR.`
+- `Run a full ReviewG33k scan of this repository.`
+
+The skill selects the corresponding review scope, invokes JSON output, validates findings against the source context, and can rerun the same review after requested fixes.
+
+## Building a release
+
+The **Installers** GitHub Actions workflow can build the Windows installer and macOS DMGs, then publish them together as a GitHub Release. Run the workflow manually, supply the version, select the platforms, and leave **Create a GitHub release** enabled. After successful builds, DTC.Installer creates the `v<version>` tag, generates release notes, and attaches the `.exe` and `.dmg` files.
+
+Disable release creation when you only want downloadable workflow artifacts for testing.
 
 ## Build and run
 Prereq: .NET 8 SDK.
