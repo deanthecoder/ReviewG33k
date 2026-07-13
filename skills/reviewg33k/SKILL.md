@@ -15,15 +15,28 @@ Run ReviewG33k from the repository root and interpret its machine-readable findi
 
 ## Run the review
 
-Locate the installed `ReviewG33k` executable. Check the command path first, then normal application install locations for the current operating system. If it cannot be found, tell the user to install ReviewG33k and stop.
+Locate the installed `ReviewG33k` executable. Check the command path first, then these likely locations:
+
+- Windows: `$env:ProgramFiles\ReviewG33k\ReviewG33k.exe`, then `$env:LOCALAPPDATA\Programs\ReviewG33k\ReviewG33k.exe`.
+- macOS: `/Applications/ReviewG33k.app/Contents/MacOS/ReviewG33k`, then `$HOME/Applications/ReviewG33k.app/Contents/MacOS/ReviewG33k`.
+
+Use `Get-Command ReviewG33k -ErrorAction SilentlyContinue` on Windows or `command -v ReviewG33k` on macOS before checking those paths. If the executable cannot be found, tell the user to install ReviewG33k and stop.
 
 Run one of:
 
 ```text
-ReviewG33k --cli --repo <repository-root> --mode uncommitted --json
-ReviewG33k --cli --repo <repository-root> --mode committed --base <base-branch> --json
-ReviewG33k --cli --repo <repository-root> --mode tree --json
+ReviewG33k --cli --json --repo <repository-root> --mode uncommitted
+ReviewG33k --cli --json --repo <repository-root> --mode committed --base <base-branch>
+ReviewG33k --cli --json --repo <repository-root> --mode tree
 ```
+
+On Windows, ReviewG33k is a GUI-subsystem executable, so a direct PowerShell invocation can return before the scan finishes and lose its console output. Always force PowerShell to wait and capture standard output by piping the invocation to `Out-String`:
+
+```powershell
+$json = & $reviewG33k --cli --json --repo $repositoryRoot --mode uncommitted | Out-String
+```
+
+Substitute the selected mode and base-branch arguments as needed. When using a process API instead of PowerShell, redirect standard output and standard error and wait for process exit before reading the result. Do not treat an empty result from an unpiped Windows invocation as a successful scan.
 
 Exit code `0` means no findings. Exit code `1` means findings were produced and is a successful scan. Exit code `2` means the scan failed; parse the JSON error from standard error and report it without treating it as review feedback.
 
