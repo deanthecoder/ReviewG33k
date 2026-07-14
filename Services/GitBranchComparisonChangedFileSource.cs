@@ -76,11 +76,16 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
 
         var hasRemoteBaseRef = await RefExistsAsync(remoteBaseRefName);
         var hasLocalBaseRef = await RefExistsAsync(localBaseRefName);
+        // Use fully qualified refs for every Git operation. A local branch named, for example,
+        // "origin/master" otherwise takes precedence over the remote-tracking ref of the same name.
         var baseRef = hasRemoteBaseRef
-            ? remoteBaseRef
+            ? remoteBaseRefName
             : hasLocalBaseRef
-                ? targetBranch
+                ? localBaseRefName
                 : null;
+        var baseRefDisplayName = hasRemoteBaseRef
+            ? remoteBaseRef
+            : targetBranch;
         if (baseRef == null)
         {
             info.Add($"Code review scan skipped: Target branch '{targetBranch}' was not found on origin or as a local branch.");
@@ -92,7 +97,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
 
         var diffRange = $"{baseRef}...HEAD";
         var comparisonBaseRef = await ResolveMergeBaseAsync(baseRef) ?? baseRef;
-        progressLogger?.Invoke($"Code review scan: Enumerating files changed since {baseRef}...");
+        progressLogger?.Invoke($"Code review scan: Enumerating files changed since {baseRefDisplayName}...");
         var nameStatusResult = await m_gitCommandRunner.RunAsync(
             m_repositoryPath,
             "diff",
@@ -116,7 +121,7 @@ public sealed class GitBranchComparisonChangedFileSource : ICodeReviewChangedFil
 
         if (allChangedFileEntries.Length == 0)
         {
-            info.Add($"Code review scan: No differences between HEAD and {baseRef}.");
+            info.Add($"Code review scan: No differences between HEAD and {baseRefDisplayName}.");
             return new CodeReviewChangedFileSourceResult([], info);
         }
 
