@@ -15,12 +15,12 @@ Run ReviewG33k from the repository root and interpret its machine-readable findi
 
 ## Run the review
 
-Locate the installed `ReviewG33k` executable. Check the command path first, then these likely locations:
+Try the default application install location for the current operating system first:
 
-- Windows: `$env:ProgramFiles\ReviewG33k\ReviewG33k.exe`, then `$env:LOCALAPPDATA\Programs\ReviewG33k\ReviewG33k.exe`.
-- macOS: `/Applications/ReviewG33k.app/Contents/MacOS/ReviewG33k`, then `$HOME/Applications/ReviewG33k.app/Contents/MacOS/ReviewG33k`.
+- Windows: `$env:ProgramFiles\ReviewG33k\ReviewG33k.exe`.
+- macOS: `/Applications/ReviewG33k.app/Contents/MacOS/ReviewG33k`.
 
-Use `Get-Command ReviewG33k -ErrorAction SilentlyContinue` on Windows or `command -v ReviewG33k` on macOS before checking those paths. If the executable cannot be found, tell the user to install ReviewG33k and stop.
+If the executable is not there, use `Get-Command ReviewG33k -ErrorAction SilentlyContinue` on Windows or `command -v ReviewG33k` on macOS, then check the per-user location (`$env:LOCALAPPDATA\Programs\ReviewG33k\ReviewG33k.exe` on Windows or `$HOME/Applications/ReviewG33k.app/Contents/MacOS/ReviewG33k` on macOS). If the executable still cannot be found, tell the user to install ReviewG33k and stop.
 
 Run one of:
 
