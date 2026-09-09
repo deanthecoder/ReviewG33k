@@ -80,6 +80,7 @@ internal static class CodeReviewFindingCategoryResolver
             CodeReviewRuleIds.MissingBlankLineBetweenMethods or
             CodeReviewRuleIds.BlankLineBetweenBracePairs or
             CodeReviewRuleIds.IfElseBraceConsistency or
+            CodeReviewRuleIds.EmptyIf or
             CodeReviewRuleIds.IfElseUnnecessaryBraces or
             CodeReviewRuleIds.BooleanLiteralComparison or
             CodeReviewRuleIds.UnnecessaryCast or

@@ -324,6 +324,7 @@ public sealed class CodeSmellReportAnalyzer
         new PublicMethodArgumentGuardsCodeReviewCheck(),
         new EmptyCatchCodeReviewCheck(),
         new EmptyMethodCodeReviewCheck(),
+        new EmptyIfCodeReviewCheck(),
         new SwallowingCatchCodeReviewCheck(),
         new LockTargetCodeReviewCheck(),
         new TaskRunAsyncCodeReviewCheck(),

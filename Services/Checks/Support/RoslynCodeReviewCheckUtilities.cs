@@ -360,7 +360,7 @@ internal static class RoslynCodeReviewCheckUtilities
         public IReadOnlyList<Diagnostic> Diagnostics { get; }
     }
 
-    private static bool IsRoslynCSharpFile(CodeReviewChangedFile file) =>
+    public static bool IsRoslynCSharpFile(CodeReviewChangedFile file) =>
         file != null &&
         !string.IsNullOrWhiteSpace(file.Path) &&
         file.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);

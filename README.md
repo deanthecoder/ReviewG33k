@@ -148,6 +148,7 @@ ReviewG33k labels each finding with one of these categories:
 | --- | --- |
 | Empty catch blocks | `catch` blocks with no real handling logic. |
 | Empty methods | Newly added ordinary methods with no implementation statements. |
+| Empty if bodies | Empty or comment-only `if` bodies, with or without `else`, including `if (condition);`. |
 | Swallowing catch blocks | `catch` blocks that silently consume exceptions. |
 | `throw ex;` in catch blocks | Re-throw patterns that lose original stack trace context. |
 | `IDisposable` not disposed | Disposable objects created without clear disposal. |

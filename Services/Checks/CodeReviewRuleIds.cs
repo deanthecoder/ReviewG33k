@@ -17,6 +17,7 @@ public static class CodeReviewRuleIds
     public const string PublicMethodArgumentGuards = "public-method-argument-guards";
     public const string EmptyCatch = "empty-catch";
     public const string EmptyMethod = "empty-method";
+    public const string EmptyIf = "empty-if";
     public const string SwallowingCatch = "swallowing-catch";
     public const string LockThisOrPublic = "lock-this-or-public";
     public const string TaskRunAsync = "task-run-async";
