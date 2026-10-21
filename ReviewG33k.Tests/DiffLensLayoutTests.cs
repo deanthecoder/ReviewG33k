@@ -181,7 +181,7 @@ public sealed class DiffLensLayoutTests
         cells[0].Update("", string.Join("\n", Enumerable.Range(1, 300)));
         DiffLensLayout.Build("repo", cells);
         var before = cells.Select(cell => cell.Bounds).ToArray();
-        DiffLensLayout.Build("repo", cells.Reverse().ToArray());
+        DiffLensLayout.Build("repo", Enumerable.Reverse(cells).ToArray());
         Assert.That(cells.Select(cell => cell.Bounds), Is.EqualTo(before));
     }
 
