@@ -81,7 +81,7 @@ public sealed class DiffLensLayoutTests
     [TestCase(0)]
     [TestCase(2)]
     [TestCase(3)]
-    public void WiderFolderFitsDirectlyBelowReadmeWithoutCollidingWithSourceColumn(int detail)
+    public void WiderFolderFitsDirectlyBelowReadmeWithoutCollidingWithSource(int detail)
     {
         var cells = new[] { Cell("README.md"), Cell("src/Core/Download.cs"), Cell("src/Core/Retry.cs"), Cell("src/UI/View.cs"), Cell("tests/DownloadTests.cs") };
         cells[0].Update("", string.Join("\n", Enumerable.Range(1, 30)));
@@ -93,14 +93,13 @@ public sealed class DiffLensLayoutTests
         Assert.That(tests.Bounds.Width, Is.GreaterThan(cells[0].Bounds.Width));
         Assert.That(tests.Bounds.X, Is.EqualTo(cells[0].Bounds.X));
         Assert.That(tests.Bounds.Y, Is.EqualTo(cells[0].Bounds.Bottom + DiffLensLayout.Padding));
-        Assert.That(tests.Bounds.Right + DiffLensLayout.Padding, Is.LessThanOrEqualTo(source.Bounds.X));
         Assert.That(tests.Bounds.Intersects(source.Bounds), Is.False);
     }
 
     [TestCase(0)]
     [TestCase(2)]
     [TestCase(3)]
-    public void WideFolderDoesNotWidenAdjacentFileOnlyColumns(int detail)
+    public void WideFolderKeepsAdjacentFilesTogetherWithoutOverlap(int detail)
     {
         var cells = new[] { Cell("a.cs"), Cell("b.cs"), Cell("src/one.cs"), Cell("src/two.cs") };
         foreach (var cell in cells)
@@ -110,8 +109,9 @@ public sealed class DiffLensLayoutTests
         Assert.That(source.Bounds.Width, Is.GreaterThan(cells[0].Bounds.Width * 2));
         Assert.That(cells[1].Position.Y, Is.EqualTo(cells[0].Position.Y));
         Assert.That(cells[1].Position.X, Is.EqualTo(cells[0].Bounds.Right + DiffLensLayout.Padding));
-        Assert.That(source.Bounds.X, Is.EqualTo(cells[1].Bounds.Right + DiffLensLayout.Padding));
-        Assert.That(root.Bounds.Right, Is.EqualTo(source.Bounds.Right + DiffLensLayout.Padding));
+        Assert.That(cells.Take(2).All(cell => !source.Bounds.Intersects(cell.Bounds)), Is.True);
+        var right = Math.Max(source.Bounds.Right, cells.Take(2).Max(cell => cell.Bounds.Right));
+        Assert.That(root.Bounds.Right, Is.EqualTo(right + DiffLensLayout.Padding));
     }
 
     [Test]
@@ -130,6 +130,59 @@ public sealed class DiffLensLayoutTests
         Assert.That(cells.Select(cell => cell.Bounds), Is.EqualTo(before));
         Assert.That(cells[0].Rows(3).Any(row => row.Left != null && row.Right != null && row.Changed), Is.True);
         Assert.That(root.Bounds.Contains(cells[0].Bounds.BottomRight), Is.True);
+    }
+
+    [Test]
+    public void PackingPreservesSizesAndPaddingAcrossMixedBlocks()
+    {
+        var random = new Random(42);
+        var sizes = Enumerable.Range(0, 150)
+            .Select(_ => new Size(random.Next(100, 3000), random.Next(100, 10000))).ToArray();
+        var packed = DiffLensRectanglePacker.Pack(sizes);
+        Assert.That(packed.Select(rect => rect.Size), Is.EqualTo(sizes));
+        Assert.That(packed.All(rect => rect.X >= 0 && rect.Y >= 0), Is.True);
+        for (var i = 0; i < packed.Count; i++)
+        {
+            var padded = new Rect(packed[i].Position,
+                new Size(packed[i].Width + DiffLensLayout.Padding, packed[i].Height + DiffLensLayout.Padding));
+            for (var j = i + 1; j < packed.Count; j++)
+            {
+                var other = new Rect(packed[j].Position,
+                    new Size(packed[j].Width + DiffLensLayout.Padding, packed[j].Height + DiffLensLayout.Padding));
+                Assert.That(padded.Intersects(other), Is.False, $"Blocks {i} and {j} overlap or lose padding.");
+            }
+        }
+        Assert.That(DiffLensRectanglePacker.Pack(sizes), Is.EqualTo(packed));
+    }
+
+    [Test]
+    public void SmallBlocksFillSpaceBesideTallBlock()
+    {
+        var sizes = new[] { new Size(1000, 2000) }
+            .Concat(Enumerable.Repeat(new Size(1000, 300), 6)).ToArray();
+        var packed = DiffLensRectanglePacker.Pack(sizes);
+        var area = packed.Max(rect => rect.Right) * packed.Max(rect => rect.Bottom);
+        // All six short blocks fit beside the tall one, rather than extending the canvas below it.
+        Assert.That(area, Is.LessThanOrEqualTo(2040 * 2000));
+    }
+
+    [Test]
+    public void EmptyAndSingleBlockLayoutsKeepNaturalSizes()
+    {
+        Assert.That(DiffLensRectanglePacker.Pack([]), Is.Empty);
+        Assert.That(DiffLensRectanglePacker.Pack([new Size(100, 200)]),
+            Is.EqualTo(new[] { new Rect(0, 0, 100, 200) }));
+    }
+
+    [Test]
+    public void LayoutIsStableWhenInputFileOrderChanges()
+    {
+        var cells = new[] { Cell("src/a.cs"), Cell("src/b.cs"), Cell("tests/test.cs"), Cell("README.md") };
+        cells[0].Update("", string.Join("\n", Enumerable.Range(1, 300)));
+        DiffLensLayout.Build("repo", cells);
+        var before = cells.Select(cell => cell.Bounds).ToArray();
+        DiffLensLayout.Build("repo", cells.Reverse().ToArray());
+        Assert.That(cells.Select(cell => cell.Bounds), Is.EqualTo(before));
     }
 
     private static DiffLensCell Cell(string path) => new(new DiffLensEntry(path, null, "Unsupported"));

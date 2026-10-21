@@ -149,38 +149,14 @@ internal static class DiffLensLayout
             Measure(child);
         var sizes = folder.Files.Select(cell => new Size(DiffLensCell.Width, cell.Height))
             .Concat(folder.Folders.Select(child => child.Bounds.Size)).ToArray();
-        var targetWidth = sizes.Length == 0 ? DiffLensCell.Width : Math.Max(sizes.Max(size => size.Width), Math.Sqrt(sizes.Sum(size => (size.Width + Padding) * (size.Height + Padding))) * 1.4);
-        // Estimate the column count, then assign children before determining column widths.
-        // Each column reserves only the width of its own widest child, including frames.
-        var columnWidth = sizes.Length == 0 ? DiffLensCell.Width : sizes.Max(size => size.Width);
-        var columnCount = Math.Clamp((int)Math.Round((targetWidth + Padding) / (columnWidth + Padding)), 1, Math.Max(1, sizes.Length));
-        var bottoms = Enumerable.Repeat(FolderHeader, columnCount).ToArray();
-        var widths = new double[columnCount];
-        var columns = new int[sizes.Length];
-        var tops = new double[sizes.Length];
-        foreach (var (size, index) in sizes.Select((size, index) => (size, index)))
-        {
-            var column = Array.IndexOf(bottoms, bottoms.Min());
-            columns[index] = column;
-            tops[index] = bottoms[column];
-            widths[column] = Math.Max(widths[column], size.Width);
-            bottoms[column] += size.Height + Padding;
-        }
-        var lefts = new double[columnCount];
-        var nextLeft = Padding;
-        for (var column = 0; column < columnCount; column++)
-        {
-            lefts[column] = nextLeft;
-            nextLeft += widths[column] + Padding;
-        }
+        var packed = DiffLensRectanglePacker.Pack(sizes);
         var placed = new List<Rect>();
-        foreach (var (size, index) in sizes.Select((size, index) => (size, index)))
+        for (var index = 0; index < packed.Count; index++)
         {
-            var best = new Point(lefts[columns[index]], tops[index]);
-            var bounds = new Rect(best, size);
+            var bounds = packed[index].Translate(new Vector(Padding, FolderHeader));
             placed.Add(bounds);
             if (index < folder.Files.Count)
-                folder.Files[index].Position = best;
+                folder.Files[index].Position = bounds.Position;
             else
                 folder.Folders[index - folder.Files.Count].Bounds = bounds;
         }
