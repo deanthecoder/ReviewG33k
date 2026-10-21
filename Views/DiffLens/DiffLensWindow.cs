@@ -391,6 +391,7 @@ internal sealed class DiffLensWindow : Window
             m_canvas.IsHitTestVisible = true;
             foreach (var cell in cells)
                 cell.Findings = m_review?.FindingsFor(changeSet.Root, m_targetBranch, m_reviewMode, cell.Entry.Path) ?? [];
+            m_canvas.RepositoryRootPath = changeSet.Root;
             m_canvas.SetFiles(Path.GetFileName(changeSet.Root), cells);
             m_status.Text = cells.Length == 0 ? "No files to review." : "Double-click to edit · Esc to return";
         }

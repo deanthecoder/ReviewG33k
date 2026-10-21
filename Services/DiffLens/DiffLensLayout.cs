@@ -83,6 +83,7 @@ internal sealed class DiffLensCell
 internal sealed class DiffLensFolder(string name)
 {
     public string Name { get; set; } = name;
+    public string RelativePath { get; set; } = string.Empty;
     public List<DiffLensFolder> Folders { get; } = [];
     public List<DiffLensCell> Files { get; } = [];
     public Rect Bounds { get; set; }
@@ -115,7 +116,10 @@ internal static class DiffLensLayout
                 var child = folder.Folders.FirstOrDefault(item => item.Name == segment);
                 if (child == null)
                 {
-                    child = new DiffLensFolder(segment);
+                    child = new DiffLensFolder(segment)
+                    {
+                        RelativePath = string.IsNullOrEmpty(folder.RelativePath) ? segment : $"{folder.RelativePath}/{segment}"
+                    };
                     folder.Folders.Add(child);
                 }
                 folder = child;
@@ -135,6 +139,7 @@ internal static class DiffLensLayout
         {
             var child = folder.Folders[0];
             folder.Name += " / " + child.Name;
+            folder.RelativePath = child.RelativePath;
             folder.Files.AddRange(child.Files);
             folder.Folders.Clear();
             folder.Folders.AddRange(child.Folders);

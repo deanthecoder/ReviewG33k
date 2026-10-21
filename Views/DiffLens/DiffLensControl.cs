@@ -11,6 +11,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -41,7 +42,7 @@ internal sealed class DiffLensControl : Control
     private readonly IBrush m_accentBrush = Brush.Parse("#66DCC1");
     private readonly IBrush m_modeSelectedBrush = Brush.Parse("#28544C");
     private readonly IBrush m_modeBrush = Brush.Parse("#202E3D");
-    private readonly Pen m_folderPen = new(Brush.Parse("#456076"), 1);
+    private readonly Pen m_folderPen = new(Brush.Parse("#63816D"), 1);
     private readonly Pen m_borderPen = new(Brush.Parse("#36546A"), 1);
     private readonly Pen m_selectedPen = new(Brush.Parse("#E9BC70"), 1.5);
     private readonly Typeface m_font = new("Cascadia Mono,Consolas,monospace");
@@ -131,6 +132,7 @@ internal sealed class DiffLensControl : Control
     public event EventHandler ViewChanged;
     public event EventHandler<(string Path, int Line)> EditRequested;
     public double Zoom => m_zoom;
+    public string RepositoryRootPath { get; set; }
     public Func<CodeSmellFinding, int> FindingLineResolver { get; set; }
 
     private int FindingLine(CodeSmellFinding finding) => FindingLineResolver?.Invoke(finding) ?? finding.LineNumber;
@@ -602,6 +604,12 @@ internal sealed class DiffLensControl : Control
                 if (findings.Count > 0)
                     hint = string.Join("\n", findings.Select(finding => $"{finding.Severity} · {finding.RuleId}: {finding.Message}")) +
                            "\nRight-click for issue actions";
+            }
+            if (hint == null)
+            {
+                var folder = m_root?.Descendants.Reverse().FirstOrDefault(item => FolderLabel(item).Contains(hoverPoint));
+                if (folder != null)
+                    hint = Path.Combine(RepositoryRootPath ?? m_root.Name, folder.RelativePath.Replace('/', Path.DirectorySeparatorChar));
             }
             // Keep an unchanged tip alive while the pointer moves inside a marker's hit area.
             if (hint != m_hoverHint)

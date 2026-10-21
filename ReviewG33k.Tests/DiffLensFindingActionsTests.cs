@@ -165,6 +165,27 @@ public sealed class DiffLensFindingActionsTests
         canvas.StopAnimations();
     }
 
+    [Test]
+    public void FolderLabelTooltipShowsFullPathAfterCompactingAncestors()
+    {
+        var canvas = new DiffLensControl { RepositoryRootPath = System.IO.Path.GetFullPath("example") };
+        canvas.Arrange(new Rect(0, 0, 1400, 900));
+        canvas.SetFiles("example", [new DiffLensCell(new DiffLensEntry("src/Core/Example.cs", null, "Unsupported"))]);
+        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        var root = (DiffLensFolder)typeof(DiffLensControl).GetField("m_root", flags)!.GetValue(canvas);
+        var labelMethod = typeof(DiffLensControl).GetMethod("FolderLabel", flags)!;
+        foreach (var folder in root.Descendants)
+        {
+            var label = (Rect)labelMethod.Invoke(canvas, [folder]);
+            canvas.RaiseEvent(new PointerEventArgs(InputElement.PointerMovedEvent, canvas,
+                new Pointer(1, PointerType.Mouse, true), canvas, label.Center, 0,
+                new PointerPointProperties(), KeyModifiers.None));
+            Assert.That(ToolTip.GetTip(canvas), Is.EqualTo(System.IO.Path.Combine(canvas.RepositoryRootPath,
+                folder == root ? "" : System.IO.Path.Combine("src", "Core"))));
+        }
+        canvas.StopAnimations();
+    }
+
     private static (DiffLensControl Canvas, Point Marker) CanvasWithMarker()
     {
         var file = new DiffLensFile("/tmp/Example.cs", "Example.cs", "HEAD", "class Example {}",
