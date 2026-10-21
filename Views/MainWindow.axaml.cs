@@ -33,6 +33,37 @@ namespace ReviewG33k.Views;
 
 public partial class MainWindow : Window
 {
+    private Services.DiffLens.DiffLensReviewSnapshot m_diffLensReview;
+
+    private async void DiffLensButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (m_viewModel.IsPullRequestReviewMode || m_viewModel.IsLocalFolderReviewMode ||
+                string.IsNullOrWhiteSpace(m_viewModel.LocalRepositoryPath))
+            {
+                var path = await BrowseFolderAsync("Choose a repository for DiffLens", m_viewModel.LocalRepositoryPath);
+                if (string.IsNullOrWhiteSpace(path))
+                    return;
+                m_viewModel.ReviewModeIndex = 1; // Expose repository and base-branch choices.
+                m_viewModel.LocalRepositoryPath = path;
+                await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: false);
+            }
+            if (!RepositoryUtilities.IsGitRepository(m_viewModel.LocalRepositoryPath))
+            {
+                ShowMessage("DiffLens", "Choose a Git repository using the Local Repo folder picker.");
+                return;
+            }
+            var baseBranch = LocalBaseBranchService.NormalizeBranchName(m_viewModel.LocalBaseBranch) ?? "main";
+            var review = m_diffLensReview?.Matches(m_viewModel.LocalRepositoryPath, baseBranch) == true ? m_diffLensReview : null;
+            new DiffLens.DiffLensWindow(["--repo", m_viewModel.LocalRepositoryPath, "--base", baseBranch], review).Show(this);
+        }
+        catch (Exception ex)
+        {
+            ShowMessage("Unable to open DiffLens", ex.Message);
+        }
+    }
+
     private const string ApplicationTitle = "ReviewG33k";
 
     private readonly CodeLocationOpener m_codeLocationOpener;
@@ -266,6 +297,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        m_diffLensReview = null;
+        if (applyResult.Report != null && m_viewModel.IsAnyLocalReviewMode && !m_viewModel.IsLocalFolderReviewMode)
+        {
+            m_diffLensReview = Services.DiffLens.DiffLensReviewSnapshot.Create(m_viewModel.LocalRepositoryPath,
+                LocalBaseBranchService.NormalizeBranchName(m_viewModel.LocalBaseBranch) ?? "main",
+                applyResult.ReviewWorktreePath ?? m_viewModel.LocalRepositoryPath, applyResult.Report.Findings);
+        }
         if (applyResult.HasReportFindings)
             await ShowReviewResultsWindowAsync(applyResult.Report);
     }
@@ -297,6 +335,8 @@ public partial class MainWindow : Window
                 .FirstOrDefault(IsOpenTargetAvailable);
         }
 
+        var reviewSnapshot = m_diffLensReview;
+        var scannedRoot = m_viewModel.LatestReviewWorktreePath ?? m_viewModel.LocalRepositoryPath;
         var resultsWindow = new ReviewResultsWindow(
             report?.Findings ?? [],
             canOpenCodeLocation,
@@ -312,7 +352,14 @@ public partial class MainWindow : Window
             CommentOnReviewFindingAsync,
             ResolveReviewFindingPath,
             ResampleLocalFindingsForFileAsync,
-            reviewWindowPullRequestTitle);
+            reviewWindowPullRequestTitle,
+            reviewSnapshot == null ? null : (owner, findings) =>
+            {
+                var snapshot = Services.DiffLens.DiffLensReviewSnapshot.Create(reviewSnapshot.Root,
+                    reviewSnapshot.BaseBranch, scannedRoot, findings);
+                m_diffLensReview = snapshot;
+                new DiffLens.DiffLensWindow(["--repo", snapshot.Root, "--base", snapshot.BaseBranch], snapshot).Show(owner);
+            });
         await resultsWindow.ShowDialog(this);
     }
 

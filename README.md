@@ -48,6 +48,24 @@ Persistent issue-type preferences for future scans. Use the cog button in the to
 - **Whole-folder review**: choose **Entire Local Folder**, pick any source folder, then click **Review Local**.
 - **Issue-type preferences**: click the cog button in the top-right of the main window, enable or disable checks, then save. Changes apply to the next scan.
 
+## DiffLens Overview
+
+Click **DiffLens** beside the main review actions to explore changed files on a zoomable folder canvas. It uses the selected local repository, or prompts you to choose one when opening from a pull-request or folder review. No scan is required. To change repositories or the base branch, use the main window's local-review controls and open DiffLens again.
+The canvas uses the repository and base branch from the main window and opens all changed files. Its only button is **Fit all**; **F5** reloads changes from disk. Standalone launches without `--repo` also offer repository setup fields.
+The comparison is always the target branch's merge base with `HEAD` against the current working file, including uncommitted edits. It uses local refs without fetching; there is no commit picker.
+
+- **Ctrl+wheel** zooms around the pointer without changing the diff presentation. Each file has unified and side-by-side toggle icons in its top-right corner; **U** and **S** also switch the selected file. Changes fade between presentations. Each file keeps its choice while zooming, fitting, editing, and refreshing. Both presentations keep four surrounding context lines.
+- Nested frames group files up to the repository root; single-child folder paths are compacted. Click a folder label to fit that group, or **Fit all** to see the whole map. File previews and folder frames fit the visible diff rows at each detail level; shorter items fill available space beside taller siblings. Selection borders share the card geometry while row content fades.
+- Middle-click to fit all files with a short animated zoom and pan (also used by **Fit all** and folder labels). Scrolling or dragging interrupts the animation; drag with the left or middle button to pan. Use the wheel to move vertically, and **Shift+wheel** to read long lines within the panes.
+- Double-click a diff line at any zoom to open the working-file editor near that line. Deleted lines map to a nearby surviving line. Edits save automatically after a short typing pause and when leaving the editor, refreshing, or closing; **Esc** returns to the diff. Each file retains its own buffer and undo history when switching files or views.
+- Saves preserve supported encoding/BOM and existing newline text, and refuse to overwrite a file that changed on disk. Undo/redo also saves automatically. Save failures retain the buffer and prevent closing or refreshing from discarding edits; **Ctrl+S** retries.
+
+Local review results offer **Open in DiffLens**, which includes only findings ticked in the Findings list when clicked. The canvas shows per-file finding counts, amber markers on reported lines (or collapsed context), and a findings panel; click a message to focus its location. Findings outside the changed-file canvas remain listed. These are last-scan snapshots: rerun the review after edits to update findings; **F5** refreshes code only. Pull-request and non-Git folder review results do not currently offer this integration.
+
+Editing uses the integrated working-copy editor. The editor uses a full-document view; review comments, automatic external refresh and review progress are not implemented yet. Binary files and symlink paths remain visible as unsupported previews and are not editable.
+
+Launch directly with `ReviewG33k --difflens --repo <path> --base main [--file <relative-path>]`.
+
 ## Command-line usage
 ReviewG33k can also run without the UI for local-review automation, including post-coding checks from Codex or scripts.
 

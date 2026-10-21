@@ -260,7 +260,7 @@
                                   Grid.Column="1"
                                   Grid.ColumnSpan="2"
                                   Margin="0,12,0,0"
-                                  ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+                                  ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
                                 <Button x:Name="PrepareReviewButton"
                                         Grid.Column="0"
                                         Classes="accent neon"
@@ -307,6 +307,12 @@
                                                    Text="Stopping..." />
                                     </Grid>
                                 </Button>
+                                <Button Grid.Column="4" Content="DiffLens"
+                                        HorizontalAlignment="Left" Margin="8,0,12,0"
+                                        Classes="neon" Padding="12,8"
+                                        IsEnabled="{Binding !IsBusy}"
+                                        ToolTip.Tip="Explore changes and the latest local review findings"
+                                        Click="DiffLensButton_OnClick" />
                                 <Button x:Name="OpenSolutionButton"
                                         Grid.Column="5"
                                         Classes="neon"

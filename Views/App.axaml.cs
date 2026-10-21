@@ -9,6 +9,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using Avalonia;
+using System;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using ReviewG33k.Services;
@@ -27,7 +28,9 @@ public class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow(MainWindowCompositionRoot.CreateDependencies());
+            desktop.MainWindow = Array.IndexOf(desktop.Args ?? [], "--difflens") >= 0
+                ? new DiffLens.DiffLensWindow(desktop.Args)
+                : new MainWindow(MainWindowCompositionRoot.CreateDependencies());
         }
 
         base.OnFrameworkInitializationCompleted();

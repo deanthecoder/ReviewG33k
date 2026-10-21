@@ -172,7 +172,7 @@
 
                 <Grid Grid.Row="1"
                       Margin="0,12,0,4"
-                      ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                      ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
                     <Button x:Name="ToggleAllButton"
                             Grid.Column="0"
                             Classes="neon"
@@ -210,6 +210,9 @@
                                        Text="Export To Clipboard" />
                         </StackPanel>
                     </Button>
+                    <Button x:Name="DiffLensResultsButton" Grid.Column="5"
+                            Classes="neon" Margin="8,0,0,0" Content="Open in DiffLens"
+                            ToolTip.Tip="Show only ticked findings on the local repository canvas" />
                     <Button x:Name="CommentSelectedButton"
                             Grid.Column="4"
                             Classes="neon"

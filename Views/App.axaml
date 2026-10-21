@@ -10,6 +10,7 @@
   <Application.Styles>
     <materialIcons:MaterialIconStyles />
     <FluentTheme />
+    <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
     <dialogHostAvalonia:DialogHostStyles />
     <StyleInclude Source="/Views/Styles/SharedGlassTheme.axaml" />
   </Application.Styles>

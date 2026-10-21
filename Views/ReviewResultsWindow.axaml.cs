@@ -87,7 +87,8 @@ public partial class ReviewResultsWindow : Window
         Func<CodeSmellFinding, Task<bool>> commentFindingAction,
         Func<CodeSmellFinding, string> resolveFindingPath,
         Func<string, Task<IReadOnlyList<CodeSmellFinding>>> resampleFileFindingsAction,
-        string pullRequestTitle = null)
+        string pullRequestTitle = null,
+        Action<Window, IReadOnlyList<CodeSmellFinding>> openDiffLens = null)
     {
         m_canOpenInVsCode = canOpenInVsCode;
         m_canCommentInBitbucket = canCommentInBitbucket;
@@ -154,6 +155,8 @@ public partial class ReviewResultsWindow : Window
         foreach (var row in m_rows)
             row.PropertyChanged += ReviewResultRow_OnPropertyChanged;
 
+        DiffLensResultsButton.IsVisible = openDiffLens != null;
+        DiffLensResultsButton.Click += (_, _) => openDiffLens?.Invoke(this, m_rows.Where(row => row.IsIncluded).Select(row => row.Finding).ToArray());
         m_viewModel.SetRows(m_rows);
         m_viewModel.SelectedRow = m_rows.FirstOrDefault();
         if (m_viewModel.SelectedRow == null)
