@@ -42,4 +42,49 @@ public sealed class RepositoryUtilitiesTests
 
         Assert.That(solutionPath, Is.EqualTo(tempRoot.GetFile("src/App/Actual.sln").FullName));
     }
+
+    [Test]
+    public void FindTopLevelSolutionFileWhenRootContainsSlnxPrefersItOverNestedSln()
+    {
+        using var tempRoot = new TempDirectory();
+        tempRoot.GetFile("Root.slnx").WriteAllText(string.Empty);
+        tempRoot.GetDir("src").Create();
+        tempRoot.GetFile("src/Nested.sln").WriteAllText(string.Empty);
+
+        var solutionPath = RepositoryUtilities.FindTopLevelSolutionFile(tempRoot.FullName);
+
+        Assert.That(solutionPath, Is.EqualTo(tempRoot.GetFile("Root.slnx").FullName));
+    }
+
+    [Test]
+    public void FindTopLevelSolutionFilePrefersShallowestSolutionThenAlphabeticalPath()
+    {
+        using var tempRoot = new TempDirectory();
+        tempRoot.GetDir("a/deep").Create();
+        tempRoot.GetDir("b").Create();
+        tempRoot.GetFile("a/deep/First.sln").WriteAllText(string.Empty);
+        tempRoot.GetFile("b/Zebra.sln").WriteAllText(string.Empty);
+        tempRoot.GetFile("b/Alpha.slnx").WriteAllText(string.Empty);
+
+        var solutionPath = RepositoryUtilities.FindTopLevelSolutionFile(tempRoot.FullName);
+
+        Assert.That(solutionPath, Is.EqualTo(tempRoot.GetFile("b/Alpha.slnx").FullName));
+    }
+
+    [TestCase(".git")]
+    [TestCase(".vs")]
+    [TestCase(".idea")]
+    [TestCase("bin")]
+    [TestCase("obj")]
+    [TestCase("dist")]
+    [TestCase("node_modules")]
+    public void FindTopLevelSolutionFileWhenOnlyExcludedFolderContainsSolutionReturnsNull(string folder)
+    {
+        using var tempRoot = new TempDirectory();
+        tempRoot.GetDir($"{folder}/nested").Create();
+        tempRoot.GetFile($"{folder}/nested/Generated.slnx").WriteAllText(string.Empty);
+
+        Assert.That(RepositoryUtilities.FindTopLevelSolutionFile(tempRoot.FullName), Is.Null);
+    }
+
 }

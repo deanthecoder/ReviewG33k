@@ -46,28 +46,38 @@ public static class RepositoryUtilities
 
     private static string FindTopLevelSolutionFileCore(string rootFolder)
     {
-        var rootDirectory = rootFolder.ToDir();
-        var topLevelCandidates = rootDirectory
-            .TryGetFiles("*.sln")
-            .Select(file => file.FullName)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        if (topLevelCandidates.Length > 0)
-            return topLevelCandidates[0];
-
-        return rootDirectory
-            .TryGetFiles("*.sln", SearchOption.AllDirectories)
-            .Where(file => !IsInsideSkippedSolutionSearchDirectory(rootDirectory.FullName, file.DirectoryName))
-            .Select(file => file.FullName)
-            .Select(path => new
+        var directories = new List<DirectoryInfo> { rootFolder.ToDir() };
+        while (directories.Count > 0)
+        {
+            var candidates = new List<string>();
+            var nextLevel = new List<DirectoryInfo>();
+            foreach (var directory in directories)
             {
-                Path = path,
-                Depth = GetDepth(Path.GetRelativePath(rootFolder, path))
-            })
-            .OrderBy(candidate => candidate.Depth)
-            .ThenBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
-            .Select(candidate => candidate.Path)
-            .FirstOrDefault();
+                foreach (var entry in directory.TryGetContent())
+                {
+                    if (entry is FileInfo file &&
+                        (file.Extension.Equals(".sln", StringComparison.OrdinalIgnoreCase) ||
+                         file.Extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        candidates.Add(file.FullName);
+                    }
+                    else if (entry is DirectoryInfo child &&
+                             !SkippedSolutionSearchDirectories.Contains(child.Name) &&
+                             !child.IsSymbolicLink())
+                    {
+                        nextLevel.Add(child);
+                    }
+                }
+            }
+
+            // Search one depth at a time so a nearby solution avoids a full tree scan.
+            if (candidates.Count > 0)
+                return candidates.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).First();
+
+            directories = nextLevel;
+        }
+
+        return null;
     }
 
     public static bool AreSameRepoPath(string leftPath, string rightPath)
@@ -80,37 +90,4 @@ public static class RepositoryUtilities
 
     public static string NormalizeRepoPath(string path) =>
         (path ?? string.Empty).Replace('\\', '/').Trim();
-
-    private static int GetDepth(string relativePath)
-    {
-        var depth = 0;
-        foreach (var character in relativePath ?? string.Empty)
-        {
-            if (character == Path.DirectorySeparatorChar || character == Path.AltDirectorySeparatorChar)
-                depth++;
-        }
-
-        return depth;
-    }
-
-    private static bool IsInsideSkippedSolutionSearchDirectory(string rootFolder, string candidateDirectory)
-    {
-        if (string.IsNullOrWhiteSpace(candidateDirectory))
-            return false;
-
-        var relativeDirectory = Path.GetRelativePath(rootFolder, candidateDirectory);
-        if (string.IsNullOrWhiteSpace(relativeDirectory) || relativeDirectory == ".")
-            return false;
-
-        var segments = relativeDirectory.Split(
-            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
-            StringSplitOptions.RemoveEmptyEntries);
-        foreach (var segment in segments)
-        {
-            if (SkippedSolutionSearchDirectories.Contains(segment))
-                return true;
-        }
-
-        return false;
-    }
 }
