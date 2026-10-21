@@ -58,6 +58,101 @@ public sealed class DiffLensTests
     }
 
     [Test]
+    public async Task HeadComparisonExcludesCommittedBranchChangesAndLoadsOnlyLocalChanges()
+    {
+        await File.WriteAllTextAsync(Path.Combine(m_root, "sample.cs"), "committed feature\n");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "staged.cs"), "baseline staged\n");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "working.cs"), "baseline working\n");
+        await Git("add", ".");
+        await Git("commit", "-m", "Feature changes");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "staged.cs"), "staged edit\n");
+        await Git("add", "staged.cs");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "working.cs"), "unstaged edit\n");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "untracked.cs"), "new file\n");
+
+        var set = await new DiffLensFileLoader().LoadSetAsync(m_root, "HEAD");
+
+        Assert.That(set.Entries.Select(entry => entry.Path),
+            Is.EquivalentTo(new[] { "staged.cs", "working.cs", "untracked.cs" }));
+        Assert.That(set.Entries.Single(entry => entry.Path == "staged.cs").File.Baseline, Is.EqualTo("baseline staged\n"));
+        Assert.That(set.Entries.Single(entry => entry.Path == "working.cs").File.Baseline, Is.EqualTo("baseline working\n"));
+    }
+
+    [Test]
+    public async Task HeadComparisonOnCleanFeatureBranchShowsNoFiles()
+    {
+        await File.WriteAllTextAsync(Path.Combine(m_root, "sample.cs"), "committed feature\n");
+        await Git("commit", "-am", "Feature change");
+
+        var set = await new DiffLensFileLoader().LoadSetAsync(m_root, "HEAD");
+
+        Assert.That(set.Entries, Is.Empty);
+    }
+
+    [Test]
+    public async Task HeadComparisonUsesCommittedFeatureContentAsBaselineForLocalEdits()
+    {
+        await File.WriteAllTextAsync(Path.Combine(m_root, "sample.cs"), "committed feature\n");
+        await Git("commit", "-am", "Feature change");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "sample.cs"), "local edit\n");
+
+        var file = await new DiffLensFileLoader().LoadAsync(m_root, "HEAD", "sample.cs");
+
+        Assert.That(file.Baseline, Is.EqualTo("committed feature\n"));
+        Assert.That(file.WorkingText, Is.EqualTo("local edit\n"));
+    }
+
+    // Hey Codex - Do this...
+    // TODO [async-method-name-suffix]: Async method `ReviewCanvasUsesExactlyTheSelectedReviewSourcesFileSet` should end with `Async`.
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    public async Task ReviewCanvasUsesExactlyTheSelectedReviewSourcesFileSet(int modeValue) // can edit!
+    {
+        var mode = (CommandLineReviewMode)modeValue;
+        await File.WriteAllTextAsync(Path.Combine(m_root, "committed.cs"), "committed feature\n");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "deleted.cs"), "to delete\n");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "whitespace.cs"), "line\n");
+        await Git("add", ".");
+        await Git("commit", "-m", "Feature files");
+        File.Delete(Path.Combine(m_root, "deleted.cs"));
+        await File.WriteAllTextAsync(Path.Combine(m_root, "whitespace.cs"), "line   \n");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "local.cs"), "local change\n");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "notes.txt"), "not reviewed\n");
+        Directory.CreateDirectory(Path.Combine(m_root, "obj"));
+        await File.WriteAllTextAsync(Path.Combine(m_root, "obj", "generated.cs"), "generated\n");
+        ICodeReviewChangedFileSource source = mode switch
+        {
+            CommandLineReviewMode.Uncommitted => new GitWorkingTreeChangedFileSource(m_git, m_root),
+            CommandLineReviewMode.Committed => new GitBranchComparisonChangedFileSource(m_git, m_root, "main", fetchTargetBranch: false),
+            _ => new LocalRepositoryChangedFileSource(m_root, m_git)
+        };
+        var expected = await source.LoadAsync();
+
+        var actual = await new DiffLensFileLoader().LoadReviewSetAsync(m_root, "main", mode);
+
+        Assert.That(actual.Entries.Select(entry => entry.Path), Is.EquivalentTo(expected.Files.Select(file => file.Path)));
+        Assert.That(actual.Entries.All(entry => entry.Error == null), Is.True);
+        Assert.That(actual.Entries.Select(entry => entry.Path), Does.Not.Contain("notes.txt"));
+        Assert.That(actual.Entries.Select(entry => entry.Path), Does.Not.Contain("obj/generated.cs"));
+    }
+
+    [Test]
+    public async Task FolderReviewCanvasUsesTheSameFilesWithoutRequiringGit()
+    {
+        var folder = Path.Combine(m_root, "plain-folder");
+        Directory.CreateDirectory(folder);
+        await File.WriteAllTextAsync(Path.Combine(folder, "code.cs"), "source\n");
+        await File.WriteAllTextAsync(Path.Combine(folder, "notes.txt"), "not reviewed\n");
+        var expected = await new LocalRepositoryChangedFileSource(folder).LoadAsync();
+
+        var actual = await new DiffLensFileLoader().LoadReviewSetAsync(folder, "HEAD", CommandLineReviewMode.Tree);
+
+        Assert.That(actual.Entries.Select(entry => entry.Path), Is.EquivalentTo(expected.Files.Select(file => file.Path)));
+        Assert.That(actual.Entries.Single().File.WorkingText, Is.EqualTo("source\n"));
+    }
+
+    [Test]
     public async Task GivenBranchAndLocalEditsUsesMergeBaseAndCurrentDisk()
     {
         await File.WriteAllTextAsync(Path.Combine(m_root, "sample.cs"), "committed feature\n");

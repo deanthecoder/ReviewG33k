@@ -187,19 +187,8 @@ public sealed class MissingTestsForNewPublicMethodsCodeReviewCheck : CodeReviewC
             .ToArray();
     }
 
-    private static IReadOnlyList<FileInfo> EnumerateRepositoryTestFiles(string repositoryRootPath)
-    {
-        var repositoryRoot = repositoryRootPath.ToDir();
-        if (repositoryRoot?.Exists() != true)
-            return [];
-
-        return repositoryRoot
-            .TryGetFiles("*.cs", SearchOption.AllDirectories)
-            .Where(file => file?.Exists() == true)
-            .Where(file => CodeReviewFileClassification.IsTestFilePath(
-                RepositoryUtilities.NormalizeRepoPath(Path.GetRelativePath(repositoryRootPath, file.FullName))))
-            .ToArray();
-    }
+    private static IReadOnlyList<FileInfo> EnumerateRepositoryTestFiles(string repositoryRootPath) =>
+        RepositoryTestFileSearch.Enumerate(repositoryRootPath);
 
     private static bool IsLikelyMatchingTestFileName(string fileName, string typeName)
     {

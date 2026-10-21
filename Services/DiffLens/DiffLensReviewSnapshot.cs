@@ -22,13 +22,19 @@ namespace ReviewG33k.Services.DiffLens;
 /// Normalized relative paths let worktree findings annotate the corresponding working files.
 /// Findings remain a scan snapshot and are not revalidated by editing or refreshing the canvas.
 /// </remarks>
-internal sealed record DiffLensReviewSnapshot(string Root, string BaseBranch, IReadOnlyList<CodeSmellFinding> Findings)
+internal sealed record DiffLensReviewSnapshot(string Root, string BaseBranch, IReadOnlyList<CodeSmellFinding> Findings, CommandLineReviewMode Mode = CommandLineReviewMode.Committed)
 {
-    public bool Matches(string root, string baseBranch) =>
+    public bool Matches(string root, string baseBranch, CommandLineReviewMode mode) =>
+        Mode == mode &&
         string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)), Root, StringComparison.OrdinalIgnoreCase) &&
         string.Equals(BaseBranch, baseBranch, StringComparison.Ordinal);
 
-    public static DiffLensReviewSnapshot Create(string root, string baseBranch, string scannedRoot, IEnumerable<CodeSmellFinding> findings)
+    public IReadOnlyList<CodeSmellFinding> FindingsFor(string root, string baseBranch, CommandLineReviewMode mode, string path) =>
+        Matches(root, baseBranch, mode)
+            ? Findings.Where(finding => string.Equals(finding.FilePath, path, StringComparison.OrdinalIgnoreCase)).ToArray()
+            : [];
+
+    public static DiffLensReviewSnapshot Create(string root, string baseBranch, string scannedRoot, IEnumerable<CodeSmellFinding> findings, CommandLineReviewMode mode = CommandLineReviewMode.Committed)
     {
         var normalized = new List<CodeSmellFinding>();
         foreach (var finding in findings.Where(finding => finding.Severity != CodeReviewFindingSeverity.Ok))
@@ -42,6 +48,6 @@ internal sealed record DiffLensReviewSnapshot(string Root, string BaseBranch, IR
             normalized.Add(new CodeSmellFinding(finding.Severity, finding.RuleId, relative, finding.LineNumber,
                 finding.Message, finding.CurrentText, finding.BaselineText));
         }
-        return new DiffLensReviewSnapshot(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)), baseBranch, normalized);
+        return new DiffLensReviewSnapshot(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)), baseBranch, normalized, mode);
     }
 }

@@ -29,9 +29,39 @@ public sealed class DiffLensFindingsTests
             new CodeSmellFinding(CodeReviewFindingSeverity.Ok, "ok", "ok.cs", 1, "OK")
         ]);
         Assert.That(report.Findings.Select(finding => finding.FilePath), Is.EqualTo(new[] { "src/File.cs", "tests/File.cs" }));
-        Assert.That(report.Matches(root + Path.DirectorySeparatorChar, "main"), Is.True);
-        Assert.That(report.Matches(scanned, "main"), Is.False);
-        Assert.That(report.Matches(root, "other-branch"), Is.False);
+        Assert.That(report.Matches(root + Path.DirectorySeparatorChar, "main", CommandLineReviewMode.Committed), Is.True);
+        Assert.That(report.Matches(scanned, "main", CommandLineReviewMode.Committed), Is.False);
+        Assert.That(report.Matches(root, "other-branch", CommandLineReviewMode.Committed), Is.False);
+    }
+
+    [Test]
+    public void FindingsFromAnotherReviewModeDoNotMatchTheCanvas()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "working-repo");
+        var report = DiffLensReviewSnapshot.Create(root, "HEAD", root, [], CommandLineReviewMode.Uncommitted);
+
+        Assert.That(report.Matches(root, "HEAD", CommandLineReviewMode.Uncommitted), Is.True);
+        Assert.That(report.Matches(root, "HEAD", CommandLineReviewMode.Tree), Is.False);
+        Assert.That(report.Matches(root, "HEAD", CommandLineReviewMode.Committed), Is.False);
+    }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    public void CanvasReceivesFindingsForTheMatchingFileAndReviewMode(int modeValue)
+    {
+        var mode = (CommandLineReviewMode)modeValue;
+        var root = Path.Combine(Path.GetTempPath(), "working-repo");
+        var report = DiffLensReviewSnapshot.Create(root, "HEAD", root,
+            [Finding("src/File.cs"), Finding("other.cs")], mode);
+
+        var findings = report.FindingsFor(root, "HEAD", mode, "src/File.cs");
+
+        Assert.That(findings, Has.Count.EqualTo(1));
+        Assert.That(findings[0].FilePath, Is.EqualTo("src/File.cs"));
+        Assert.That(report.FindingsFor(root, "other", mode, "src/File.cs"), Is.Empty);
+        var otherMode = mode == CommandLineReviewMode.Uncommitted ? CommandLineReviewMode.Committed : CommandLineReviewMode.Uncommitted;
+        Assert.That(report.FindingsFor(root, "HEAD", otherMode, "src/File.cs"), Is.Empty);
     }
 
     [TestCase(0)]

@@ -39,30 +39,36 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (m_viewModel.IsPullRequestReviewMode || m_viewModel.IsLocalFolderReviewMode ||
+            if (m_viewModel.IsPullRequestReviewMode ||
                 string.IsNullOrWhiteSpace(m_viewModel.LocalRepositoryPath))
             {
                 var path = await BrowseFolderAsync("Choose a repository for DiffLens", m_viewModel.LocalRepositoryPath);
                 if (string.IsNullOrWhiteSpace(path))
                     return;
-                m_viewModel.ReviewModeIndex = 1; // Expose repository and base-branch choices.
+                m_viewModel.ReviewModeIndex = 2; // Start a newly chosen repository with uncommitted changes.
                 m_viewModel.LocalRepositoryPath = path;
                 await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: false);
             }
-            if (!RepositoryUtilities.IsGitRepository(m_viewModel.LocalRepositoryPath))
+            if (!m_viewModel.IsLocalFolderReviewMode && !RepositoryUtilities.IsGitRepository(m_viewModel.LocalRepositoryPath))
             {
                 ShowMessage("DiffLens", "Choose a Git repository using the Local Repo folder picker.");
                 return;
             }
-            var baseBranch = LocalBaseBranchService.NormalizeBranchName(m_viewModel.LocalBaseBranch) ?? "main";
-            var review = m_diffLensReview?.Matches(m_viewModel.LocalRepositoryPath, baseBranch) == true ? m_diffLensReview : null;
-            new DiffLens.DiffLensWindow(["--repo", m_viewModel.LocalRepositoryPath, "--base", baseBranch], review).Show(this);
+            var baseBranch = m_viewModel.IsLocalCommittedReviewMode
+                ? LocalBaseBranchService.NormalizeBranchName(m_viewModel.LocalBaseBranch) ?? "main"
+                : "HEAD";
+            var review = m_diffLensReview?.Matches(m_viewModel.LocalRepositoryPath, baseBranch, DiffLensReviewMode) == true ? m_diffLensReview : null;
+            new DiffLens.DiffLensWindow(["--repo", m_viewModel.LocalRepositoryPath, "--base", baseBranch], review, DiffLensReviewMode).Show(this);
         }
         catch (Exception ex)
         {
             ShowMessage("Unable to open DiffLens", ex.Message);
         }
     }
+
+    private CommandLineReviewMode DiffLensReviewMode => m_viewModel.IsLocalCommittedReviewMode
+        ? CommandLineReviewMode.Committed
+        : m_viewModel.IsLocalUncommittedReviewMode ? CommandLineReviewMode.Uncommitted : CommandLineReviewMode.Tree;
 
     private const string ApplicationTitle = "ReviewG33k";
 
@@ -298,11 +304,13 @@ public partial class MainWindow : Window
         }
 
         m_diffLensReview = null;
-        if (applyResult.Report != null && m_viewModel.IsAnyLocalReviewMode && !m_viewModel.IsLocalFolderReviewMode)
+        if (applyResult.Report != null && m_viewModel.IsAnyLocalReviewMode)
         {
             m_diffLensReview = Services.DiffLens.DiffLensReviewSnapshot.Create(m_viewModel.LocalRepositoryPath,
-                LocalBaseBranchService.NormalizeBranchName(m_viewModel.LocalBaseBranch) ?? "main",
-                applyResult.ReviewWorktreePath ?? m_viewModel.LocalRepositoryPath, applyResult.Report.Findings);
+                m_viewModel.IsLocalCommittedReviewMode
+                    ? LocalBaseBranchService.NormalizeBranchName(m_viewModel.LocalBaseBranch) ?? "main"
+                    : "HEAD",
+                applyResult.ReviewWorktreePath ?? m_viewModel.LocalRepositoryPath, applyResult.Report.Findings, DiffLensReviewMode);
         }
         if (applyResult.HasReportFindings)
             await ShowReviewResultsWindowAsync(applyResult.Report);
@@ -356,7 +364,7 @@ public partial class MainWindow : Window
             reviewSnapshot == null ? null : (owner, findings) =>
             {
                 var snapshot = Services.DiffLens.DiffLensReviewSnapshot.Create(reviewSnapshot.Root,
-                    reviewSnapshot.BaseBranch, scannedRoot, findings);
+                    reviewSnapshot.BaseBranch, scannedRoot, findings, reviewSnapshot.Mode);
                 m_diffLensReview = snapshot;
                 new DiffLens.DiffLensWindow(["--repo", snapshot.Root, "--base", snapshot.BaseBranch], snapshot).Show(owner);
             });

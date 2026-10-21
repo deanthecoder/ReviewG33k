@@ -17,10 +17,10 @@ using System.Threading.Tasks;
 namespace ReviewG33k.Services.DiffLens;
 
 /// <summary>
-/// Loads current files against the merge base of HEAD and a target branch.
+/// Loads current files against HEAD or the merge base with a target branch.
 /// </summary>
 /// <remarks>
-/// Resolves local refs without fetching and preserves the original path of renamed files.
+/// Uses HEAD for uncommitted changes, resolves branch refs without fetching, and preserves rename paths.
 /// </remarks>
 internal sealed class DiffLensFileLoader
 {
@@ -56,15 +56,73 @@ internal sealed class DiffLensFileLoader
         return new DiffLensChangeSet(snapshot.Root, snapshot.MergeBase, entries);
     }
 
+    public async Task<DiffLensChangeSet> LoadReviewSetAsync(
+        string repository, string target, CommandLineReviewMode mode, string path = null)
+    {
+        ICodeReviewChangedFileSource source = mode switch
+        {
+            CommandLineReviewMode.Uncommitted => new GitWorkingTreeChangedFileSource(m_git, repository),
+            CommandLineReviewMode.Committed => new GitBranchComparisonChangedFileSource(m_git, repository, target, fetchTargetBranch: true),
+            _ => new LocalRepositoryChangedFileSource(repository, RepositoryUtilities.IsGitRepository(repository) ? m_git : null)
+        };
+        var reviewFiles = (await source.LoadAsync()).Files;
+        var paths = reviewFiles.Select(file => file.Path)
+            .Where(relative => string.IsNullOrWhiteSpace(path) || relative == path)
+            .OrderBy(relative => relative, StringComparer.Ordinal).ToArray();
+        var root = Path.GetFullPath(repository);
+        var entries = new List<DiffLensEntry>();
+        if (!RepositoryUtilities.IsGitRepository(root))
+        {
+            foreach (var relative in paths)
+            {
+                try
+                {
+                    var fullPath = ResolveEditablePath(root, relative);
+                    var file = new DiffLensFile(fullPath, relative, "Working tree", string.Empty, await File.ReadAllBytesAsync(fullPath));
+                    entries.Add(new DiffLensEntry(relative, file, null));
+                }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or ArgumentException)
+                {
+                    entries.Add(new DiffLensEntry(relative, null, ex.Message));
+                }
+            }
+            return new DiffLensChangeSet(root, "Working tree", entries);
+        }
+
+        var snapshot = await ResolveAsync(root, mode == CommandLineReviewMode.Committed ? target : "HEAD");
+        foreach (var relative in paths)
+        {
+            try
+            {
+                var file = await LoadFileAsync(snapshot.Root, snapshot.MergeBase, snapshot.Changes, relative);
+                entries.Add(new DiffLensEntry(relative, file, null));
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or ArgumentException)
+            {
+                entries.Add(new DiffLensEntry(relative, null, ex.Message));
+            }
+        }
+        return new DiffLensChangeSet(snapshot.Root, snapshot.MergeBase, entries);
+    }
+
     private async Task<(string Root, string MergeBase, (string OldPath, string NewPath)[] Changes, string[] Paths)> ResolveAsync(string repository, string target)
     {
         var root = Path.GetFullPath((await RunAsync(repository, "rev-parse", "--show-toplevel")).Trim());
         if (string.IsNullOrWhiteSpace(target))
             throw new InvalidOperationException("Choose a target branch, such as main.");
-        var reference = target.StartsWith("refs/", StringComparison.Ordinal) ? target : $"refs/remotes/origin/{target}";
-        if (!(await m_git.RunAsync(root, "show-ref", "--verify", "--quiet", reference)).IsSuccess)
-            reference = $"refs/heads/{target}";
-        var mergeBase = (await RunAsync(root, "merge-base", "HEAD", reference)).Trim();
+        string mergeBase;
+        if (target == "HEAD")
+        {
+            // Comparing the index and working tree to HEAD excludes already committed branch changes.
+            mergeBase = (await RunAsync(root, "rev-parse", "HEAD")).Trim();
+        }
+        else
+        {
+            var reference = target.StartsWith("refs/", StringComparison.Ordinal) ? target : $"refs/remotes/origin/{target}";
+            if (!(await m_git.RunAsync(root, "show-ref", "--verify", "--quiet", reference)).IsSuccess)
+                reference = $"refs/heads/{target}";
+            mergeBase = (await RunAsync(root, "merge-base", "HEAD", reference)).Trim();
+        }
         var statuses = (await RunAsync(root, "diff", "--name-status", "-z", "--find-renames", mergeBase, "--")).Split('\0');
         var changes = ParseChanges(statuses);
         var untracked = (await RunAsync(root, "ls-files", "--others", "--exclude-standard", "-z")).Split('\0', StringSplitOptions.RemoveEmptyEntries);
@@ -73,18 +131,8 @@ internal sealed class DiffLensFileLoader
 
     private async Task<DiffLensFile> LoadFileAsync(string root, string mergeBase, (string OldPath, string NewPath)[] changes, string path)
     {
-        var fullPath = Path.GetFullPath(Path.Combine(root, path));
+        var fullPath = ResolveEditablePath(root, path);
         var relative = Path.GetRelativePath(root, fullPath).Replace('\\', '/');
-        if (relative == ".." || relative.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(relative))
-            throw new InvalidOperationException("Choose a file inside this repository.");
-        // Refuse symlink traversal when opening an editable document.
-        for (var item = fullPath; !string.Equals(item, root, StringComparison.OrdinalIgnoreCase); item = Path.GetDirectoryName(item))
-        {
-            if (string.IsNullOrEmpty(item))
-                throw new InvalidOperationException("Unable to resolve the repository path.");
-            if ((File.Exists(item) || Directory.Exists(item)) && File.GetAttributes(item).HasFlag(FileAttributes.ReparsePoint))
-                throw new InvalidOperationException("Symlink files and directories are not editable in this prototype.");
-        }
         var change = changes.FirstOrDefault(c => c.NewPath == relative);
         var oldPath = change.OldPath ?? relative;
         var baseline = string.Empty;
@@ -103,6 +151,23 @@ internal sealed class DiffLensFileLoader
         if (bytes == null && string.IsNullOrEmpty(exists.StandardOutput))
             throw new FileNotFoundException("File is absent from both the branch base and working tree.", fullPath);
         return new DiffLensFile(fullPath, relative, mergeBase, baseline, bytes);
+    }
+
+    private static string ResolveEditablePath(string root, string path)
+    {
+        var fullPath = Path.GetFullPath(Path.Combine(root, path));
+        var relative = Path.GetRelativePath(root, fullPath).Replace('\\', '/');
+        if (relative == ".." || relative.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(relative))
+            throw new InvalidOperationException("Choose a file inside this repository.");
+        // Refuse symlink traversal when opening an editable document.
+        for (var item = fullPath; !string.Equals(item, root, StringComparison.OrdinalIgnoreCase); item = Path.GetDirectoryName(item))
+        {
+            if (string.IsNullOrEmpty(item))
+                throw new InvalidOperationException("Unable to resolve the repository path.");
+            if ((File.Exists(item) || Directory.Exists(item)) && File.GetAttributes(item).HasFlag(FileAttributes.ReparsePoint))
+                throw new InvalidOperationException("Symlink files and directories are not editable in this prototype.");
+        }
+        return fullPath;
     }
 
     private async Task<string> RunAsync(string root, params string[] args)

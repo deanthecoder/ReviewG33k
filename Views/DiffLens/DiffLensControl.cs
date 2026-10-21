@@ -20,6 +20,7 @@ using Avalonia.Threading;
 using System.Diagnostics;
 using DiffPlex.DiffBuilder.Model;
 using ReviewG33k.Services.DiffLens;
+using ReviewG33k.Services;
 
 namespace ReviewG33k.Views.DiffLens;
 
@@ -37,6 +38,8 @@ internal sealed class DiffLensControl : Control
     private readonly Typeface m_font = new("Cascadia Mono,Consolas,monospace");
     private readonly IBrush m_background = Brush.Parse("#0C1219");
     private readonly IBrush m_card = Brush.Parse("#151E29");
+    private readonly IBrush m_selectedCard = Brush.Parse("#29251B");
+    private readonly IBrush m_findingMarker = Brush.Parse("#E9BC70");
     private readonly IBrush m_text = Brush.Parse("#D7E3EE");
     private readonly IBrush m_muted = Brush.Parse("#8194A8");
     private readonly IBrush m_added = Brush.Parse("#173C31");
@@ -51,6 +54,8 @@ internal sealed class DiffLensControl : Control
     private Point? m_middleClickOrigin;
     private double m_zoom = 0.6;
     private double m_horizontalScroll;
+    private string m_hoverHint;
+    private readonly DispatcherTimer m_hoverTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private readonly Stopwatch m_fitClock = new();
     private readonly DispatcherTimer m_fitTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private double m_fitStartZoom;
@@ -64,6 +69,21 @@ internal sealed class DiffLensControl : Control
     {
         ClipToBounds = true;
         Focusable = true;
+        // The whole canvas is one control; manage hover as the pointer crosses drawn rows.
+        ToolTip.SetServiceEnabled(this, false);
+        m_hoverTimer.Tick += (_, _) =>
+        {
+            m_hoverTimer.Stop();
+            if (m_hoverHint != null && m_drag == null && ContextMenu?.IsOpen != true && TopLevel.GetTopLevel(this) != null)
+                ToolTip.SetIsOpen(this, true);
+        };
+        Gestures.AddPointerTouchPadGestureMagnifyHandler(this, (_, e) =>
+        {
+            // macOS supplies incremental magnification, centered on the pointer.
+            HideHoverHint();
+            SetZoom(m_zoom * (1 + e.Delta.Y), e.GetPosition(this));
+            e.Handled = true;
+        });
         m_fadeTimer.Tick += (_, _) =>
         {
             InvalidateVisual();
@@ -89,16 +109,22 @@ internal sealed class DiffLensControl : Control
             InvalidateVisual();
             ViewChanged?.Invoke(this, EventArgs.Empty);
         };
-        DetachedFromVisualTree += (_, _) =>
-        {
-            m_fadeTimer.Stop();
-            m_fitTimer.Stop();
-        };
+        DetachedFromVisualTree += (_, _) => StopAnimations();
+    }
+
+    public void StopAnimations()
+    {
+        HideHoverHint();
+        m_fitTimer.Stop();
+        m_fadeTimer.Stop();
     }
 
     public event EventHandler ViewChanged;
     public event EventHandler<(string Path, int Line)> EditRequested;
     public double Zoom => m_zoom;
+    public Func<CodeSmellFinding, int> FindingLineResolver { get; set; }
+
+    private int FindingLine(CodeSmellFinding finding) => FindingLineResolver?.Invoke(finding) ?? finding.LineNumber;
 
     public void SetFiles(string rootName, IReadOnlyList<DiffLensCell> cells)
     {
@@ -137,6 +163,7 @@ internal sealed class DiffLensControl : Control
 
     private void FitBounds(DiffLensFolder folder, bool animate = true)
     {
+        HideHoverHint();
         var bounds = folder.Bounds;
         var zoom = Math.Clamp(Math.Min((Bounds.Width - 60) / bounds.Width, (Bounds.Height - 60) / bounds.Height), 0.001, 0.72);
         var offset = new Vector((Bounds.Width - bounds.Width * zoom) / 2 - bounds.X * zoom,
@@ -169,6 +196,7 @@ internal sealed class DiffLensControl : Control
 
     private void SetZoom(double zoom, Point pointer)
     {
+        HideHoverHint();
         m_fitTimer.Stop();
         zoom = Math.Clamp(zoom, 0.001, 2.5);
         var local = (pointer - m_offset) / m_zoom;
@@ -180,6 +208,7 @@ internal sealed class DiffLensControl : Control
 
     private void SetMode(DiffLensCell cell, int detail)
     {
+        HideHoverHint();
         m_fitTimer.Stop();
         if (cell.Detail == detail)
             return;
@@ -206,6 +235,7 @@ internal sealed class DiffLensControl : Control
 
     public bool FocusFinding(string path, int line)
     {
+        HideHoverHint();
         var cell = m_cells.FirstOrDefault(item => string.Equals(item.Entry.Path, path, StringComparison.OrdinalIgnoreCase));
         if (cell == null)
             return false;
@@ -220,15 +250,48 @@ internal sealed class DiffLensControl : Control
         return true;
     }
 
+    public IReadOnlyList<CodeSmellFinding> SelectedFindings =>
+        m_cells.FirstOrDefault(cell => cell.Entry.Path == SelectedPath)?.Findings ?? [];
+
+    public IReadOnlyList<CodeSmellFinding> FindingsAt(Point point)
+    {
+        foreach (var cell in m_cells.Reverse())
+        {
+            var left = m_offset.X + cell.Position.X * m_zoom;
+            var top = m_offset.Y + (cell.Position.Y + HeaderHeight) * m_zoom;
+            var margin = point.X >= left - 8 && point.X <= left + Math.Max(18, 8 * m_zoom);
+            if (!margin && !cell.Bounds.Contains((point - m_offset) / m_zoom))
+                continue;
+            if (margin)
+            {
+                var closest = cell.Findings.Select(finding => (Finding: finding, Row: cell.FindingRow(FindingLine(finding), cell.Detail)))
+                    .Where(item => item.Row >= 0)
+                    .Select(item => (item.Finding, item.Row, Distance: Math.Abs(point.Y - (top + (item.Row + 0.5) * RowHeight * m_zoom))))
+                    .Where(item => item.Distance <= Math.Max(7, RowHeight * m_zoom / 2))
+                    .OrderBy(item => item.Distance).ToArray();
+                if (closest.Length > 0)
+                    return closest.Where(item => item.Row == closest[0].Row).Select(item => item.Finding).ToArray();
+            }
+            else
+            {
+                var row = (int)Math.Floor((point.Y - top) / (RowHeight * m_zoom));
+                var findings = cell.Findings.Where(finding => cell.FindingRow(FindingLine(finding), cell.Detail) == row && row >= 0).ToArray();
+                if (findings.Length > 0)
+                    return findings;
+            }
+        }
+        return [];
+    }
+
     private void DrawFindings(DrawingContext context, DiffLensCell cell, Vector offset)
     {
         if (cell.Findings.Count == 0)
             return;
-        var marker = Brush.Parse("#E9BC70");
+        var marker = m_findingMarker;
         using (context.PushTransform(Matrix.CreateScale(m_zoom, m_zoom) * Matrix.CreateTranslation(offset)))
         {
             DrawText(context, $"! {cell.Findings.Count}", 12, 39, marker, 15);
-            foreach (var row in cell.Findings.Select(finding => cell.FindingRow(finding.LineNumber, cell.Detail)).Where(row => row >= 0).Distinct())
+            foreach (var row in cell.Findings.Select(finding => cell.FindingRow(FindingLine(finding), cell.Detail)).Where(row => row >= 0).Distinct())
                 context.FillRectangle(marker, new Rect(1, HeaderHeight + row * RowHeight, 5, RowHeight));
         }
     }
@@ -281,7 +344,7 @@ internal sealed class DiffLensControl : Control
             // One opaque card and one geometry for content, border and hit testing.
             // Only the row content fades; outgoing content cannot leave a ghost card.
             using (context.PushTransform(Matrix.CreateScale(m_zoom, m_zoom) * Matrix.CreateTranslation(offset)))
-                context.FillRectangle(m_card, new Rect(0, 0, CellWidth, cell.Height), 8);
+                context.FillRectangle(cell.Entry.Path == SelectedPath ? m_selectedCard : m_card, new Rect(0, 0, CellWidth, cell.Height), 8);
             using (context.PushClip(new Rect(cell.Position * m_zoom + m_offset,
                        new Size(CellWidth * m_zoom, cell.Height * m_zoom))))
             {
@@ -289,7 +352,7 @@ internal sealed class DiffLensControl : Control
                     DrawLayer(context, cell.Rows(previous), previous, offset, 1);
                 DrawLayer(context, cell.Rows(cell.Detail), cell.Detail, offset, cell == m_fadingCell ? progress : 1);
             }
-            context.DrawRectangle(null, new Pen(Brush.Parse(cell.Entry.Path == SelectedPath ? "#66DCC1" : "#36546A"),
+            context.DrawRectangle(null, new Pen(Brush.Parse(cell.Entry.Path == SelectedPath ? "#E9BC70" : "#36546A"),
                 cell.Entry.Path == SelectedPath ? 1.5 : 1),
                 new Rect(cell.Position * m_zoom + m_offset, new Size(CellWidth * m_zoom, cell.Height * m_zoom)), 8 * m_zoom, 8 * m_zoom);
             DrawTitle(context, cell, offset);
@@ -383,13 +446,15 @@ internal sealed class DiffLensControl : Control
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
+        HideHoverHint();
         m_fitTimer.Stop();
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) ||
+            (OperatingSystem.IsMacOS() && e.KeyModifiers.HasFlag(KeyModifiers.Meta)))
             SetZoom(m_zoom * Math.Pow(1.15, e.Delta.Y), e.GetPosition(this));
         else
         {
             if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
-                m_horizontalScroll = Math.Max(0, m_horizontalScroll - e.Delta.Y * 45);
+                m_horizontalScroll = Math.Max(0, m_horizontalScroll - (e.Delta.X != 0 ? e.Delta.X : e.Delta.Y) * 45);
             else
                 m_offset += new Vector(e.Delta.X * 45, e.Delta.Y * 45);
             InvalidateVisual();
@@ -399,6 +464,8 @@ internal sealed class DiffLensControl : Control
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
+        HideHoverHint();
+        base.OnPointerPressed(e);
         m_fitTimer.Stop();
         Focus();
         var local = (e.GetPosition(this) - m_offset) / m_zoom;
@@ -457,15 +524,22 @@ internal sealed class DiffLensControl : Control
             var cell = HitCell((hoverPoint - m_offset) / m_zoom);
             var hint = cell == null ? null : ModeButton(cell, false).Contains(hoverPoint) ? "Unified diff (U)" :
                 ModeButton(cell, true).Contains(hoverPoint) ? "Side-by-side diff (S)" : null;
-            if (hint == null && cell != null && cell.Findings.Count > 0)
+            if (hint == null)
             {
-                var row = (int)Math.Floor(((hoverPoint.Y - m_offset.Y) / m_zoom - cell.Position.Y - HeaderHeight) / RowHeight);
-                var findings = cell.Findings.Where(finding => cell.FindingRow(finding.LineNumber, cell.Detail) == row);
-                var messages = findings.Select(finding => $"{finding.Severity} · {finding.RuleId}: {finding.Message}").ToArray();
-                if (messages.Length > 0)
-                    hint = "Last scan snapshot\n" + string.Join("\n", messages);
+                var findings = FindingsAt(hoverPoint);
+                if (findings.Count > 0)
+                    hint = string.Join("\n", findings.Select(finding => $"{finding.Severity} · {finding.RuleId}: {finding.Message}")) +
+                           "\nRight-click for issue actions";
             }
-            ToolTip.SetTip(this, hint);
+            // Keep an unchanged tip alive while the pointer moves inside a marker's hit area.
+            if (hint != m_hoverHint)
+            {
+                HideHoverHint();
+                m_hoverHint = hint;
+                ToolTip.SetTip(this, hint);
+                if (hint != null)
+                    m_hoverTimer.Start();
+            }
             return;
         }
         var point = e.GetPosition(this);
@@ -505,6 +579,22 @@ internal sealed class DiffLensControl : Control
             Fit();
             e.Handled = true;
         }
+        // Control raises ContextRequested here for a right-button release.
+        base.OnPointerReleased(e);
+    }
+
+    private void HideHoverHint()
+    {
+        m_hoverTimer.Stop();
+        m_hoverHint = null;
+        ToolTip.SetIsOpen(this, false);
+        ToolTip.SetTip(this, null);
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        HideHoverHint();
+        base.OnPointerExited(e);
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)

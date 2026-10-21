@@ -41,58 +41,52 @@ namespace ReviewG33k.Views.DiffLens;
 /// </remarks>
 internal sealed class DiffLensWindow : Window
 {
-    private readonly TextBox m_repository = new() { Watermark = "Repository folder", MinWidth = 270 };
-    private readonly TextBox m_target = new() { Text = "main", Width = 120, Watermark = "Target branch" };
-    private readonly TextBox m_path = new() { Watermark = "Relative file path (blank = all changed files)", MinWidth = 270 };
-    private readonly TextBlock m_status = new() { Text = "Load a file to begin.", TextWrapping = TextWrapping.Wrap };
+    private readonly string m_repositoryPath;
+    private readonly string m_targetBranch;
+    private readonly string m_relativePath;
+    private readonly TextBlock m_status = new() { Text = "No repository selected.", TextWrapping = TextWrapping.Wrap };
     private readonly DiffLensControl m_canvas = new();
     private readonly TextEditor m_editor = new()
     {
         ShowLineNumbers = true, FontFamily = new FontFamily("Cascadia Mono,Consolas,monospace"), FontSize = 16,
         Background = Brush.Parse("#151E29"), Foreground = Brush.Parse("#D7E3EE"), IsVisible = false
     };
-    private readonly Button m_load = new() { Content = "Load / Refresh" };
     private readonly DiffLensReviewSnapshot m_review;
+    private readonly CommandLineReviewMode m_reviewMode;
     private DiffLensFile m_file;
     private readonly Dictionary<string, DiffLensFile> m_files = new();
     private readonly Dictionary<string, TextDocument> m_documents = new();
+    private readonly Dictionary<string, DiffLensFindingActions> m_findingActions = new();
     private readonly DispatcherTimer m_autoSave = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private readonly SemaphoreSlim m_saveGate = new(1, 1);
     private bool m_closeReady;
+    private bool m_isClosing;
+    private bool m_isClosed;
     private bool m_loading;
     private bool m_settingText;
     private bool m_isEditing;
     private int m_transitionVersion;
 
-    public DiffLensWindow(string[] args = null, DiffLensReviewSnapshot review = null)
+    private static string NavigationHint => OperatingSystem.IsMacOS()
+        ? "Two-finger scroll: pan · Pinch or ⌘+scroll: zoom · Shift+scroll: long lines"
+        : "Scroll or drag: pan · Ctrl+wheel: zoom · Shift+wheel: long lines";
+
+    public DiffLensWindow(string[] args = null, DiffLensReviewSnapshot review = null, CommandLineReviewMode? reviewMode = null)
     {
         m_review = review;
+        m_reviewMode = reviewMode ?? review?.Mode ??
+            (Argument(args, "--base") is { } branch && branch != "HEAD" ? CommandLineReviewMode.Committed : CommandLineReviewMode.Uncommitted);
         Title = "ReviewG33k DiffLens";
         Width = 1420;
         Height = 920;
         MinWidth = 950;
         MinHeight = 600;
         Background = Brush.Parse("#0C1219");
-        m_repository.Text = Argument(args, "--repo") ?? Settings.Instance.LocalReviewRepositoryPath;
-        m_target.Text = Argument(args, "--base") ?? Settings.Instance.LocalReviewBaseBranch ?? "main";
-        m_path.Text = Argument(args, "--file");
-        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto") };
-        var heading = new StackPanel { Margin = new Thickness(20, 15), Spacing = 5 };
-        heading.Children.Add(new TextBlock { Text = "ReviewG33k  /  DiffLens", FontSize = 24, FontWeight = FontWeight.SemiBold });
-        heading.Children.Add(new TextBlock { Text = "Branch base → current files    ·    Ctrl+wheel: zoom    ·    Drag: pan    ·    Shift+wheel: scroll long lines", Foreground = Brush.Parse("#91A7B9") });
-        var configured = !string.IsNullOrWhiteSpace(Argument(args, "--repo"));
-        if (!configured)
-            root.Children.Add(heading);
-        var toolbar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(20, 0, 20, 12) };
-        toolbar.Children.Add(m_repository);
-        toolbar.Children.Add(m_target);
-        toolbar.Children.Add(m_path);
-        toolbar.Children.Add(m_load);
-        Grid.SetRow(toolbar, 1);
-        if (!configured)
-            root.Children.Add(toolbar);
-        else
-            Title = $"ReviewG33k DiffLens — {m_repository.Text} ({m_target.Text})";
+        m_repositoryPath = Argument(args, "--repo") ?? Settings.Instance.LocalReviewRepositoryPath;
+        m_targetBranch = Argument(args, "--base") ?? "HEAD";
+        m_relativePath = Argument(args, "--file");
+        Title = $"ReviewG33k DiffLens — {m_repositoryPath} ({m_targetBranch})";
+        var root = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
         var surface = new Grid();
         surface.Children.Add(m_canvas);
         surface.Children.Add(m_editor);
@@ -106,7 +100,7 @@ internal sealed class DiffLensWindow : Window
         m_canvas.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(180) } };
         m_editor.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(180) } };
         m_editor.Opacity = 0;
-        Grid.SetRow(surface, 2);
+        Grid.SetRow(surface, 0);
         root.Children.Add(surface);
         var footer = new DockPanel { Margin = new Thickness(12, 8) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -117,19 +111,29 @@ internal sealed class DiffLensWindow : Window
                 ToggleEditor();
             m_canvas.Fit();
         };
-        ToolTip.SetTip(fit, "Fit all changed files (middle-click). F5 refreshes from disk.");
+        ToolTip.SetTip(fit, "Fit all changed files (middle-click).");
         actions.Children.Add(fit);
         DockPanel.SetDock(actions, Dock.Left);
         actions.Margin = new Thickness(0, 0, 12, 0);
         m_status.VerticalAlignment = VerticalAlignment.Center;
         footer.Children.Add(actions);
+        ToolTip.SetTip(footer, NavigationHint);
         footer.Children.Add(m_status);
-        Grid.SetRow(footer, 3);
+        Grid.SetRow(footer, 1);
         root.Children.Add(footer);
         Content = root;
+        m_canvas.FindingLineResolver = finding => m_findingActions.TryGetValue(finding.FilePath, out var actions)
+            ? actions.GetCurrentLine(finding) : finding.LineNumber;
         m_canvas.ViewChanged += (_, _) => UpdateView();
         m_canvas.EditRequested += (_, request) => { SelectFile(request.Path); ToggleEditor(request.Line); };
-        m_load.Click += async (_, _) => await LoadAsync();
+        m_canvas.ContextRequested += (_, e) =>
+        {
+            var findings = e.TryGetPosition(m_canvas, out var point) ? m_canvas.FindingsAt(point) : m_canvas.SelectedFindings;
+            if (findings.Count == 0)
+                return;
+            OpenFindingMenu(m_canvas, findings);
+            e.Handled = true;
+        };
         m_autoSave.Tick += async (_, _) =>
         {
             m_autoSave.Stop();
@@ -141,18 +145,13 @@ internal sealed class DiffLensWindow : Window
                 return;
             m_autoSave.Stop();
             m_autoSave.Start();
-            m_status.Text = $"{m_file.RelativePath} · Saving automatically...";
+            m_status.Text = "Saving...";
         };
         AddHandler(KeyDownEvent, async (_, e) =>
         {
             if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control))
             {
                 await SaveAsync();
-                e.Handled = true;
-            }
-            else if (e.Key == Key.F5)
-            {
-                await LoadAsync();
                 e.Handled = true;
             }
             else if (e.Key == Key.Escape && m_isEditing)
@@ -166,24 +165,41 @@ internal sealed class DiffLensWindow : Window
             if (m_closeReady)
                 return;
             e.Cancel = true;
-            if (m_loading)
+            if (m_loading || m_isClosing)
                 return;
+            m_isClosing = true;
             SetBusy(true);
             m_autoSave.Stop();
             if (await SaveAsync())
             {
-                m_closeReady = true;
-                Dispatcher.UIThread.Post(Close);
+                // A dispatcher post can run inside Avalonia's native input callback on macOS.
+                // Wait for a timer tick before disposing the window so that callback can return.
+                DispatcherTimer.RunOnce(() =>
+                {
+                    if (m_isClosed)
+                        return;
+                    m_closeReady = true;
+                    Close();
+                }, TimeSpan.FromMilliseconds(1), DispatcherPriority.Background);
             }
             else
+            {
+                m_isClosing = false;
                 SetBusy(false);
+            }
         };
-        Closed += (_, _) => m_autoSave.Stop();
+        Closed += (_, _) =>
+        {
+            m_isClosed = true;
+            ++m_transitionVersion;
+            m_autoSave.Stop();
+            m_canvas.StopAnimations();
+        };
         Opened += async (_, _) =>
         {
             UpdateView();
-            if (!string.IsNullOrWhiteSpace(m_repository.Text))
-                await LoadAsync();
+            if (!string.IsNullOrWhiteSpace(m_repositoryPath))
+                await LoadSnapshotAsync();
         };
     }
 
@@ -194,7 +210,7 @@ internal sealed class DiffLensWindow : Window
         heading.Children.Add(new TextBlock { Text = $"Review findings ({m_review.Findings.Count})", FontSize = 18 });
         heading.Children.Add(new TextBlock
         {
-            Text = "Last scan snapshot. Edits may move lines or resolve issues. Rerun the review to update findings; F5 refreshes code only.",
+            Text = "Last scan snapshot. Edits may move lines or resolve issues. Rerun the review to update findings.",
             TextWrapping = TextWrapping.Wrap, Foreground = Brush.Parse("#B8A77B"), FontSize = 12
         });
         DockPanel.SetDock(heading, Dock.Top);
@@ -211,15 +227,114 @@ internal sealed class DiffLensWindow : Window
             {
                 if (m_isEditing)
                     ToggleEditor();
-                if (m_canvas.FocusFinding(finding.FilePath, finding.LineNumber))
-                    m_status.Text = $"Last scan · {finding.FilePath}:{finding.LineNumber} · {finding.Message}";
+                if (m_canvas.FocusFinding(finding.FilePath, m_findingActions.TryGetValue(finding.FilePath, out var actions) ? actions.GetCurrentLine(finding) : finding.LineNumber))
+                    m_status.Text = string.Empty;
                 else
-                    m_status.Text = $"{finding.FilePath}: this finding is outside the current changed-file canvas. Use Review Results to open its source.";
+                    m_status.Text = "Finding is outside this view.";
+            };
+            button.ContextRequested += (_, e) =>
+            {
+                OpenFindingMenu(button, [finding]);
+                e.Handled = true;
             };
             items.Children.Add(button);
         }
         panel.Children.Add(new ScrollViewer { Content = items, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
         return panel;
+    }
+
+    private TextDocument GetDocument(DiffLensFile file)
+    {
+        if (!m_documents.TryGetValue(file.RelativePath, out var document))
+        {
+            m_documents[file.RelativePath] = document = new TextDocument(file.WorkingText);
+            var findings = m_review?.FindingsFor(m_repositoryPath, m_targetBranch, m_reviewMode, file.RelativePath) ?? [];
+            m_findingActions[file.RelativePath] = new DiffLensFindingActions(file.RelativePath, document, findings);
+        }
+        return document;
+    }
+
+    private void OpenFindingMenu(Control target, IReadOnlyList<CodeSmellFinding> findings)
+    {
+        if (m_loading || m_isClosing || m_isClosed)
+            return;
+        ToolTip.SetIsOpen(m_canvas, false);
+        var menu = new ContextMenu();
+        foreach (var finding in findings)
+        {
+            var items = CreateFindingMenuItems(finding);
+            if (findings.Count == 1)
+                menu.ItemsSource = items;
+            else
+                menu.Items.Add(new MenuItem
+                {
+                    Header = new TextBlock { Text = finding.Message, MaxWidth = 340, TextWrapping = TextWrapping.Wrap },
+                    ItemsSource = items
+                });
+        }
+        target.ContextMenu = menu;
+        menu.Closed += (_, _) =>
+        {
+            if (target.ContextMenu == menu)
+                target.ContextMenu = null;
+        };
+        menu.Open(target);
+    }
+
+    private MenuItem[] CreateFindingMenuItems(CodeSmellFinding finding)
+    {
+        DiffLensFindingActions actions = null;
+        var reason = "The issue's file is unavailable for editing.";
+        var canInsert = false;
+        if (m_files.TryGetValue(finding.FilePath, out var file) && file.CanEdit)
+        {
+            GetDocument(file);
+            actions = m_findingActions[file.RelativePath];
+            canInsert = actions.CanInsertTodo(finding, out reason);
+        }
+        var add = new MenuItem { Header = "Add TODO above this line", IsEnabled = canInsert };
+        ToolTip.SetTip(add, canInsert ? "Insert an undoable TODO using this issue's instructions" : reason);
+        add.Click += async (_, _) => await AddFindingTodoAsync(finding);
+        var copy = new MenuItem { Header = "Copy fix instructions", IsEnabled = Clipboard != null };
+        copy.Click += async (_, _) =>
+        {
+            try
+            {
+                var instructions = actions?.GetFixInstructions(finding) ??
+                    $"File: {finding.FilePath}:{finding.LineNumber}\nRule: {finding.RuleId}\nIssue: {finding.Message}";
+                if (Clipboard != null)
+                {
+                    await Clipboard.SetTextAsync(instructions);
+                    m_status.Text = "Fix instructions copied.";
+                }
+            }
+            catch (Exception ex)
+            {
+                m_status.Text = $"Could not copy instructions: {ex.Message}";
+            }
+        };
+        return [add, copy];
+    }
+
+    private async Task AddFindingTodoAsync(CodeSmellFinding finding)
+    {
+        if (m_loading || m_isClosing || m_isClosed || !m_files.TryGetValue(finding.FilePath, out var file) || !file.CanEdit)
+            return;
+        GetDocument(file);
+        if (!m_findingActions[file.RelativePath].TryInsertTodo(finding, out var line, out var reason))
+        {
+            m_status.Text = reason;
+            return;
+        }
+        SelectFile(file.RelativePath);
+        if (!m_isEditing)
+            ToggleEditor(line);
+        else
+        {
+            m_editor.TextArea.Caret.Line = line;
+            m_editor.ScrollToLine(line);
+        }
+        await SaveAsync();
     }
 
     private void SelectFile(string path)
@@ -232,13 +347,11 @@ internal sealed class DiffLensWindow : Window
         if (m_file == file)
             return;
         m_file = file;
-        if (!m_documents.TryGetValue(path, out var document))
-            m_documents[path] = document = new TextDocument(file.WorkingText);
+        var document = GetDocument(file);
         m_settingText = true;
         m_editor.Document = document;
         m_settingText = false;
         m_editor.SyntaxHighlighting = Path.GetExtension(path).Equals(".cs", StringComparison.OrdinalIgnoreCase) ? CreateHighlighting() : null;
-        m_status.Text = path + " · Edits save automatically";
     }
 
     private void UpdateView()
@@ -247,9 +360,9 @@ internal sealed class DiffLensWindow : Window
             SelectFile(m_canvas.SelectedPath);
     }
 
-    private async Task LoadAsync()
+    private async Task LoadSnapshotAsync()
     {
-        if (m_loading)
+        if (m_loading || m_isClosing || m_isClosed)
             return;
         SetBusy(true);
         m_autoSave.Stop();
@@ -258,13 +371,14 @@ internal sealed class DiffLensWindow : Window
             SetBusy(false);
             return;
         }
-        m_status.Text = "Resolving branch base and loading working files...";
+        m_status.Text = "Loading...";
         try
         {
-            var changeSet = await new DiffLensFileLoader().LoadSetAsync(m_repository.Text, m_target.Text, m_path.Text);
+            var changeSet = await new DiffLensFileLoader().LoadReviewSetAsync(m_repositoryPath, m_targetBranch, m_reviewMode, m_relativePath);
             var cells = await Task.Run(() => changeSet.Entries.Select(entry => new DiffLensCell(entry)).ToArray());
             m_files.Clear();
             m_documents.Clear();
+            m_findingActions.Clear();
             m_file = null;
             foreach (var entry in changeSet.Entries.Where(entry => entry.File != null))
                 m_files[entry.Path] = entry.File;
@@ -275,11 +389,10 @@ internal sealed class DiffLensWindow : Window
             m_canvas.IsVisible = true;
             m_canvas.Opacity = 1;
             m_canvas.IsHitTestVisible = true;
-            if (m_review?.Matches(changeSet.Root, m_target.Text) == true)
-                foreach (var cell in cells)
-                    cell.Findings = m_review.Findings.Where(finding => string.Equals(finding.FilePath, cell.Entry.Path, StringComparison.OrdinalIgnoreCase)).ToArray();
+            foreach (var cell in cells)
+                cell.Findings = m_review?.FindingsFor(changeSet.Root, m_targetBranch, m_reviewMode, cell.Entry.Path) ?? [];
             m_canvas.SetFiles(Path.GetFileName(changeSet.Root), cells);
-            m_status.Text = $"{cells.Length} changed files · Base {changeSet.BaseRevision[..12]} → working file  ·  Ctrl+wheel zooms · Double-click edits · Esc returns · F5 refreshes.";
+            m_status.Text = cells.Length == 0 ? "No files to review." : "Double-click to edit · Esc to return";
         }
         catch (Exception ex)
         {
@@ -290,7 +403,7 @@ internal sealed class DiffLensWindow : Window
 
     private void ToggleEditor(int? line = null)
     {
-        if (m_file?.CanEdit != true || m_loading)
+        if (m_file?.CanEdit != true || m_loading || m_isClosing || m_isClosed)
             return;
         m_isEditing = !m_isEditing;
         var version = ++m_transitionVersion;
@@ -306,7 +419,7 @@ internal sealed class DiffLensWindow : Window
         {
             Dispatcher.UIThread.Post(() =>
             {
-                if (version != m_transitionVersion || !m_isEditing)
+                if (m_isClosing || m_isClosed || version != m_transitionVersion || !m_isEditing)
                     return;
                 m_editor.Focus();
                 if (line is { } requestedLine)
@@ -317,7 +430,7 @@ internal sealed class DiffLensWindow : Window
                     m_editor.ScrollToLine(targetLine);
                 }
             }, DispatcherPriority.Loaded);
-            m_status.Text = $"{m_file.RelativePath} · Edits save automatically; Esc returns to the diff.";
+            m_status.Text = "Edits save automatically · Esc to return";
         }
         else
         {
@@ -332,7 +445,7 @@ internal sealed class DiffLensWindow : Window
     private async Task FinishTransitionAsync(int version)
     {
         await Task.Delay(180);
-        if (version != m_transitionVersion)
+        if (m_isClosing || m_isClosed || version != m_transitionVersion)
             return;
         m_editor.IsVisible = m_isEditing;
         m_canvas.IsVisible = !m_isEditing;
@@ -352,7 +465,7 @@ internal sealed class DiffLensWindow : Window
                 {
                     await file.SaveAsync(document.Text);
                     m_canvas.SetFile(path, file.Baseline, document.Text, false);
-                    m_status.Text = $"{path} · Saved automatically";
+                    m_status.Text = "Saved.";
                 }
             }
             return true;
@@ -368,7 +481,6 @@ internal sealed class DiffLensWindow : Window
     private void SetBusy(bool busy)
     {
         m_loading = busy;
-        m_load.IsEnabled = !busy;
         m_canvas.IsHitTestVisible = !busy && !m_isEditing;
         m_editor.IsReadOnly = busy;
         UpdateView();
