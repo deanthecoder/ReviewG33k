@@ -35,6 +35,15 @@ internal sealed class DiffLensControl : Control
     private const double CellWidth = 1040;
     private const double HeaderHeight = 68;
     private const double RowHeight = 22;
+    private const double TextZoomThreshold = 0.2;
+    private readonly Dictionary<(string Text, double Size, IBrush Brush), FormattedText> m_textCache = new();
+    private readonly IBrush m_gridBrush = Brush.Parse("#24303E");
+    private readonly IBrush m_accentBrush = Brush.Parse("#66DCC1");
+    private readonly IBrush m_modeSelectedBrush = Brush.Parse("#28544C");
+    private readonly IBrush m_modeBrush = Brush.Parse("#202E3D");
+    private readonly Pen m_folderPen = new(Brush.Parse("#456076"), 1);
+    private readonly Pen m_borderPen = new(Brush.Parse("#36546A"), 1);
+    private readonly Pen m_selectedPen = new(Brush.Parse("#E9BC70"), 1.5);
     private readonly Typeface m_font = new("Cascadia Mono,Consolas,monospace");
     private readonly IBrush m_background = Brush.Parse("#0C1219");
     private readonly IBrush m_card = Brush.Parse("#151E29");
@@ -128,6 +137,7 @@ internal sealed class DiffLensControl : Control
 
     public void SetFiles(string rootName, IReadOnlyList<DiffLensCell> cells)
     {
+        m_textCache.Clear();
         var modes = m_cells.ToDictionary(cell => cell.Entry.Path, cell => cell.Detail);
         foreach (var cell in cells)
             if (modes.TryGetValue(cell.Entry.Path, out var detail))
@@ -290,21 +300,24 @@ internal sealed class DiffLensControl : Control
         var marker = m_findingMarker;
         using (context.PushTransform(Matrix.CreateScale(m_zoom, m_zoom) * Matrix.CreateTranslation(offset)))
         {
-            DrawText(context, $"! {cell.Findings.Count}", 12, 39, marker, 15);
+            if (m_zoom >= TextZoomThreshold)
+                DrawText(context, $"! {cell.Findings.Count}", 12, 39, marker, 15);
             foreach (var row in cell.Findings.Select(finding => cell.FindingRow(FindingLine(finding), cell.Detail)).Where(row => row >= 0).Distinct())
-                context.FillRectangle(marker, new Rect(1, HeaderHeight + row * RowHeight, 5, RowHeight));
+                context.FillRectangle(marker, new Rect(1, HeaderHeight + row * RowHeight, Math.Max(5, 2 / m_zoom), Math.Max(RowHeight, 1 / m_zoom)));
         }
     }
 
     private void DrawModeButtons(DrawingContext context, DiffLensCell cell)
     {
+        if (32 * m_zoom < 6)
+            return;
         foreach (var split in new[] { false, true })
         {
             var bounds = ModeButton(cell, split);
             var selected = (cell.Detail >= 3) == split;
-            context.FillRectangle(Brush.Parse(selected ? "#28544C" : "#202E3D"), bounds, 2);
+            context.FillRectangle(selected ? m_modeSelectedBrush : m_modeBrush, bounds, 2);
             var icon = bounds.Deflate(bounds.Width * 0.24);
-            var pen = new Pen(selected ? Brush.Parse("#66DCC1") : m_muted, Math.Min(1.3, m_zoom * 2));
+            var pen = new Pen(selected ? m_accentBrush : m_muted, Math.Min(1.3, m_zoom * 2));
             context.DrawRectangle(pen, icon);
             if (split)
                 context.DrawLine(pen, new Point(icon.Center.X, icon.Top), new Point(icon.Center.X, icon.Bottom));
@@ -322,7 +335,7 @@ internal sealed class DiffLensControl : Control
         context.FillRectangle(m_background, new Rect(Bounds.Size));
         for (double x = m_offset.X % 32; x < Bounds.Width; x += 32)
             for (double y = m_offset.Y % 32; y < Bounds.Height; y += 32)
-                context.FillRectangle(Brush.Parse("#24303E"), new Rect(x, y, 1, 1));
+                context.FillRectangle(m_gridBrush, new Rect(x, y, 1, 1));
         // Retain an opaque outgoing layer beneath the incoming layer. Fading both
         // independently would dim their combined alpha and expose the background.
         if (m_root == null)
@@ -330,8 +343,12 @@ internal sealed class DiffLensControl : Control
         foreach (var folder in m_root.Descendants)
         {
             var rect = new Rect(folder.Bounds.Position * m_zoom + m_offset, folder.Bounds.Size * m_zoom);
-            context.DrawRectangle(new Pen(Brush.Parse("#456076"), 1), rect, 8);
+            if (!rect.Intersects(new Rect(Bounds.Size)))
+                continue;
+            context.DrawRectangle(m_folderPen, rect, 8);
             var label = FolderLabel(folder);
+            if (label.Height < 7 || !label.Intersects(new Rect(Bounds.Size)))
+                continue;
             using (context.PushClip(label))
                 DrawText(context, $"{folder.Name}  ·  {folder.FileCount} files", label.X + 6, label.Y + 3, m_muted, Math.Min(14, 38 * m_zoom));
         }
@@ -349,11 +366,10 @@ internal sealed class DiffLensControl : Control
                        new Size(CellWidth * m_zoom, cell.Height * m_zoom))))
             {
                 if (cell == m_fadingCell && m_previousDetail is { } previous && progress < 1)
-                    DrawLayer(context, cell.Rows(previous), previous, offset, 1);
-                DrawLayer(context, cell.Rows(cell.Detail), cell.Detail, offset, cell == m_fadingCell ? progress : 1);
+                    DrawLayer(context, cell, previous, offset, 1);
+                DrawLayer(context, cell, cell.Detail, offset, cell == m_fadingCell ? progress : 1);
             }
-            context.DrawRectangle(null, new Pen(Brush.Parse(cell.Entry.Path == SelectedPath ? "#E9BC70" : "#36546A"),
-                cell.Entry.Path == SelectedPath ? 1.5 : 1),
+            context.DrawRectangle(null, cell.Entry.Path == SelectedPath ? m_selectedPen : m_borderPen,
                 new Rect(cell.Position * m_zoom + m_offset, new Size(CellWidth * m_zoom, cell.Height * m_zoom)), 8 * m_zoom, 8 * m_zoom);
             DrawTitle(context, cell, offset);
             DrawModeButtons(context, cell);
@@ -370,8 +386,9 @@ internal sealed class DiffLensControl : Control
     private Rect FolderLabel(DiffLensFolder folder) => new(folder.Bounds.Position * m_zoom + m_offset,
         new Size(folder.Bounds.Width * m_zoom, DiffLensLayout.FolderHeader * m_zoom));
 
-    private void DrawLayer(DrawingContext context, IReadOnlyList<DiffLensRow> rows, int detail, Vector offset, double opacity)
+    private void DrawLayer(DrawingContext context, DiffLensCell cell, int detail, Vector offset, double opacity)
     {
+        var rows = cell.Rows(detail);
         using (context.PushOpacity(opacity))
         using (context.PushTransform(Matrix.CreateScale(m_zoom, m_zoom) * Matrix.CreateTranslation(offset)))
         {
@@ -381,6 +398,11 @@ internal sealed class DiffLensControl : Control
             {
                 var first = Math.Max(0, (int)((-offset.Y / m_zoom - HeaderHeight) / RowHeight));
                 var last = Math.Min(rows.Count, (int)((Bounds.Height - offset.Y) / m_zoom / RowHeight) + 2);
+                if (m_zoom < TextZoomThreshold)
+                {
+                    DrawOverview(context, cell, rows, detail, first, last);
+                    return;
+                }
                 for (var i = first; i < last; i++)
                 {
                     var row = rows[i];
@@ -400,13 +422,15 @@ internal sealed class DiffLensControl : Control
                 }
             }
             if (detail >= 3)
-                context.DrawLine(new Pen(Brush.Parse("#36546A")), new Point(CellWidth / 2, 38), new Point(CellWidth / 2, height));
+                context.DrawLine(m_borderPen, new Point(CellWidth / 2, 38), new Point(CellWidth / 2, height));
         }
     }
 
     private void DrawTitle(DrawingContext context, DiffLensCell cell, Vector offset)
     {
-        // Keep the title inside the projected card, including at overview zoom.
+        // Do not shape text that is too small to read in the overview.
+        if (HeaderHeight * m_zoom < 7 || CellWidth * m_zoom < 40)
+            return;
         var titleSize = Math.Min(14, 36 * m_zoom);
         var titleBounds = new Rect(offset.X + 2, offset.Y + 1, Math.Max(1, ModeButton(cell, false).Left - offset.X - 6), Math.Max(1, HeaderHeight * m_zoom - 2));
         using (context.PushClip(titleBounds))
@@ -422,7 +446,7 @@ internal sealed class DiffLensControl : Control
         if (cell.Detail >= 3 && m_zoom >= 0.45)
         {
             DrawText(context, "BRANCH BASE", offset.X + (cell.Findings.Count > 0 ? 90 : 12) * m_zoom, offset.Y + 40 * m_zoom, m_muted, 11);
-            DrawText(context, "WORKING FILE", offset.X + CellWidth * m_zoom / 2 + 12, offset.Y + 40 * m_zoom, Brush.Parse("#66DCC1"), 11);
+            DrawText(context, "WORKING FILE", offset.X + CellWidth * m_zoom / 2 + 12, offset.Y + 40 * m_zoom, m_accentBrush, 11);
         }
     }
 
@@ -441,8 +465,56 @@ internal sealed class DiffLensControl : Control
         }
     }
 
-    private void DrawText(DrawingContext context, string text, double x, double y, IBrush brush, double size = 14) =>
-        context.DrawText(new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, m_font, size, brush), new Point(x, y));
+    private void DrawOverview(DrawingContext context, DiffLensCell cell, IReadOnlyList<DiffLensRow> rows, int detail, int first, int last)
+    {
+        var overview = cell.Overview(detail);
+        var stride = Math.Max(1, (int)Math.Ceiling(2 / (RowHeight * m_zoom)));
+        for (var index = first - first % stride; index < last; index += stride)
+        {
+            var count = Math.Min(stride, rows.Count - index);
+            var change = overview.Changes(index, count);
+            var y = HeaderHeight + index * RowHeight;
+            var height = count * RowHeight;
+            var split = detail >= 3;
+            if (change.Removed)
+                context.FillRectangle(m_removed, new Rect(0, y, split || change.Added ? CellWidth / 2 : CellWidth, height));
+            if (change.Added)
+                context.FillRectangle(m_added, new Rect(split || change.Removed ? CellWidth / 2 : 0, y, split || change.Removed ? CellWidth / 2 : CellWidth, height));
+            if (CellWidth * m_zoom < 28)
+                continue;
+            var row = rows[index];
+            using (context.PushOpacity(0.35))
+            {
+                if (split)
+                {
+                    DrawOverviewStroke(context, row.Left, 0, y + height / 2, CellWidth / 2);
+                    DrawOverviewStroke(context, row.Right, CellWidth / 2, y + height / 2, CellWidth / 2);
+                }
+                else
+                    DrawOverviewStroke(context, row.Right ?? row.Left, 0, y + height / 2, CellWidth);
+            }
+        }
+    }
+
+    private void DrawOverviewStroke(DrawingContext context, DiffPiece piece, double x, double y, double width)
+    {
+        var length = piece?.Text?.Length ?? 0;
+        if (length > 0)
+            context.FillRectangle(m_muted, new Rect(x + 70, y, Math.Min(width - 80, length * 8.4), 1 / m_zoom));
+    }
+
+    private void DrawText(DrawingContext context, string text, double x, double y, IBrush brush, double size = 14)
+    {
+        var key = (text, size, brush);
+        if (!m_textCache.TryGetValue(key, out var formatted))
+        {
+            // Bound retained layout data when exploring large or repeatedly edited repositories.
+            if (m_textCache.Count >= 8192)
+                m_textCache.Clear();
+            m_textCache[key] = formatted = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, m_font, size, brush);
+        }
+        context.DrawText(formatted, new Point(x, y));
+    }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {

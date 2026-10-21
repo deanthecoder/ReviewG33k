@@ -40,8 +40,23 @@ internal static class DiffLensRows
 
     public static IReadOnlyList<DiffLensRow> Build(string baseline, string working, int context, bool split)
     {
+        return Project(BuildModelRows(baseline, working), context, split);
+    }
+
+    public static (IReadOnlyList<DiffLensRow> Unified, IReadOnlyList<DiffLensRow> Split) BuildBoth(string baseline, string working, int context)
+    {
+        var rows = BuildModelRows(baseline, working);
+        return (Project(rows, context, false), Project(rows, context, true));
+    }
+
+    private static DiffLensRow[] BuildModelRows(string baseline, string working)
+    {
         var model = new SideBySideDiffBuilder().BuildDiffModel(baseline, working, ignoreWhitespace: false);
-        var all = model.OldText.Lines.Zip(model.NewText.Lines, (left, right) => new DiffLensRow(left, right)).ToArray();
+        return model.OldText.Lines.Zip(model.NewText.Lines, (left, right) => new DiffLensRow(left, right)).ToArray();
+    }
+
+    private static IReadOnlyList<DiffLensRow> Project(DiffLensRow[] all, int context, bool split)
+    {
         var visible = new bool[all.Length];
         for (var i = 0; i < all.Length; i++)
         {

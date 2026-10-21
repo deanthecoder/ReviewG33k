@@ -30,6 +30,8 @@ internal sealed class DiffLensCell
     public Point Position { get; set; }
     public IReadOnlyList<DiffLensRow>[] Levels { get; private set; }
     public int Detail { get; set; }
+    private DiffLensOverview[] m_overviews = new DiffLensOverview[4];
+    public DiffLensOverview Overview(int detail) => m_overviews[detail] ??= new DiffLensOverview(Rows(detail));
     public IReadOnlyList<CodeSmellFinding> Findings { get; set; } = [];
     public double Height => DisplayHeight(Detail);
     public Rect Bounds => new(Position, new Size(Width, Height));
@@ -66,8 +68,9 @@ internal sealed class DiffLensCell
 
     public void Update(string baseline, string working)
     {
-        var unified = DiffLensRows.Build(baseline, working, 4, false);
-        Levels = [unified, unified, unified, DiffLensRows.Build(baseline, working, 4, true)];
+        var (unified, split) = DiffLensRows.BuildBoth(baseline, working, 4);
+        Levels = [unified, unified, unified, split];
+        m_overviews = new DiffLensOverview[4];
     }
 }
 

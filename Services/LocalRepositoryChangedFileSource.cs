@@ -83,7 +83,7 @@ public sealed class LocalRepositoryChangedFileSource : ICodeReviewChangedFileSou
     private static IReadOnlyList<string> SplitLines(string text) =>
         (text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
 
-    private async Task<FileInfo[]> EnumerateAnalyzableFilesAsync(DirectoryInfo repositoryPathInfo)
+    internal async Task<FileInfo[]> EnumerateAnalyzableFilesAsync(DirectoryInfo repositoryPathInfo)
     {
         if (m_gitCommandRunner != null && RepositoryUtilities.IsGitRepository(repositoryPathInfo.FullName))
         {

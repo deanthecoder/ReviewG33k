@@ -374,7 +374,7 @@ internal sealed class DiffLensWindow : Window
         m_status.Text = "Loading...";
         try
         {
-            var changeSet = await new DiffLensFileLoader().LoadReviewSetAsync(m_repositoryPath, m_targetBranch, m_reviewMode, m_relativePath);
+            var changeSet = await Task.Run(() => new DiffLensFileLoader().LoadReviewSetAsync(m_repositoryPath, m_targetBranch, m_reviewMode, m_relativePath));
             var cells = await Task.Run(() => changeSet.Entries.Select(entry => new DiffLensCell(entry)).ToArray());
             m_files.Clear();
             m_documents.Clear();

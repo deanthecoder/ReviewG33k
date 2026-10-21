@@ -250,6 +250,51 @@ public sealed class DiffLensTests
         });
     }
 
+    [Test]
+    public async Task TreeSnapshotUsesBatchedBaselinesForUnchangedModifiedRenamedAndNewFiles()
+    {
+        var encoding = new UnicodeEncoding(false, true, true);
+        var unicodePath = Path.Combine(m_root, "a file.cs");
+        await File.WriteAllTextAsync(unicodePath, "old Unicode value\r\n", encoding);
+        await File.WriteAllTextAsync(Path.Combine(m_root, "empty.cs"), string.Empty);
+        await Git("add", ".");
+        await Git("commit", "-m", "Additional baseline files");
+        await Git("mv", "sample.cs", "renamed.cs");
+        await File.WriteAllTextAsync(unicodePath, "new Unicode value\r\n", encoding);
+        await File.WriteAllTextAsync(Path.Combine(m_root, "new.cs"), "new file\n");
+
+        var set = await new DiffLensFileLoader().LoadReviewSetAsync(m_root, "HEAD", CommandLineReviewMode.Tree);
+
+        Assert.That(set.Entries.All(entry => entry.Error == null), Is.True);
+        Assert.That(set.Entries.Single(entry => entry.Path == "renamed.cs").File.Baseline, Does.Contain("Value = 1"));
+        Assert.That(set.Entries.Single(entry => entry.Path == "empty.cs").File.WorkingText, Is.Empty);
+        Assert.That(set.Entries.Single(entry => entry.Path == "new.cs").File.Baseline, Is.Empty);
+        var file = set.Entries.Single(entry => entry.Path == "a file.cs").File;
+        Assert.That(file.Baseline, Is.EqualTo("old Unicode value\r\n"));
+        Assert.That(file.WorkingText, Is.EqualTo("new Unicode value\r\n"));
+        await file.SaveAsync("edited\r\n");
+        Assert.That(await File.ReadAllBytesAsync(unicodePath), Is.EqualTo(encoding.GetPreamble().Concat(encoding.GetBytes("edited\r\n")).ToArray()));
+    }
+
+    [Test]
+    public async Task GitBatchReaderPreservesBinaryAndEmptyBlobsAndSkipsAbsentPaths()
+    {
+        var binary = new byte[] { 0, 10, 13, 255, 1 };
+        await File.WriteAllBytesAsync(Path.Combine(m_root, "binary blob.bin"), binary);
+        await File.WriteAllTextAsync(Path.Combine(m_root, "empty.cs"), string.Empty);
+        await File.WriteAllTextAsync(Path.Combine(m_root, "another empty.cs"), string.Empty);
+        await Git("add", ".");
+        await Git("commit", "-m", "Batch baseline blobs");
+
+        var blobs = await GitBaselineBatchReader.ReadAsync(m_root, "HEAD",
+            ["binary blob.bin", "empty.cs", "another empty.cs", "absent.cs"]);
+
+        Assert.That(blobs.Keys, Is.EquivalentTo(new[] { "binary blob.bin", "empty.cs", "another empty.cs" }));
+        Assert.That(blobs["binary blob.bin"], Is.EqualTo(binary));
+        Assert.That(blobs["empty.cs"], Is.Empty);
+        Assert.That(blobs["another empty.cs"], Is.Empty);
+    }
+
     private async Task Git(params string[] args)
     {
         var result = await m_git.RunAsync(m_root, args);

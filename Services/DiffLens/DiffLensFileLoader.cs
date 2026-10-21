@@ -59,6 +59,8 @@ internal sealed class DiffLensFileLoader
     public async Task<DiffLensChangeSet> LoadReviewSetAsync(
         string repository, string target, CommandLineReviewMode mode, string path = null)
     {
+        if (mode == CommandLineReviewMode.Tree)
+            return await LoadTreeSetAsync(repository, path);
         ICodeReviewChangedFileSource source = mode switch
         {
             CommandLineReviewMode.Uncommitted => new GitWorkingTreeChangedFileSource(m_git, repository),
@@ -105,6 +107,43 @@ internal sealed class DiffLensFileLoader
         return new DiffLensChangeSet(snapshot.Root, snapshot.MergeBase, entries);
     }
 
+    private async Task<DiffLensChangeSet> LoadTreeSetAsync(string repository, string path)
+    {
+        var root = Path.GetFullPath(repository);
+        var isGit = RepositoryUtilities.IsGitRepository(root);
+        var source = new LocalRepositoryChangedFileSource(root, isGit ? m_git : null);
+        var files = (await source.EnumerateAnalyzableFilesAsync(new DirectoryInfo(root)))
+            .Select(file => Path.GetRelativePath(root, file.FullName).Replace('\\', '/'))
+            .Where(relative => string.IsNullOrWhiteSpace(path) || relative == path)
+            .OrderBy(relative => relative, StringComparer.Ordinal).ToArray();
+        var revision = "Working tree";
+        var changes = new Dictionary<string, string>(StringComparer.Ordinal);
+        IReadOnlyDictionary<string, byte[]> baselines = new Dictionary<string, byte[]>();
+        if (isGit)
+        {
+            var snapshot = await ResolveAsync(root, "HEAD");
+            root = snapshot.Root;
+            revision = snapshot.MergeBase;
+            changes = snapshot.Changes.ToDictionary(change => change.NewPath, change => change.OldPath, StringComparer.Ordinal);
+            baselines = await GitBaselineBatchReader.ReadAsync(root, revision, files.Select(relative => changes.GetValueOrDefault(relative, relative)));
+        }
+        var entries = new List<DiffLensEntry>();
+        foreach (var relative in files)
+        {
+            try
+            {
+                var baseline = baselines.GetValueOrDefault(changes.GetValueOrDefault(relative, relative));
+                var file = await LoadFileAsync(root, revision, [], relative, baseline, baselineProvided: true);
+                entries.Add(new DiffLensEntry(relative, file, null));
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or ArgumentException)
+            {
+                entries.Add(new DiffLensEntry(relative, null, ex.Message));
+            }
+        }
+        return new DiffLensChangeSet(root, revision, entries);
+    }
+
     private async Task<(string Root, string MergeBase, (string OldPath, string NewPath)[] Changes, string[] Paths)> ResolveAsync(string repository, string target)
     {
         var root = Path.GetFullPath((await RunAsync(repository, "rev-parse", "--show-toplevel")).Trim());
@@ -129,26 +168,32 @@ internal sealed class DiffLensFileLoader
         return (root, mergeBase, changes, changes.Select(c => c.NewPath).Concat(untracked).Distinct(StringComparer.Ordinal).OrderBy(p => p, StringComparer.Ordinal).ToArray());
     }
 
-    private async Task<DiffLensFile> LoadFileAsync(string root, string mergeBase, (string OldPath, string NewPath)[] changes, string path)
+    private async Task<DiffLensFile> LoadFileAsync(string root, string mergeBase, (string OldPath, string NewPath)[] changes, string path,
+        byte[] baselineBytes = null, bool baselineProvided = false)
     {
         var fullPath = ResolveEditablePath(root, path);
         var relative = Path.GetRelativePath(root, fullPath).Replace('\\', '/');
         var change = changes.FirstOrDefault(c => c.NewPath == relative);
         var oldPath = change.OldPath ?? relative;
-        var baseline = string.Empty;
-        var exists = await m_git.RunAsync(root, "ls-tree", "-z", mergeBase, "--", oldPath);
-        if (!exists.IsSuccess)
-            throw new IOException(exists.StandardError);
-        if (!string.IsNullOrEmpty(exists.StandardOutput))
+        var hasBaseline = baselineBytes != null;
+        if (!baselineProvided)
         {
-            var result = await m_git.RunBytesAsync(root, "show", $"{mergeBase}:{oldPath}");
-            if (!result.IsSuccess)
-                throw new IOException(result.StandardError);
-            baseline = GitChangedFileContent.DecodeText(result.StandardOutput)
-                ?? throw new InvalidOperationException("The baseline is not supported text.");
+            var exists = await m_git.RunAsync(root, "ls-tree", "-z", mergeBase, "--", oldPath);
+            if (!exists.IsSuccess)
+                throw new IOException(exists.StandardError);
+            hasBaseline = !string.IsNullOrEmpty(exists.StandardOutput);
+            if (hasBaseline)
+            {
+                var result = await m_git.RunBytesAsync(root, "show", $"{mergeBase}:{oldPath}");
+                if (!result.IsSuccess)
+                    throw new IOException(result.StandardError);
+                baselineBytes = result.StandardOutput;
+            }
         }
+        var baseline = baselineBytes == null ? string.Empty : GitChangedFileContent.DecodeText(baselineBytes)
+            ?? throw new InvalidOperationException("The baseline is not supported text.");
         var bytes = File.Exists(fullPath) ? await File.ReadAllBytesAsync(fullPath) : null;
-        if (bytes == null && string.IsNullOrEmpty(exists.StandardOutput))
+        if (bytes == null && !hasBaseline)
             throw new FileNotFoundException("File is absent from both the branch base and working tree.", fullPath);
         return new DiffLensFile(fullPath, relative, mergeBase, baseline, bytes);
     }
