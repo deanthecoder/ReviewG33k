@@ -140,6 +140,7 @@ internal sealed class DiffLensControl : Control
     public void SetFiles(string rootName, IReadOnlyList<DiffLensCell> cells)
     {
         m_textCache.Clear();
+        m_codeCache.Clear();
         var previousCells = m_cells.ToDictionary(cell => cell.Entry.Path);
         foreach (var cell in cells)
             if (previousCells.TryGetValue(cell.Entry.Path, out var previous))
@@ -159,6 +160,7 @@ internal sealed class DiffLensControl : Control
         m_fitTimer.Stop();
         var position = cell.Position;
         cell.Update(baseline, working);
+        m_codeCache.Clear();
         m_root = DiffLensLayout.Build(m_root.Name, m_cells);
         m_offset += (position - cell.Position) * m_zoom;
         m_previousDetail = null;
@@ -454,11 +456,11 @@ internal sealed class DiffLensControl : Control
                     }
                     if (detail >= 3)
                     {
-                        DrawPiece(context, row.Left, 0, y, CellWidth / 2, true, row.Changed);
-                        DrawPiece(context, row.Right, CellWidth / 2, y, CellWidth / 2, false, row.Changed);
+                        DrawPiece(context, cell, row.Left, 0, y, CellWidth / 2, true, row.Changed);
+                        DrawPiece(context, cell, row.Right, CellWidth / 2, y, CellWidth / 2, false, row.Changed);
                     }
                     else
-                        DrawPiece(context, row.Right ?? row.Left, 0, y, CellWidth, row.Right == null, row.Changed);
+                        DrawPiece(context, cell, row.Right ?? row.Left, 0, y, CellWidth, row.Right == null, row.Changed);
                 }
             }
             if (detail >= 3)
@@ -490,7 +492,7 @@ internal sealed class DiffLensControl : Control
         }
     }
 
-    private void DrawPiece(DrawingContext context, DiffPiece piece, double x, double y, double width, bool oldSide, bool changed)
+    private void DrawPiece(DrawingContext context, DiffLensCell cell, DiffPiece piece, double x, double y, double width, bool oldSide, bool changed)
     {
         if (piece == null || piece.Type == ChangeType.Imaginary)
             return;
@@ -501,7 +503,7 @@ internal sealed class DiffLensControl : Control
             var marker = changed ? oldSide ? "−" : "+" : " ";
             DrawText(context, $"{piece.Position,4} {marker}", x + 8, y + 2, m_muted, 12);
             using (context.PushClip(new Rect(x + 68, y, width - 68, RowHeight)))
-                DrawText(context, piece.Text.Replace("\t", "    "), x + 70 - m_horizontalScroll, y + 2, m_text);
+                DrawCode(context, cell, piece, oldSide, x + 70 - m_horizontalScroll, y + 2);
         }
     }
 
@@ -541,6 +543,33 @@ internal sealed class DiffLensControl : Control
         var length = piece?.Text?.Length ?? 0;
         if (length > 0)
             context.FillRectangle(m_muted, new Rect(x + 70, y, Math.Min(width - 80, length * 8.4), 1 / m_zoom));
+    }
+
+    private readonly Dictionary<(DiffLensCell Cell, bool OldSide, int Line), FormattedText> m_codeCache = new();
+
+    private void DrawCode(DrawingContext context, DiffLensCell cell, DiffPiece piece, bool oldSide, double x, double y)
+    {
+        var syntax = oldSide ? cell.BaselineSyntax : cell.WorkingSyntax;
+        if (syntax == null || piece.Position is not { } lineNumber)
+        {
+            DrawText(context, piece.Text.Replace("\t", "    "), x, y, m_text);
+            return;
+        }
+        var key = (cell, oldSide, lineNumber);
+        if (!m_codeCache.TryGetValue(key, out var formatted))
+        {
+            if (m_codeCache.Count >= 8192)
+                m_codeCache.Clear();
+            formatted = new FormattedText(piece.Text.Replace("\t", "    "), CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight, m_font, 14, m_text);
+            var line = syntax.Line(lineNumber);
+            if (line != null)
+                foreach (var section in line.Sections)
+                    if (section.Color.Foreground is { } foreground)
+                        formatted.SetForegroundBrush(foreground.GetBrush(null), section.Offset - line.DocumentLine.Offset, section.Length);
+            m_codeCache[key] = formatted;
+        }
+        context.DrawText(formatted, new Point(x, y));
     }
 
     private void DrawText(DrawingContext context, string text, double x, double y, IBrush brush, double size = 14)

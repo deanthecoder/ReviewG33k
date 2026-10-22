@@ -33,6 +33,8 @@ internal sealed class DiffLensCell
     public bool IsReviewed { get; set; }
     private string m_baseline;
     private string m_working;
+    public DiffLensHighlightedText BaselineSyntax { get; private set; }
+    public DiffLensHighlightedText WorkingSyntax { get; private set; }
     private DiffLensOverview[] m_overviews = new DiffLensOverview[4];
     public DiffLensOverview Overview(int detail) => m_overviews[detail] ??= new DiffLensOverview(Rows(detail));
     public IReadOnlyList<CodeSmellFinding> Findings { get; set; } = [];
@@ -83,6 +85,9 @@ internal sealed class DiffLensCell
             IsReviewed = false;
         m_baseline = baseline;
         m_working = working;
+        var syntax = DiffLensSyntax.ForPath(Entry.Path);
+        BaselineSyntax = syntax == null ? null : new DiffLensHighlightedText(baseline, syntax);
+        WorkingSyntax = syntax == null ? null : new DiffLensHighlightedText(working, syntax);
         var (unified, split) = DiffLensRows.BuildBoth(baseline, working, 4);
         Levels = [unified, unified, unified, split];
         m_overviews = new DiffLensOverview[4];

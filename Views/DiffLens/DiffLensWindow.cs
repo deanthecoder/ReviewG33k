@@ -13,9 +13,6 @@ using System.Collections.Generic;
 using AvaloniaEdit.Document;
 using System.Linq;
 using System.IO;
-using System.Xml;
-using AvaloniaEdit.Highlighting;
-using AvaloniaEdit.Highlighting.Xshd;
 using System.Threading.Tasks;
 using System.Threading;
 using DTC.Core;
@@ -401,7 +398,7 @@ internal sealed class DiffLensWindow : Window
         m_settingText = true;
         m_editor.Document = document;
         m_settingText = false;
-        m_editor.SyntaxHighlighting = Path.GetExtension(path).Equals(".cs", StringComparison.OrdinalIgnoreCase) ? CreateHighlighting() : null;
+        m_editor.SyntaxHighlighting = DiffLensSyntax.ForPath(path);
     }
 
     private void UpdateView()
@@ -585,32 +582,6 @@ internal sealed class DiffLensWindow : Window
         m_canvas.IsHitTestVisible = !busy && !m_isEditing;
         m_editor.IsReadOnly = busy;
         UpdateView();
-    }
-
-    private static IHighlightingDefinition CreateHighlighting()
-    {
-        const string definition = """
-            <SyntaxDefinition name="DiffLens CSharp" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
-              <Color name="Comment" foreground="#7DAA84" />
-              <Color name="String" foreground="#DEB887" />
-              <Color name="Keyword" foreground="#82B9F0" />
-              <RuleSet>
-                <Span color="Comment" begin="//" />
-                <Span color="Comment" multiline="true" begin="/\*" end="\*/" />
-                <Span color="String" begin="&quot;" end="&quot;" />
-                <Keywords color="Keyword">
-                  <Word>using</Word><Word>namespace</Word><Word>public</Word><Word>private</Word>
-                  <Word>internal</Word><Word>protected</Word><Word>sealed</Word><Word>class</Word>
-                  <Word>readonly</Word><Word>static</Word><Word>async</Word><Word>await</Word>
-                  <Word>return</Word><Word>throw</Word><Word>new</Word><Word>var</Word><Word>const</Word>
-                  <Word>int</Word><Word>string</Word><Word>bool</Word><Word>void</Word><Word>null</Word>
-                  <Word>if</Word><Word>else</Word><Word>for</Word><Word>while</Word><Word>try</Word><Word>catch</Word><Word>when</Word>
-                </Keywords>
-              </RuleSet>
-            </SyntaxDefinition>
-            """;
-        using var reader = XmlReader.Create(new StringReader(definition));
-        return HighlightingLoader.Load(reader, HighlightingManager.Instance);
     }
 
     private static string Argument(string[] args, string name)
