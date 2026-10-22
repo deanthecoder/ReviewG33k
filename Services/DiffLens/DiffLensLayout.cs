@@ -109,6 +109,15 @@ internal sealed class DiffLensFolder(string name)
     public Rect Bounds { get; set; }
     public int FileCount => Files.Count + Folders.Sum(folder => folder.FileCount);
     public IEnumerable<DiffLensFolder> Descendants => new[] { this }.Concat(Folders.SelectMany(folder => folder.Descendants));
+    public IEnumerable<DiffLensCell> ReviewableFiles => Descendants.SelectMany(folder => folder.Files).Where(cell => cell.Entry.File != null);
+    public bool IsReviewed => ReviewableFiles.Any() && ReviewableFiles.All(cell => cell.IsReviewed);
+
+    public void MarkReviewed()
+    {
+        foreach (var cell in ReviewableFiles)
+            cell.IsReviewed = true;
+    }
+
 }
 
 /// <summary>

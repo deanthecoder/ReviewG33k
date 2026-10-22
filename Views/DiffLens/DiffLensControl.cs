@@ -250,6 +250,27 @@ internal sealed class DiffLensControl : Control
         InvalidateVisual();
     }
 
+    private Rect FolderReviewButton(DiffLensFolder folder)
+    {
+        var size = Math.Min(26, 32 * m_zoom);
+        var gap = 6 * m_zoom;
+        return new Rect(m_offset.X + folder.Bounds.Right * m_zoom - gap - size,
+            m_offset.Y + folder.Bounds.Top * m_zoom + gap, size, size);
+    }
+
+    private void MarkFolderReviewed(DiffLensFolder folder)
+    {
+        HideHoverHint();
+        m_fitTimer.Stop();
+        var anchor = FolderReviewButton(folder).Position;
+        folder.MarkReviewed();
+        m_previousDetail = null;
+        m_root = DiffLensLayout.Build(m_root.Name, m_cells);
+        var updated = m_root.Descendants.First(item => item.RelativePath == folder.RelativePath);
+        m_offset += anchor - FolderReviewButton(updated).Position;
+        InvalidateVisual();
+    }
+
     private Rect ReviewButton(DiffLensCell cell)
     {
         var mode = ModeButton(cell, true);
@@ -333,6 +354,16 @@ internal sealed class DiffLensControl : Control
         }
     }
 
+    private void DrawReviewTick(DrawingContext context, Rect bounds, bool reviewed)
+    {
+        context.FillRectangle(reviewed ? m_modeSelectedBrush : m_modeBrush, bounds, 2);
+        var icon = bounds.Deflate(bounds.Width * 0.24);
+        var pen = new Pen(reviewed ? m_accentBrush : m_muted, Math.Min(2, m_zoom * 3));
+        var elbow = new Point(icon.Left + icon.Width * 0.35, icon.Bottom);
+        context.DrawLine(pen, new Point(icon.Left, icon.Center.Y), elbow);
+        context.DrawLine(pen, elbow, new Point(icon.Right, icon.Top));
+    }
+
     private void DrawModeButtons(DrawingContext context, DiffLensCell cell)
     {
         if (32 * m_zoom < 6)
@@ -340,12 +371,7 @@ internal sealed class DiffLensControl : Control
         if (cell.Entry.File != null)
         {
             var bounds = ReviewButton(cell);
-            context.FillRectangle(cell.IsReviewed ? m_modeSelectedBrush : m_modeBrush, bounds, 2);
-            var icon = bounds.Deflate(bounds.Width * 0.24);
-            var pen = new Pen(cell.IsReviewed ? m_accentBrush : m_muted, Math.Min(2, m_zoom * 3));
-            var elbow = new Point(icon.Left + icon.Width * 0.35, icon.Bottom);
-            context.DrawLine(pen, new Point(icon.Left, icon.Center.Y), elbow);
-            context.DrawLine(pen, elbow, new Point(icon.Right, icon.Top));
+            DrawReviewTick(context, bounds, cell.IsReviewed);
         }
         foreach (var split in new[] { false, true })
         {
@@ -385,8 +411,11 @@ internal sealed class DiffLensControl : Control
             var label = FolderLabel(folder);
             if (label.Height < 7 || !label.Intersects(new Rect(Bounds.Size)))
                 continue;
-            using (context.PushClip(label))
+            var tick = FolderReviewButton(folder);
+            using (context.PushClip(new Rect(label.Position, new Size(Math.Max(0, tick.Left - label.Left - 6), label.Height))))
                 DrawText(context, $"{folder.Name}  ·  {folder.FileCount} files", label.X + 6, label.Y + 3, m_muted, Math.Min(14, 38 * m_zoom));
+            if (32 * m_zoom >= 6 && folder.ReviewableFiles.Any())
+                DrawReviewTick(context, tick, folder.IsReviewed);
         }
         var progress = m_previousDetail == null ? 1 : Math.Clamp(m_fadeClock.Elapsed.TotalMilliseconds / 180, 0, 1);
         foreach (var cell in m_cells)
@@ -650,7 +679,10 @@ internal sealed class DiffLensControl : Control
                 var folder = m_root?.Descendants.Reverse().FirstOrDefault(item => FolderLabel(item).Contains(e.GetPosition(this)));
                 if (folder != null)
                 {
-                    FitBounds(folder);
+                    if (folder.ReviewableFiles.Any() && FolderReviewButton(folder).Contains(e.GetPosition(this)))
+                        MarkFolderReviewed(folder);
+                    else
+                        FitBounds(folder);
                     e.Handled = true;
                     return;
                 }
@@ -685,7 +717,9 @@ internal sealed class DiffLensControl : Control
             {
                 var folder = m_root?.Descendants.Reverse().FirstOrDefault(item => FolderLabel(item).Contains(hoverPoint));
                 if (folder != null)
-                    hint = Path.Combine(RepositoryRootPath ?? m_root.Name, folder.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+                    hint = folder.ReviewableFiles.Any() && FolderReviewButton(folder).Contains(hoverPoint)
+                        ? "Mark all files in this group reviewed and collapse"
+                        : Path.Combine(RepositoryRootPath ?? m_root.Name, folder.RelativePath.Replace('/', Path.DirectorySeparatorChar));
             }
             // Keep an unchanged tip alive while the pointer moves inside a marker's hit area.
             if (hint != m_hoverHint)

@@ -185,5 +185,29 @@ public sealed class DiffLensLayoutTests
         Assert.That(cells.Select(cell => cell.Bounds), Is.EqualTo(before));
     }
 
+    [Test]
+    public void GroupReviewIncludesNestedFilesButNotSiblingsAndNeverUnticks()
+    {
+        DiffLensCell TextCell(string path) => new(new DiffLensEntry(path,
+            new DiffLensFile(path, path, "HEAD", "old", System.Text.Encoding.UTF8.GetBytes("new")), null));
+        var direct = TextCell("src/direct.cpp");
+        var nested = TextCell("src/shaders/main.glsl");
+        var sibling = TextCell("tests/test.cpp");
+        var binary = Cell("src/image.bin");
+        var cells = new[] { direct, nested, sibling, binary };
+        var root = DiffLensLayout.Build("repo", cells);
+        var folder = root.Folders.Single(f => f.RelativePath == "src");
+        folder.MarkReviewed();
+        folder.MarkReviewed();
+        Assert.That(direct.IsReviewed && nested.IsReviewed, Is.True);
+        Assert.That(sibling.IsReviewed || binary.IsReviewed, Is.False);
+        Assert.That(folder.IsReviewed, Is.True);
+        nested.Update("old", "changed again");
+        Assert.That(folder.IsReviewed, Is.False);
+        root.MarkReviewed();
+        Assert.That(root.IsReviewed, Is.True);
+        Assert.That(sibling.IsReviewed, Is.True);
+    }
+
     private static DiffLensCell Cell(string path) => new(new DiffLensEntry(path, null, "Unsupported"));
 }
