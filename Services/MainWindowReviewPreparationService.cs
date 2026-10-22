@@ -174,33 +174,6 @@ internal sealed class MainWindowReviewPreparationService
             localExecutionResult: executionResult);
     }
 
-    public async Task<MainWindowReviewPreparationResult> PrepareLocalFolderReviewAsync(
-        string localFolderPath,
-        bool includeFullModifiedFiles,
-        Action<string> appendLog,
-        Action<int, int, string> updateBusyProgress,
-        CancellationToken cancellationToken)
-    {
-        var validation = m_inputValidationService.ValidateLocalFolderInput(localFolderPath?.Trim());
-        if (!validation.IsValid)
-            return MainWindowReviewPreparationResult.Failed(FromValidation(validation));
-
-        var executionResult = await m_reviewExecutionService.ExecuteLocalFolderReviewAsync(
-            localFolderPath,
-            includeFullModifiedFiles,
-            appendLog,
-            updateBusyProgress,
-            cancellationToken);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        return MainWindowReviewPreparationResult.Success(
-            MainWindowReviewPreparationMode.LocalFolder,
-            pullRequest: null,
-            resolvedBaseBranch: null,
-            pullRequestExecutionResult: null,
-            localExecutionResult: executionResult);
-    }
-
     private static MainWindowReviewPreparationError FromValidation(InputValidationResult validation) =>
         new(validation.StatusMessage, validation.DialogTitle, validation.DialogMessage, null);
 }
@@ -210,8 +183,7 @@ internal enum MainWindowReviewPreparationMode
     PullRequest,
     LocalCommitted,
     LocalUncommitted,
-    LocalRepository,
-    LocalFolder
+    LocalRepository
 }
 
 internal readonly record struct MainWindowReviewPreparationError(

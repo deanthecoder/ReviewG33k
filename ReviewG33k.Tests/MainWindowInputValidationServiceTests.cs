@@ -64,17 +64,6 @@ public sealed class MainWindowInputValidationServiceTests
         });
     }
 
-    [Test]
-    public void ValidateLocalFolderInputWhenFolderExistsWithoutGitReturnsSuccess()
-    {
-        using var tempRoot = new TempDirectory();
-        var service = new MainWindowInputValidationService();
-
-        var result = service.ValidateLocalFolderInput(tempRoot.FullName);
-
-        Assert.That(result.IsValid, Is.True);
-    }
-
     private static string FindRepositoryRoot()
     {
         var current = new DirectoryInfo(Environment.CurrentDirectory);

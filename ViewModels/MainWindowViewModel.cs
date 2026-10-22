@@ -32,7 +32,6 @@ public sealed class MainWindowViewModel : ViewModelBase
     private const int LocalCommittedReviewModeIndex = 1;
     private const int LocalUncommittedReviewModeIndex = 2;
     private const int LocalRepositoryReviewModeIndex = 3;
-    private const int LocalFolderReviewModeIndex = 4;
 
     private readonly Settings m_settings;
     private string m_repositoryRootPath;
@@ -66,7 +65,6 @@ public sealed class MainWindowViewModel : ViewModelBase
     private int m_latestPostedInlineCommentCount;
     private bool m_gitAvailabilityChecked;
     private CommandBase m_browseRepositoryRootCommandImpl;
-    private CommandBase m_browseLocalRepositoryCommandImpl;
     private CommandBase m_prepareReviewCommandImpl;
     private CommandBase m_postPullRequestReviewStampCommandImpl;
     private CommandBase m_cancelProcessingCommandImpl;
@@ -76,7 +74,6 @@ public sealed class MainWindowViewModel : ViewModelBase
     public ObservableCollection<LocalRepositoryOption> LocalRepositoryOptions { get; } = [];
     public ObservableCollection<string> LocalBaseBranchOptions { get; } = [];
     public ICommand BrowseRepositoryRootCommand { get; private set; }
-    public ICommand BrowseLocalRepositoryCommand { get; private set; }
     public ICommand PrepareReviewCommand { get; private set; }
     public ICommand PostPullRequestReviewStampCommand { get; private set; }
     public ICommand CancelProcessingCommand { get; private set; }
@@ -147,7 +144,9 @@ public sealed class MainWindowViewModel : ViewModelBase
         get => m_reviewModeIndex;
         set
         {
-            var normalizedValue = value is >= 0 and <= LocalFolderReviewModeIndex ? value : 0;
+            var normalizedValue = value == 4
+                ? LocalRepositoryReviewModeIndex
+                : value is >= 0 and <= LocalRepositoryReviewModeIndex ? value : PullRequestReviewModeIndex;
             if (!SetField(ref m_reviewModeIndex, normalizedValue))
                 return;
 
@@ -269,11 +268,9 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public bool IsLocalRepositoryReviewMode => m_reviewModeIndex == LocalRepositoryReviewModeIndex;
 
-    public bool IsLocalFolderReviewMode => m_reviewModeIndex == LocalFolderReviewModeIndex;
-
     public bool IsAnyLocalReviewMode => !IsPullRequestReviewMode;
 
-    public bool CanChooseScanScope => !IsLocalRepositoryReviewMode && !IsLocalFolderReviewMode;
+    public bool CanChooseScanScope => !IsLocalRepositoryReviewMode;
 
     public bool ShowScanScopeOptions => CanChooseScanScope;
 
@@ -281,12 +278,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         ShowPullRequestInputs && !string.IsNullOrWhiteSpace(m_pullRequestMetadataText);
 
     public bool ShowLocalBaseBranch => m_reviewModeIndex == LocalCommittedReviewModeIndex;
-
-    public string LocalReviewPathLabel => IsLocalFolderReviewMode ? "Local Folder:" : "Local Repo:";
-
-    public string LocalReviewPathWatermark => IsLocalFolderReviewMode
-        ? "Example: C:\\source\\CodeFolder"
-        : "Example: C:\\source\\MyRepo";
 
     public string PrepareReviewButtonText => m_reviewModeIndex == PullRequestReviewModeIndex
         ? "Review PR"
@@ -300,8 +291,6 @@ public sealed class MainWindowViewModel : ViewModelBase
             "Reviews your uncommitted working tree changes, without requiring commits.",
         LocalRepositoryReviewModeIndex =>
             "Reviews all analyzable files in your local repository folder, regardless of Git change state.",
-        LocalFolderReviewModeIndex =>
-            "Reviews all analyzable source files in a local folder without requiring Git.",
         _ =>
             "Reviews a Bitbucket pull request by preparing an isolated local worktree for that PR."
     };
@@ -324,7 +313,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     }
 
     public bool CanPrepareReview => !m_isBusy &&
-                                    (m_isGitAvailable || IsLocalFolderReviewMode) &&
+                                    m_isGitAvailable &&
                                     (ShowPullRequestInputs
                                         ? m_canReviewCurrentPullRequest && m_hasValidPullRequestPrepareInputs
                                         : m_hasValidLocalPrepareInputs);
@@ -368,7 +357,6 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public void ConfigureCommands(
         Func<Task> browseRepositoryRootAsync,
-        Func<Task> browseLocalRepositoryAsync,
         Func<Task> prepareReviewAsync,
         Func<Task> postPullRequestReviewStampAsync,
         Action cancelProcessing,
@@ -376,7 +364,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         Func<Task> openSolutionAsync)
     {
         ArgumentNullException.ThrowIfNull(browseRepositoryRootAsync);
-        ArgumentNullException.ThrowIfNull(browseLocalRepositoryAsync);
         ArgumentNullException.ThrowIfNull(prepareReviewAsync);
         ArgumentNullException.ThrowIfNull(postPullRequestReviewStampAsync);
         ArgumentNullException.ThrowIfNull(cancelProcessing);
@@ -385,9 +372,6 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         m_browseRepositoryRootCommandImpl = new AsyncRelayCommand(
             _ => browseRepositoryRootAsync(),
-            _ => !IsBusy);
-        m_browseLocalRepositoryCommandImpl = new AsyncRelayCommand(
-            _ => browseLocalRepositoryAsync(),
             _ => !IsBusy);
         m_prepareReviewCommandImpl = new AsyncRelayCommand(
             _ => prepareReviewAsync(),
@@ -406,7 +390,6 @@ public sealed class MainWindowViewModel : ViewModelBase
             _ => CanOpenSolution);
 
         BrowseRepositoryRootCommand = m_browseRepositoryRootCommandImpl;
-        BrowseLocalRepositoryCommand = m_browseLocalRepositoryCommandImpl;
         PrepareReviewCommand = m_prepareReviewCommandImpl;
         PostPullRequestReviewStampCommand = m_postPullRequestReviewStampCommandImpl;
         CancelProcessingCommand = m_cancelProcessingCommandImpl;
@@ -414,7 +397,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         OpenSolutionCommand = m_openSolutionCommandImpl;
 
         OnPropertyChanged(nameof(BrowseRepositoryRootCommand));
-        OnPropertyChanged(nameof(BrowseLocalRepositoryCommand));
         OnPropertyChanged(nameof(PrepareReviewCommand));
         OnPropertyChanged(nameof(PostPullRequestReviewStampCommand));
         OnPropertyChanged(nameof(CancelProcessingCommand));
@@ -589,7 +571,6 @@ public sealed class MainWindowViewModel : ViewModelBase
             PullRequestUrl,
             IsAnyLocalReviewMode,
             IsLocalCommittedReviewMode,
-            requiresGitRepository: !IsLocalFolderReviewMode,
             PreviewPullRequestIsOpen,
             PreviewPullRequestState,
             m_latestSolutionPath,
@@ -692,7 +673,10 @@ public sealed class MainWindowViewModel : ViewModelBase
     private static int ResolveInitialReviewModeIndex(Settings settings)
     {
         var configuredIndex = settings.ReviewModeIndex;
-        if (configuredIndex is >= PullRequestReviewModeIndex and <= LocalFolderReviewModeIndex)
+        // Migrate the retired fifth mode to whole-repository review.
+        if (configuredIndex == 4)
+            return LocalRepositoryReviewModeIndex;
+        if (configuredIndex is >= PullRequestReviewModeIndex and <= LocalRepositoryReviewModeIndex)
             return configuredIndex;
 
         return settings.UseLocalCommittedReview ? 1 : 0;
@@ -758,14 +742,11 @@ public sealed class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsLocalCommittedReviewMode));
         OnPropertyChanged(nameof(IsLocalUncommittedReviewMode));
         OnPropertyChanged(nameof(IsLocalRepositoryReviewMode));
-        OnPropertyChanged(nameof(IsLocalFolderReviewMode));
         OnPropertyChanged(nameof(IsAnyLocalReviewMode));
         OnPropertyChanged(nameof(CanChooseScanScope));
         OnPropertyChanged(nameof(ShowScanScopeOptions));
         OnPropertyChanged(nameof(ShowPullRequestMetadata));
         OnPropertyChanged(nameof(ShowLocalBaseBranch));
-        OnPropertyChanged(nameof(LocalReviewPathLabel));
-        OnPropertyChanged(nameof(LocalReviewPathWatermark));
         OnPropertyChanged(nameof(PrepareReviewButtonText));
         OnPropertyChanged(nameof(ReviewModeInfoTooltip));
         OnPropertyChanged(nameof(ScanScopeInfoTooltip));
@@ -787,7 +768,6 @@ public sealed class MainWindowViewModel : ViewModelBase
     private void InitializeDisabledCommands()
     {
         m_browseRepositoryRootCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
-        m_browseLocalRepositoryCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
         m_prepareReviewCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
         m_postPullRequestReviewStampCommandImpl = new AsyncRelayCommand(_ => Task.CompletedTask, _ => false);
         m_cancelProcessingCommandImpl = new RelayCommand(_ => { }, _ => false);
@@ -795,7 +775,6 @@ public sealed class MainWindowViewModel : ViewModelBase
         m_openSolutionCommandImpl = new RelayCommand(_ => { }, _ => false);
 
         BrowseRepositoryRootCommand = m_browseRepositoryRootCommandImpl;
-        BrowseLocalRepositoryCommand = m_browseLocalRepositoryCommandImpl;
         PrepareReviewCommand = m_prepareReviewCommandImpl;
         PostPullRequestReviewStampCommand = m_postPullRequestReviewStampCommandImpl;
         CancelProcessingCommand = m_cancelProcessingCommandImpl;
@@ -806,7 +785,6 @@ public sealed class MainWindowViewModel : ViewModelBase
     private void RaiseCommandCanExecuteChanged()
     {
         m_browseRepositoryRootCommandImpl?.RaiseCanExecuteChanged();
-        m_browseLocalRepositoryCommandImpl?.RaiseCanExecuteChanged();
         m_prepareReviewCommandImpl?.RaiseCanExecuteChanged();
         m_postPullRequestReviewStampCommandImpl?.RaiseCanExecuteChanged();
         m_cancelProcessingCommandImpl?.RaiseCanExecuteChanged();

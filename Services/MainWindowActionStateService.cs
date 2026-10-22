@@ -29,7 +29,6 @@ internal sealed class MainWindowActionStateService
         string pullRequestUrl,
         bool isAnyLocalReviewMode,
         bool requiresLocalBaseBranch,
-        bool requiresGitRepository,
         bool? previewPullRequestIsOpen,
         string previewPullRequestState,
         string latestSolutionPath,
@@ -50,8 +49,7 @@ internal sealed class MainWindowActionStateService
         var hasValidLocalPrepareInputs = IsValidLocalPrepareInputs(
             localRepositoryPath,
             localBaseBranch,
-            requiresLocalBaseBranch,
-            requiresGitRepository);
+            requiresLocalBaseBranch);
         var hasAvailableSolution = !string.IsNullOrWhiteSpace(resolvedSolutionPath) && resolvedSolutionPath.ToFile().Exists();
         var canReviewCurrentPullRequest = previewPullRequestIsOpen != false || IsMergedState(previewPullRequestState);
 
@@ -70,12 +68,9 @@ internal sealed class MainWindowActionStateService
     private bool IsValidLocalPrepareInputs(
         string localRepositoryPath,
         string localBaseBranch,
-        bool requiresLocalBaseBranch,
-        bool requiresGitRepository)
+        bool requiresLocalBaseBranch)
     {
-        var validation = requiresGitRepository
-            ? m_inputValidationService.ValidateLocalRepositoryInput(localRepositoryPath?.Trim())
-            : m_inputValidationService.ValidateLocalFolderInput(localRepositoryPath?.Trim());
+        var validation = m_inputValidationService.ValidateLocalRepositoryInput(localRepositoryPath?.Trim());
         if (!validation.IsValid)
             return false;
 

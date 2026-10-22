@@ -8,7 +8,6 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
-using System;
 using DTC.Core.Extensions;
 
 namespace ReviewG33k.Services;
@@ -49,15 +48,16 @@ internal sealed class MainWindowInputValidationService
 
     public InputValidationResult ValidateLocalRepositoryInput(string localRepositoryPath)
     {
-        var folderValidation = ValidateLocalPathInput(
-            localRepositoryPath,
-            "Set local repository folder first.",
-            "Local repository required",
-            "Choose the local repository folder to review.",
-            path => $"Local repository folder does not exist: {path}",
-            "Local repository not found");
-        if (!folderValidation.IsValid)
-            return folderValidation;
+        if (string.IsNullOrWhiteSpace(localRepositoryPath))
+        {
+            return new InputValidationResult(false, "Set local repository folder first.",
+                "Local repository required", "Choose the local repository folder to review.");
+        }
+        if (!localRepositoryPath.ToDir().Exists())
+        {
+            return new InputValidationResult(false, $"Local repository folder does not exist: {localRepositoryPath}",
+                "Local repository not found", localRepositoryPath);
+        }
 
         if (!RepositoryUtilities.IsGitRepository(localRepositoryPath))
         {
@@ -66,44 +66,6 @@ internal sealed class MainWindowInputValidationService
                 "Selected folder is not a Git repository.",
                 "Invalid repository folder",
                 "The selected folder does not appear to contain a Git repository.");
-        }
-
-        return InputValidationResult.Success;
-    }
-
-    public InputValidationResult ValidateLocalFolderInput(string localFolderPath)
-        => ValidateLocalPathInput(
-            localFolderPath,
-            "Set local folder first.",
-            "Local folder required",
-            "Choose the local folder to review.",
-            path => $"Local folder does not exist: {path}",
-            "Local folder not found");
-
-    private static InputValidationResult ValidateLocalPathInput(
-        string localFolderPath,
-        string missingStatusMessage,
-        string missingDialogTitle,
-        string missingDialogMessage,
-        Func<string, string> notFoundStatusMessageFactory,
-        string notFoundDialogTitle)
-    {
-        if (string.IsNullOrWhiteSpace(localFolderPath))
-        {
-            return new InputValidationResult(
-                false,
-                missingStatusMessage,
-                missingDialogTitle,
-                missingDialogMessage);
-        }
-
-        if (!localFolderPath.ToDir().Exists())
-        {
-            return new InputValidationResult(
-                false,
-                notFoundStatusMessageFactory(localFolderPath),
-                notFoundDialogTitle,
-                localFolderPath);
         }
 
         return InputValidationResult.Success;

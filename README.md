@@ -26,7 +26,7 @@ Persistent issue-type preferences for future scans. Use the cog button in the to
 
 ## What it can do
 - Review **Bitbucket pull requests** by pasting or dropping a PR URL.
-- Review **local committed changes**, **local uncommitted changes**, an **entire local repository**, or an **entire local folder** without Git.
+- Review **local committed changes**, **local uncommitted changes**, or an **entire local repository**.
 - Switch between **changed lines** and **full modified files** depending on how thorough you want the scan to be.
 - Prepare isolated review worktrees so your normal working tree stays untouched.
 - See findings grouped into clear categories like `Correctness`, `Threading`, `UI`, and `Repo Hygiene`.
@@ -45,12 +45,11 @@ Persistent issue-type preferences for future scans. Use the cog button in the to
 - **Local committed review**: choose **Local Committed Changes**, pick a repo and base branch, then click **Review Local**.
 - **Local uncommitted review**: choose **Local Uncommitted Changes**, pick a repo, then click **Review Local**.
 - **Whole-repository review**: choose **Entire Local Repository**, pick a repo, then click **Review Local**.
-- **Whole-folder review**: choose **Entire Local Folder**, pick any source folder, then click **Review Local**.
 - **Issue-type preferences**: click the cog button in the top-right of the main window, enable or disable checks, then save. Changes apply to the next scan.
 
 ## DiffLens
 
-Explore the files from your selected local review mode on a zoomable folder canvas. **Local Uncommitted Changes** compares against `HEAD`; **Local Committed Changes** uses the selected base branch; whole-repository and whole-folder modes show their reviewable files. DiffLens uses the same file selection and exclusions as **Review Local**.
+Explore the files from your selected local review mode on a zoomable folder canvas. **Local Uncommitted Changes** compares against `HEAD`; **Local Committed Changes** uses the selected base branch; whole-repository mode show their reviewable files. DiffLens uses the same file selection and exclusions as **Review Local**.
 
 ![DiffLens canvas with a selected file and issue markers](img/DiffLens.png)
 

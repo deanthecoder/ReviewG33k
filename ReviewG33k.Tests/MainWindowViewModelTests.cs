@@ -20,6 +20,24 @@ namespace ReviewG33k.Tests;
 public sealed class MainWindowViewModelTests
 {
     [Test]
+    public void RetiredSavedModeFallsBackToEntireRepository()
+    {
+        var viewModel = new MainWindowViewModel(new Settings { ReviewModeIndex = 4 });
+        Assert.That(viewModel.IsLocalRepositoryReviewMode, Is.True);
+        Assert.That(viewModel.ReviewModeIndex, Is.EqualTo(3));
+        Assert.That(viewModel.ShowScanScopeOptions, Is.False);
+    }
+
+    [Test]
+    public void RetiredModeAssignmentPersistsEntireRepositorySelection()
+    {
+        var settings = new Settings { ReviewModeIndex = 0 };
+        var viewModel = new MainWindowViewModel(settings) { ReviewModeIndex = 4 };
+        Assert.That(viewModel.ReviewModeIndex, Is.EqualTo(3));
+        Assert.That(settings.ReviewModeIndex, Is.EqualTo(3));
+    }
+
+    [Test]
     public void ConstructorWhenSettingsIsNullThrows()
     {
         Assert.That(() => new MainWindowViewModel(null), Throws.ArgumentNullException);
@@ -201,27 +219,6 @@ public sealed class MainWindowViewModelTests
     }
 
     [Test]
-    public void ReviewModeFlagsWhenLocalFolderSelectedReflectState()
-    {
-        var viewModel = new MainWindowViewModel(new Settings())
-        {
-            ReviewModeIndex = 4
-        };
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(viewModel.IsPullRequestReviewMode, Is.False);
-            Assert.That(viewModel.IsLocalCommittedReviewMode, Is.False);
-            Assert.That(viewModel.IsLocalUncommittedReviewMode, Is.False);
-            Assert.That(viewModel.IsLocalRepositoryReviewMode, Is.False);
-            Assert.That(viewModel.IsLocalFolderReviewMode, Is.True);
-            Assert.That(viewModel.IsAnyLocalReviewMode, Is.True);
-            Assert.That(viewModel.ShowLocalBaseBranch, Is.False);
-            Assert.That(viewModel.LocalReviewPathLabel, Is.EqualTo("Local Folder:"));
-        });
-    }
-
-    [Test]
     public void ShowPullRequestMetadataDependsOnModeAndMetadataText()
     {
         var viewModel = new MainWindowViewModel(new Settings())
@@ -311,27 +308,6 @@ public sealed class MainWindowViewModelTests
     }
 
     [Test]
-    public void IsGitAvailableWhenFalseStillAllowsLocalFolderPrepareReview()
-    {
-        var viewModel = new MainWindowViewModel(new Settings())
-        {
-            ReviewModeIndex = 4
-        };
-
-        viewModel.UpdateActionStateInputs(
-            canReviewCurrentPullRequest: true,
-            hasValidPullRequestInput: false,
-            hasValidPullRequestPrepareInputs: false,
-            hasValidLocalPrepareInputs: true,
-            hasAvailableSolution: false,
-            canCancelCurrentOperation: false,
-            isCancellationRequested: false);
-        viewModel.IsGitAvailable = false;
-
-        Assert.That(viewModel.CanPrepareReview, Is.True);
-    }
-
-    [Test]
     public void UpdateActionStateInputsWhenCancellationRequestedShowsStoppingText()
     {
         var viewModel = new MainWindowViewModel(new Settings())
@@ -402,8 +378,8 @@ public sealed class MainWindowViewModelTests
         viewModel.ReviewModeIndex = 2;
         Assert.That(viewModel.ReviewModeInfoTooltip, Does.Contain("uncommitted"));
 
-        viewModel.ReviewModeIndex = 4;
-        Assert.That(viewModel.ReviewModeInfoTooltip, Does.Contain("without requiring Git"));
+        viewModel.ReviewModeIndex = 3;
+        Assert.That(viewModel.ReviewModeInfoTooltip, Does.Contain("regardless of Git change state"));
     }
 
     [Test]
@@ -425,7 +401,7 @@ public sealed class MainWindowViewModelTests
         Assert.That(viewModel.ShowScanScopeOptions, Is.False);
         Assert.That(viewModel.IncludeFullModifiedFiles, Is.False);
 
-        viewModel.ReviewModeIndex = 4;
+        viewModel.ReviewModeIndex = 3;
         Assert.That(viewModel.CanChooseScanScope, Is.False);
         Assert.That(viewModel.ShowScanScopeOptions, Is.False);
         Assert.That(viewModel.ScanScopeInfoTooltip, Does.Contain("does not apply"));
@@ -707,7 +683,6 @@ public sealed class MainWindowViewModelTests
             () => Task.CompletedTask,
             () => Task.CompletedTask,
             () => Task.CompletedTask,
-            () => Task.CompletedTask,
             () => { },
             () => { },
             () => Task.CompletedTask);
@@ -734,7 +709,6 @@ public sealed class MainWindowViewModelTests
         var commandInvoked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         viewModel.ConfigureCommands(
             () => Task.CompletedTask,
-            () => Task.CompletedTask,
             () =>
             {
                 commandInvoked.TrySetResult(true);
@@ -759,7 +733,6 @@ public sealed class MainWindowViewModelTests
             IsBusy = true
         };
         viewModel.ConfigureCommands(
-            () => Task.CompletedTask,
             () => Task.CompletedTask,
             () => Task.CompletedTask,
             () => Task.CompletedTask,

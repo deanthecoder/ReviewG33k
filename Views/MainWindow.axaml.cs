@@ -51,7 +51,7 @@ public partial class MainWindow : Window
                 m_viewModel.LocalRepositoryPath = path;
                 await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: false);
             }
-            if (!m_viewModel.IsLocalFolderReviewMode && !RepositoryUtilities.IsGitRepository(m_viewModel.LocalRepositoryPath))
+            if (!RepositoryUtilities.IsGitRepository(m_viewModel.LocalRepositoryPath))
             {
                 ShowMessage("DiffLens", "Choose a Git repository using the Local Repo folder picker.");
                 return;
@@ -126,7 +126,6 @@ public partial class MainWindow : Window
         m_viewModel = new MainWindowViewModel(m_settings);
         m_viewModel.ConfigureCommands(
             BrowseRepositoryRootAsync,
-            BrowseLocalRepositoryAsync,
             ExecutePrepareReviewAsync,
             PostPullRequestReviewStampAsync,
             CancelProcessing,
@@ -165,20 +164,6 @@ public partial class MainWindow : Window
         var path = await BrowseFolderAsync("Choose repository root folder", m_viewModel.RepositoryRootPath);
         if (!string.IsNullOrWhiteSpace(path))
             m_viewModel.RepositoryRootPath = path;
-    }
-
-    private async Task BrowseLocalRepositoryAsync()
-    {
-        var browseTitle = m_viewModel.IsLocalFolderReviewMode
-            ? "Choose local folder"
-            : "Choose local repository folder";
-        var path = await BrowseFolderAsync(browseTitle, m_viewModel.LocalRepositoryPath);
-        if (string.IsNullOrWhiteSpace(path))
-            return;
-
-        m_viewModel.LocalRepositoryPath = path;
-        if (!m_viewModel.IsLocalFolderReviewMode)
-            await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
     }
 
     private async void ReviewSettingsButton_OnClick(object sender, RoutedEventArgs e)
@@ -241,8 +226,7 @@ public partial class MainWindow : Window
             m_reviewWorkflowService.GetPrepareReviewStatusText(
                 m_viewModel.IsPullRequestReviewMode,
                 m_viewModel.IsLocalCommittedReviewMode,
-                m_viewModel.IsLocalRepositoryReviewMode,
-                m_viewModel.IsLocalFolderReviewMode),
+                m_viewModel.IsLocalRepositoryReviewMode),
             async cancellationToken =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -251,7 +235,6 @@ public partial class MainWindow : Window
                     m_viewModel.IsPullRequestReviewMode,
                     m_viewModel.IsLocalCommittedReviewMode,
                     m_viewModel.IsLocalRepositoryReviewMode,
-                    m_viewModel.IsLocalFolderReviewMode,
                     m_viewModel.RepositoryRootPath?.Trim(),
                     m_viewModel.PullRequestUrl?.Trim(),
                     m_viewModel.LocalRepositoryPath?.Trim(),
@@ -695,8 +678,7 @@ public partial class MainWindow : Window
             RepositoryUtilities.AreSameRepoPath(option.FullPath, m_viewModel.LocalRepositoryPath))
             return;
         m_viewModel.LocalRepositoryPath = option.FullPath;
-        if (!m_viewModel.IsLocalFolderReviewMode)
-            await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
+        await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
     }
 
     private async void RefreshLocalRepositories(bool debounce = false)

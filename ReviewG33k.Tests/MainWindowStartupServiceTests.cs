@@ -75,7 +75,7 @@ public sealed class MainWindowStartupServiceTests
             Assert.That(result.LogMessages[1], Does.Contain("command not found"));
             Assert.That(result.DialogTitle, Is.EqualTo("Git not found"));
             Assert.That(result.DialogMessage, Does.Contain("Install Git for Windows"));
-            Assert.That(result.DialogMessage, Does.Contain("Entire Local Folder review can still run without Git"));
+            Assert.That(result.DialogMessage, Does.Contain("enable pull request and local repository reviews"));
             Assert.That(result.DialogMessage, Does.Contain("Details: git: command not found"));
         });
     }

@@ -42,7 +42,6 @@ public sealed class MainWindowActionStateServiceTests
                 pullRequestUrl: "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/19",
                 isAnyLocalReviewMode: true,
                 requiresLocalBaseBranch: false,
-                requiresGitRepository: true,
                 previewPullRequestIsOpen: true,
                 previewPullRequestState: "OPEN",
                 latestSolutionPath: null,
@@ -78,7 +77,6 @@ public sealed class MainWindowActionStateServiceTests
             pullRequestUrl: " ",
             isAnyLocalReviewMode: true,
             requiresLocalBaseBranch: true,
-            requiresGitRepository: true,
             previewPullRequestIsOpen: false,
             previewPullRequestState: "DECLINED",
             latestSolutionPath: null,
@@ -104,7 +102,6 @@ public sealed class MainWindowActionStateServiceTests
             pullRequestUrl: "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/19",
             isAnyLocalReviewMode: false,
             requiresLocalBaseBranch: false,
-            requiresGitRepository: true,
             previewPullRequestIsOpen: false,
             previewPullRequestState: "MERGED",
             latestSolutionPath: null,
@@ -116,21 +113,20 @@ public sealed class MainWindowActionStateServiceTests
     }
 
     [Test]
-    public void BuildSnapshotWhenGitlessLocalFolderExistsMarksLocalInputsValid()
+    public void BuildSnapshotRejectsDirectoriesWithoutGit()
     {
         using var tempRoot = new TempDirectory();
-        var localFolder = tempRoot.GetDir("plain-folder");
-        localFolder.Create();
+        var directory = tempRoot.GetDir("plain-folder");
+        directory.Create();
 
         var service = new MainWindowActionStateService(new MainWindowInputValidationService());
         var snapshot = service.BuildSnapshot(
             repositoryRootPath: null,
-            localRepositoryPath: localFolder.FullName,
+            localRepositoryPath: directory.FullName,
             localBaseBranch: null,
             pullRequestUrl: null,
             isAnyLocalReviewMode: true,
             requiresLocalBaseBranch: false,
-            requiresGitRepository: false,
             previewPullRequestIsOpen: null,
             previewPullRequestState: null,
             latestSolutionPath: null,
@@ -138,6 +134,6 @@ public sealed class MainWindowActionStateServiceTests
             canCancelCurrentOperation: false,
             isCancellationRequested: false);
 
-        Assert.That(snapshot.HasValidLocalPrepareInputs, Is.True);
+        Assert.That(snapshot.HasValidLocalPrepareInputs, Is.False);
     }
 }

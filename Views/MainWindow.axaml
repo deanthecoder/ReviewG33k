@@ -129,7 +129,6 @@
                                     <ComboBoxItem Content="Local Committed Changes" />
                                     <ComboBoxItem Content="Local Uncommitted Changes" />
                                     <ComboBoxItem Content="Entire Local Repository" />
-                                    <ComboBoxItem Content="Entire Local Folder" />
                                 </ComboBox>
                                 <Button x:Name="ReviewModeInfoButton"
                                         Grid.Column="1"
@@ -221,13 +220,12 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0"
                                            Margin="0,0,12,0"
                                            HorizontalAlignment="Right"
                                            VerticalAlignment="Center"
-                                           Text="{Binding LocalReviewPathLabel}" />
+                                           Text="Local Repo:" />
                                 <ComboBox x:Name="LocalRepositoryComboBox"
                                           Grid.Column="1"
                                           MinWidth="360"
@@ -246,23 +244,14 @@
                                         </DataTemplate>
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
-                                <Button Grid.Column="2"
-                                        Margin="10,0,0,0"
-                                        Classes="neon"
-                                        Command="{Binding BrowseLocalRepositoryCommand}"
-                                        ToolTip.Tip="Browse folder">
-                                    <materialIcons:MaterialIcon Width="18"
-                                                                Height="18"
-                                                                Kind="FolderSearchOutline" />
-                                </Button>
                                 <TextBlock x:Name="LocalBaseBranchLabelTextBlock"
-                                           Grid.Column="3"
+                                           Grid.Column="2"
                                            Margin="14,0,8,0"
                                            IsVisible="{Binding ShowLocalBaseBranch}"
                                            VerticalAlignment="Center"
                                            Text="Base Branch:" />
                                 <ComboBox x:Name="LocalBaseBranchComboBox"
-                                          Grid.Column="4"
+                                          Grid.Column="3"
                                           Width="220"
                                           IsVisible="{Binding ShowLocalBaseBranch}"
                                           ItemsSource="{Binding LocalBaseBranchOptions}"
