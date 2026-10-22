@@ -30,18 +30,29 @@ internal sealed class DiffLensCell
     public Point Position { get; set; }
     public IReadOnlyList<DiffLensRow>[] Levels { get; private set; }
     public int Detail { get; set; }
+    public bool IsReviewed { get; set; }
+    private string m_baseline;
+    private string m_working;
     private DiffLensOverview[] m_overviews = new DiffLensOverview[4];
     public DiffLensOverview Overview(int detail) => m_overviews[detail] ??= new DiffLensOverview(Rows(detail));
     public IReadOnlyList<CodeSmellFinding> Findings { get; set; } = [];
     public double Height => DisplayHeight(Detail);
     public Rect Bounds => new(Position, new Size(Width, Height));
     public IReadOnlyList<DiffLensRow> Rows(int detail) => Levels[detail];
-    public double DisplayHeight(int detail) => Math.Max(160, HeaderHeight + Rows(detail).Count * RowHeight + 24);
+    public double DisplayHeight(int detail) => IsReviewed ? HeaderHeight : Math.Max(160, HeaderHeight + Rows(detail).Count * RowHeight + 24);
 
     public DiffLensCell(DiffLensEntry entry)
     {
         Entry = entry;
         Update(entry.File?.Baseline ?? string.Empty, entry.File?.WorkingText ?? string.Empty);
+    }
+
+    public void RestoreReviewState(DiffLensCell previous)
+    {
+        Detail = previous.Detail;
+        IsReviewed = previous.IsReviewed && Entry.File != null && previous.Entry.File != null &&
+            Entry.File.CanEdit == previous.Entry.File.CanEdit &&
+            m_baseline == previous.m_baseline && m_working == previous.m_working;
     }
 
     public int FindingRow(int line, int detail)
@@ -68,6 +79,10 @@ internal sealed class DiffLensCell
 
     public void Update(string baseline, string working)
     {
+        if (m_baseline != baseline || m_working != working)
+            IsReviewed = false;
+        m_baseline = baseline;
+        m_working = working;
         var (unified, split) = DiffLensRows.BuildBoth(baseline, working, 4);
         Levels = [unified, unified, unified, split];
         m_overviews = new DiffLensOverview[4];

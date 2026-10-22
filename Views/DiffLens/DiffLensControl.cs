@@ -140,10 +140,10 @@ internal sealed class DiffLensControl : Control
     public void SetFiles(string rootName, IReadOnlyList<DiffLensCell> cells)
     {
         m_textCache.Clear();
-        var modes = m_cells.ToDictionary(cell => cell.Entry.Path, cell => cell.Detail);
+        var previousCells = m_cells.ToDictionary(cell => cell.Entry.Path);
         foreach (var cell in cells)
-            if (modes.TryGetValue(cell.Entry.Path, out var detail))
-                cell.Detail = detail;
+            if (previousCells.TryGetValue(cell.Entry.Path, out var previous))
+                cell.RestoreReviewState(previous);
         m_previousDetail = null;
         m_cells = cells;
         m_root = DiffLensLayout.Build(rootName, cells);
@@ -236,11 +236,29 @@ internal sealed class DiffLensControl : Control
         InvalidateVisual();
     }
 
+    private void ToggleReviewed(DiffLensCell cell)
+    {
+        HideHoverHint();
+        m_fitTimer.Stop();
+        var position = cell.Position;
+        cell.IsReviewed = !cell.IsReviewed;
+        m_previousDetail = null;
+        m_root = DiffLensLayout.Build(m_root.Name, m_cells);
+        m_offset += (position - cell.Position) * m_zoom;
+        InvalidateVisual();
+    }
+
+    private Rect ReviewButton(DiffLensCell cell)
+    {
+        var mode = ModeButton(cell, true);
+        return mode.Translate(new Vector(mode.Width + 6 * m_zoom, 0));
+    }
+
     private Rect ModeButton(DiffLensCell cell, bool split)
     {
         var size = Math.Min(26, 32 * m_zoom);
         var gap = 6 * m_zoom;
-        var right = m_offset.X + cell.Bounds.Right * m_zoom - gap;
+        var right = m_offset.X + cell.Bounds.Right * m_zoom - gap - size - gap;
         return new Rect(right - size - (split ? 0 : size + gap),
             m_offset.Y + cell.Position.Y * m_zoom + gap, size, size);
     }
@@ -253,6 +271,8 @@ internal sealed class DiffLensControl : Control
             return false;
         m_fitTimer.Stop();
         SelectedPath = cell.Entry.Path;
+        if (cell.IsReviewed)
+            ToggleReviewed(cell);
         var row = Math.Max(0, cell.FindingRow(line, cell.Detail));
         m_zoom = Math.Clamp((Bounds.Width - 60) / CellWidth, 0.45, 1.2);
         m_offset = new Vector((Bounds.Width - CellWidth * m_zoom) / 2 - cell.Position.X * m_zoom,
@@ -269,6 +289,8 @@ internal sealed class DiffLensControl : Control
     {
         foreach (var cell in m_cells.Reverse())
         {
+            if (cell.IsReviewed)
+                continue;
             var left = m_offset.X + cell.Position.X * m_zoom;
             var top = m_offset.Y + (cell.Position.Y + HeaderHeight) * m_zoom;
             var margin = point.X >= left - 8 && point.X <= left + Math.Max(18, 8 * m_zoom);
@@ -297,7 +319,7 @@ internal sealed class DiffLensControl : Control
 
     private void DrawFindings(DrawingContext context, DiffLensCell cell, Vector offset)
     {
-        if (cell.Findings.Count == 0)
+        if (cell.Findings.Count == 0 || cell.IsReviewed)
             return;
         var marker = m_findingMarker;
         using (context.PushTransform(Matrix.CreateScale(m_zoom, m_zoom) * Matrix.CreateTranslation(offset)))
@@ -313,6 +335,16 @@ internal sealed class DiffLensControl : Control
     {
         if (32 * m_zoom < 6)
             return;
+        if (cell.Entry.File != null)
+        {
+            var bounds = ReviewButton(cell);
+            context.FillRectangle(cell.IsReviewed ? m_modeSelectedBrush : m_modeBrush, bounds, 2);
+            var icon = bounds.Deflate(bounds.Width * 0.24);
+            var pen = new Pen(cell.IsReviewed ? m_accentBrush : m_muted, Math.Min(2, m_zoom * 3));
+            var elbow = new Point(icon.Left + icon.Width * 0.35, icon.Bottom);
+            context.DrawLine(pen, new Point(icon.Left, icon.Center.Y), elbow);
+            context.DrawLine(pen, elbow, new Point(icon.Right, icon.Top));
+        }
         foreach (var split in new[] { false, true })
         {
             var bounds = ModeButton(cell, split);
@@ -367,9 +399,10 @@ internal sealed class DiffLensControl : Control
             using (context.PushClip(new Rect(cell.Position * m_zoom + m_offset,
                        new Size(CellWidth * m_zoom, cell.Height * m_zoom))))
             {
-                if (cell == m_fadingCell && m_previousDetail is { } previous && progress < 1)
+                if (!cell.IsReviewed && cell == m_fadingCell && m_previousDetail is { } previous && progress < 1)
                     DrawLayer(context, cell, previous, offset, 1);
-                DrawLayer(context, cell, cell.Detail, offset, cell == m_fadingCell ? progress : 1);
+                if (!cell.IsReviewed)
+                    DrawLayer(context, cell, cell.Detail, offset, cell == m_fadingCell ? progress : 1);
             }
             context.DrawRectangle(null, cell.Entry.Path == SelectedPath ? m_selectedPen : m_borderPen,
                 new Rect(cell.Position * m_zoom + m_offset, new Size(CellWidth * m_zoom, cell.Height * m_zoom)), 8 * m_zoom, 8 * m_zoom);
@@ -450,7 +483,7 @@ internal sealed class DiffLensControl : Control
             };
             context.DrawText(title, new Point(titleBounds.X + 6, titleBounds.Y + Math.Min(6, m_zoom * 6)));
         }
-        if (cell.Detail >= 3 && m_zoom >= 0.45)
+        if (!cell.IsReviewed && cell.Detail >= 3 && m_zoom >= 0.45)
         {
             DrawText(context, "BRANCH BASE", offset.X + (cell.Findings.Count > 0 ? 90 : 12) * m_zoom, offset.Y + 40 * m_zoom, m_muted, 11);
             DrawText(context, "WORKING FILE", offset.X + CellWidth * m_zoom / 2 + 12, offset.Y + 40 * m_zoom, m_accentBrush, 11);
@@ -557,6 +590,14 @@ internal sealed class DiffLensControl : Control
                 ViewChanged?.Invoke(this, EventArgs.Empty);
                 InvalidateVisual();
                 var point = e.GetPosition(this);
+                if (cell.Entry.File != null && ReviewButton(cell).Contains(point))
+                {
+                    m_drag = null;
+                    e.Pointer.Capture(null);
+                    ToggleReviewed(cell);
+                    e.Handled = true;
+                    return;
+                }
                 if (ModeButton(cell, false).Contains(point) || ModeButton(cell, true).Contains(point))
                 {
                     m_drag = null;
@@ -601,7 +642,8 @@ internal sealed class DiffLensControl : Control
         {
             var hoverPoint = e.GetPosition(this);
             var cell = HitCell((hoverPoint - m_offset) / m_zoom);
-            var hint = cell == null ? null : ModeButton(cell, false).Contains(hoverPoint) ? "Unified diff (U)" :
+            var hint = cell == null ? null : cell.Entry.File != null && ReviewButton(cell).Contains(hoverPoint)
+                ? (cell.IsReviewed ? "Mark unreviewed and expand" : "Mark reviewed and collapse") : ModeButton(cell, false).Contains(hoverPoint) ? "Unified diff (U)" :
                 ModeButton(cell, true).Contains(hoverPoint) ? "Side-by-side diff (S)" : null;
             if (hint == null)
             {

@@ -82,6 +82,41 @@ public sealed class DiffLensTests
         Assert.That((await m_git.RunAsync(m_root, "status", "--porcelain")).IsSuccess, Is.True);
     }
 
+    [TestCase("same")]
+    [TestCase("working")]
+    [TestCase("baseline")]
+    [TestCase("deleted")]
+    public void ReviewedFilesStayCollapsedOnlyWhileTheirFullDiffIsUnchanged(string change)
+    {
+        var text = string.Join("\n", Enumerable.Range(1, 6000).Select(i => $"line {i}"));
+        DiffLensCell Cell(string baseline, byte[] bytes) => new(new DiffLensEntry("large.txt",
+            new DiffLensFile(Path.Combine(m_root, "large.txt"), "large.txt", "HEAD", baseline, bytes), null));
+        var previous = Cell("original", Encoding.UTF8.GetBytes(text));
+        previous.IsReviewed = true;
+        previous.Detail = 3;
+        var next = Cell(change == "baseline" ? "new baseline" : "original",
+            change == "deleted" ? null : Encoding.UTF8.GetBytes(change == "working" ? text + "\nnew last line" : text));
+        next.RestoreReviewState(previous);
+        Assert.That(next.IsReviewed, Is.EqualTo(change == "same"));
+        Assert.That(next.Detail, Is.EqualTo(3));
+        Assert.That(next.Height == DiffLensCell.HeaderHeight, Is.EqualTo(change == "same"));
+    }
+
+    [Test]
+    public void ReviewingFilesShrinksFolderBoundsAndEditsReopenThem()
+    {
+        var file = new DiffLensFile(Path.Combine(m_root, "sample.cs"), "sample.cs", "HEAD", "old", Encoding.UTF8.GetBytes("new"));
+        var cell = new DiffLensCell(new DiffLensEntry("folder/sample.cs", file, null));
+        var expanded = DiffLensLayout.Build("repo", [cell]).Bounds.Height;
+        cell.IsReviewed = true;
+        Assert.That(DiffLensLayout.Build("repo", [cell]).Bounds.Height, Is.LessThan(expanded));
+        cell.Update("old", "new");
+        Assert.That(cell.IsReviewed, Is.True);
+        cell.Update("old", "edited");
+        Assert.That(cell.IsReviewed, Is.False);
+        Assert.That(DiffLensLayout.Build("repo", [cell]).Bounds.Height, Is.EqualTo(expanded));
+    }
+
     [Test]
     public void LargePreviewsAreCappedWithoutTruncatingTheEditableSnapshot()
     {
