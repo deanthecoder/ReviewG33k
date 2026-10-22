@@ -43,6 +43,73 @@ public sealed class DiffLensTests
         Directory.Delete(m_root, true);
     }
 
+    private sealed class LoadProgress(Action<DiffLensLoadProgress> report) : IProgress<DiffLensLoadProgress>
+    {
+        public void Report(DiffLensLoadProgress value) => report(value);
+    }
+
+    [Test]
+    public async Task LoadingReportsFileCountsAndCanBeCancelledBetweenFilesAsync()
+    {
+        await File.WriteAllTextAsync(Path.Combine(m_root, "first.txt"), "first\n");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "second.txt"), "second\n");
+        var updates = new List<DiffLensLoadProgress>();
+        await new DiffLensFileLoader(progress: new LoadProgress(updates.Add)).LoadSetAsync(m_root, "HEAD");
+        Assert.That(updates.Any(p => p.Total == 2 && p.Completed == 2), Is.True);
+        using var cancellation = new CancellationTokenSource();
+        var progress = new LoadProgress(p =>
+        {
+            if (p.Stage == "Loading files" && p.Completed == 1)
+                cancellation.Cancel();
+        });
+        Assert.ThrowsAsync<OperationCanceledException>(() => new DiffLensFileLoader(cancellation.Token, progress).LoadSetAsync(m_root, "HEAD"));
+        Assert.That(await File.ReadAllTextAsync(Path.Combine(m_root, "second.txt")), Is.EqualTo("second\n"));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task CancelStopsAnActiveGitProcessAsync(bool binary)
+    {
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        // Git executes aliases through its shell on Windows as well as Unix.
+        var args = new[] { "-c", "alias.wait=!sleep 30", "wait" };
+        if (binary)
+            Assert.ThrowsAsync<OperationCanceledException>(() => m_git.RunBytesAsync(m_root, cancellation.Token, args));
+        else
+            Assert.ThrowsAsync<OperationCanceledException>(() => m_git.RunAsync(m_root, cancellation.Token, args));
+        Assert.That(clock.Elapsed, Is.LessThan(TimeSpan.FromSeconds(10)));
+        Assert.That((await m_git.RunAsync(m_root, "status", "--porcelain")).IsSuccess, Is.True);
+    }
+
+    [Test]
+    public void LargePreviewsAreCappedWithoutTruncatingTheEditableSnapshot()
+    {
+        var text = string.Join("\n", Enumerable.Range(1, 6000).Select(i => $"line {i}"));
+        var file = new DiffLensFile(Path.Combine(m_root, "large.txt"), "large.txt", "HEAD", "", Encoding.UTF8.GetBytes(text));
+        var cell = new DiffLensCell(new DiffLensEntry("large.txt", file, null));
+        foreach (var detail in Enumerable.Range(0, 4))
+        {
+            var rows = cell.Rows(detail);
+            Assert.That(rows.Count, Is.EqualTo(5001));
+            Assert.That(rows[^1].Notice, Does.Contain("5,000"));
+            Assert.That(rows[^2].NewLine, Is.EqualTo(5000));
+        }
+        Assert.That(file.WorkingText, Is.EqualTo(text));
+        Assert.That(cell.FindingRow(5500, 0), Is.EqualTo(-1));
+    }
+
+    [TestCase((int)CommandLineReviewMode.Tree)]
+    [TestCase((int)CommandLineReviewMode.Committed)]
+    [TestCase((int)CommandLineReviewMode.Uncommitted)]
+    public void ReviewCanvasRequiresAGitRepository(int modeValue)
+    {
+        var directory = Path.Combine(m_root, "ordinary-directory");
+        Directory.CreateDirectory(directory);
+        Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new DiffLensFileLoader().LoadReviewSetAsync(directory, "HEAD", (CommandLineReviewMode)modeValue));
+    }
+
     [Test]
     public async Task LoadSetIncludesDeletedUntrackedAndUnsupportedFilesAgainstOneBase()
     {
@@ -103,11 +170,11 @@ public sealed class DiffLensTests
     }
 
     // Hey Codex - Do this...
-    // TODO [async-method-name-suffix]: Async method `ReviewCanvasUsesExactlyTheSelectedReviewSourcesFileSet` should end with `Async`.
+    // TODO [async-method-name-suffix]: Async method `ReviewCanvasUsesGitScopeWithoutScannerFileFilters` should end with `Async`.
     [TestCase(0)]
     [TestCase(1)]
     [TestCase(2)]
-    public async Task ReviewCanvasUsesExactlyTheSelectedReviewSourcesFileSet(int modeValue) // can edit!
+    public async Task ReviewCanvasUsesGitScopeWithoutScannerFileFilters(int modeValue) // can edit!
     {
         var mode = (CommandLineReviewMode)modeValue;
         await File.WriteAllTextAsync(Path.Combine(m_root, "committed.cs"), "committed feature\n");
@@ -121,35 +188,105 @@ public sealed class DiffLensTests
         await File.WriteAllTextAsync(Path.Combine(m_root, "notes.txt"), "not reviewed\n");
         Directory.CreateDirectory(Path.Combine(m_root, "obj"));
         await File.WriteAllTextAsync(Path.Combine(m_root, "obj", "generated.cs"), "generated\n");
-        ICodeReviewChangedFileSource source = mode switch
-        {
-            CommandLineReviewMode.Uncommitted => new GitWorkingTreeChangedFileSource(m_git, m_root),
-            CommandLineReviewMode.Committed => new GitBranchComparisonChangedFileSource(m_git, m_root, "main", fetchTargetBranch: false),
-            _ => new LocalRepositoryChangedFileSource(m_root, m_git)
-        };
-        var expected = await source.LoadAsync();
+        var actual = await new DiffLensFileLoader().LoadReviewSetAsync(m_root, "main", mode);
+        var expected = new List<string> { "whitespace.cs", "local.cs", "notes.txt", "obj/generated.cs" };
+        if (mode == CommandLineReviewMode.Uncommitted)
+            expected.Add("deleted.cs");
+        else
+            expected.Add("committed.cs");
+        if (mode == CommandLineReviewMode.Tree)
+            expected.Add("sample.cs");
+        Assert.That(actual.Entries.Select(entry => entry.Path), Is.EquivalentTo(expected));
+        Assert.That(actual.Entries.All(entry => entry.Error == null), Is.True);
+    }
+
+    [TestCase((int)CommandLineReviewMode.Uncommitted)]
+    [TestCase((int)CommandLineReviewMode.Committed)]
+    [TestCase((int)CommandLineReviewMode.Tree)]
+    public async Task ReviewCanvasIncludesCppSourcesAndHeadersAsync(int modeValue)
+    {
+        var mode = (CommandLineReviewMode)modeValue;
+        var nativePaths = new[] { "native.cpp", "native.cc", "native.cxx", "native.h", "native.hpp", "native.hxx" };
+        foreach (var path in nativePaths)
+            await File.WriteAllTextAsync(Path.Combine(m_root, path), "int value = 1;\n");
+        await Git("add", ".");
+        await Git("commit", "-m", "Native source");
+        foreach (var path in nativePaths)
+            await File.WriteAllTextAsync(Path.Combine(m_root, path), "int value = 2;\n");
+        await Git("add", "native.cpp");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "new.cpp"), "int added;\n");
+        Directory.CreateDirectory(Path.Combine(m_root, "obj"));
+        await File.WriteAllTextAsync(Path.Combine(m_root, "obj", "generated.cpp"), "generated\n");
 
         var actual = await new DiffLensFileLoader().LoadReviewSetAsync(m_root, "main", mode);
 
-        Assert.That(actual.Entries.Select(entry => entry.Path), Is.EquivalentTo(expected.Files.Select(file => file.Path)));
-        Assert.That(actual.Entries.All(entry => entry.Error == null), Is.True);
-        Assert.That(actual.Entries.Select(entry => entry.Path), Does.Not.Contain("notes.txt"));
-        Assert.That(actual.Entries.Select(entry => entry.Path), Does.Not.Contain("obj/generated.cs"));
+        foreach (var path in nativePaths.Append("new.cpp"))
+        {
+            var entry = actual.Entries.Single(item => item.Path == path);
+            Assert.That(entry.Error, Is.Null);
+            Assert.That(entry.File.CanEdit, Is.True);
+        }
+        var modified = actual.Entries.Single(item => item.Path == "native.cpp").File;
+        Assert.That(modified.WorkingText, Is.EqualTo("int value = 2;\n"));
+        Assert.That(modified.Baseline, Is.EqualTo(mode == CommandLineReviewMode.Committed ? string.Empty : "int value = 1;\n"));
+        Assert.That(actual.Entries.Select(item => item.Path), Does.Contain("obj/generated.cpp"));
+        var scanner = await new GitWorkingTreeChangedFileSource(m_git, m_root).LoadAsync();
+        Assert.That(scanner.Files.Select(file => file.Path), Does.Not.Contain("native.cpp"));
+    }
+
+    [TestCase((int)CommandLineReviewMode.Committed)]
+    [TestCase((int)CommandLineReviewMode.Uncommitted)]
+    [TestCase((int)CommandLineReviewMode.Tree)]
+    public async Task ReviewCanvasShowsArbitraryTextAndBinaryPlaceholdersAsync(int modeValue)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["README.md"] = "documentation\n", ["settings.json"] = "{ }\n",
+            ["shader.glsl"] = "void main() {}\n", ["Makefile"] = "all: build\n",
+            ["tiny.unknown"] = "x", ["empty.unknown"] = "", ["unicode.unknown"] = "日本語のテキスト\n"
+        };
+        foreach (var (path, text) in files)
+            await File.WriteAllTextAsync(Path.Combine(m_root, path), text);
+        await File.WriteAllTextAsync(Path.Combine(m_root, "utf16.unknown"), "Unicode text\n", new UnicodeEncoding(false, true));
+        await File.WriteAllBytesAsync(Path.Combine(m_root, "binary.dat"), new byte[] { 1, 2, 3, 4 });
+        await File.WriteAllBytesAsync(Path.Combine(m_root, "disguised.txt"), new byte[] { 0, 1, 2, 3 });
+        await File.WriteAllTextAsync(Path.Combine(m_root, ".gitignore"), "ignored.data\n");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "ignored.data"), "ignored\n");
+
+        var set = await new DiffLensFileLoader().LoadReviewSetAsync(m_root, "main", (CommandLineReviewMode)modeValue);
+
+        foreach (var (path, text) in files)
+        {
+            var entry = set.Entries.Single(e => e.Path == path);
+            Assert.That(entry.Error, Is.Null, path);
+            Assert.That(entry.File.WorkingText, Is.EqualTo(text), path);
+        }
+        Assert.That(set.Entries.Single(e => e.Path == "utf16.unknown").File.WorkingText, Is.EqualTo("Unicode text\n"));
+        foreach (var path in new[] { "binary.dat", "disguised.txt" })
+        {
+            var entry = set.Entries.Single(e => e.Path == path);
+            Assert.That(entry.File, Is.Null);
+            Assert.That(entry.Error, Does.Contain("Binary"));
+        }
+        Assert.That(set.Entries.Select(e => e.Path), Does.Not.Contain("ignored.data"));
     }
 
     [Test]
-    public async Task FolderReviewCanvasUsesTheSameFilesWithoutRequiringGit()
+    public async Task ReviewCanvasPreservesDeletedAndRenamedTextAndDeletedBinaryAsync()
     {
-        var folder = Path.Combine(m_root, "plain-folder");
-        Directory.CreateDirectory(folder);
-        await File.WriteAllTextAsync(Path.Combine(folder, "code.cs"), "source\n");
-        await File.WriteAllTextAsync(Path.Combine(folder, "notes.txt"), "not reviewed\n");
-        var expected = await new LocalRepositoryChangedFileSource(folder).LoadAsync();
-
-        var actual = await new DiffLensFileLoader().LoadReviewSetAsync(folder, "HEAD", CommandLineReviewMode.Tree);
-
-        Assert.That(actual.Entries.Select(entry => entry.Path), Is.EquivalentTo(expected.Files.Select(file => file.Path)));
-        Assert.That(actual.Entries.Single().File.WorkingText, Is.EqualTo("source\n"));
+        await File.WriteAllTextAsync(Path.Combine(m_root, "old.md"), "rename me\n");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "deleted.txt"), "removed text\n");
+        await File.WriteAllBytesAsync(Path.Combine(m_root, "deleted.bin"), new byte[] { 1, 2, 3 });
+        await Git("add", ".");
+        await Git("commit", "-m", "Baseline documents");
+        await Git("mv", "old.md", "new.md");
+        File.Delete(Path.Combine(m_root, "deleted.txt"));
+        File.Delete(Path.Combine(m_root, "deleted.bin"));
+        var set = await new DiffLensFileLoader().LoadReviewSetAsync(m_root, "HEAD", CommandLineReviewMode.Uncommitted);
+        var renamed = set.Entries.Single(e => e.Path == "new.md").File;
+        Assert.That(renamed.Baseline, Is.EqualTo("rename me\n"));
+        Assert.That(set.Entries.Single(e => e.Path == "deleted.txt").File.CanEdit, Is.False);
+        Assert.That(set.Entries.Single(e => e.Path == "deleted.bin").Error, Does.Contain("Binary"));
     }
 
     [Test]

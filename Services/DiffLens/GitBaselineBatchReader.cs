@@ -15,6 +15,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace ReviewG33k.Services.DiffLens;
 
@@ -27,10 +28,11 @@ namespace ReviewG33k.Services.DiffLens;
 /// </remarks>
 internal static class GitBaselineBatchReader
 {
-    public static async Task<IReadOnlyDictionary<string, byte[]>> ReadAsync(string root, string revision, IEnumerable<string> paths)
+    public static async Task<IReadOnlyDictionary<string, byte[]>> ReadAsync(string root, string revision, IEnumerable<string> paths, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var wanted = paths.ToHashSet(StringComparer.Ordinal);
-        var tree = await new GitCommandRunner().RunAsync(root, "ls-tree", "-r", "-z", revision);
+        var tree = await new GitCommandRunner().RunAsync(root, cancellationToken, "ls-tree", "-r", "-z", revision);
         if (!tree.IsSuccess)
             throw new IOException(tree.StandardError);
         var objects = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -66,12 +68,13 @@ internal static class GitBaselineBatchReader
             var singleByte = new byte[1];
             foreach (var objectId in objects.Values.Distinct(StringComparer.Ordinal))
             {
-                await process.StandardInput.WriteLineAsync(objectId);
+                cancellationToken.ThrowIfCancellationRequested();
+                await process.StandardInput.WriteLineAsync(objectId.AsMemory(), cancellationToken);
                 await process.StandardInput.FlushAsync();
                 using var header = new MemoryStream();
                 while (true)
                 {
-                    await output.ReadExactlyAsync(singleByte);
+                    await output.ReadExactlyAsync(singleByte, cancellationToken);
                     if (singleByte[0] == '\n')
                         break;
                     header.WriteByte(singleByte[0]);
@@ -82,14 +85,14 @@ internal static class GitBaselineBatchReader
                 if (fields.Length != 3 || fields[0] != objectId || fields[1] != "blob" || !int.TryParse(fields[2], out var length) || length < 0)
                     throw new IOException("Invalid Git baseline blob response.");
                 var bytes = new byte[length];
-                await output.ReadExactlyAsync(bytes);
-                await output.ReadExactlyAsync(singleByte);
+                await output.ReadExactlyAsync(bytes, cancellationToken);
+                await output.ReadExactlyAsync(singleByte, cancellationToken);
                 if (singleByte[0] != '\n')
                     throw new IOException("Invalid Git baseline blob terminator.");
                 blobs[objectId] = bytes;
             }
             process.StandardInput.Close();
-            await process.WaitForExitAsync();
+            await process.WaitForExitAsync(cancellationToken);
             var error = await errors;
             if (process.ExitCode != 0)
                 throw new IOException(error);

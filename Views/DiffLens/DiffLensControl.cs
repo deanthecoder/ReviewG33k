@@ -409,6 +409,11 @@ internal sealed class DiffLensControl : Control
                 {
                     var row = rows[i];
                     var y = HeaderHeight + i * RowHeight;
+                    if (row.Notice != null)
+                    {
+                        DrawText(context, row.Notice, 18, y + 2, m_findingMarker);
+                        continue;
+                    }
                     if (row.HiddenLines > 0)
                     {
                         DrawText(context, $"⋯  {row.HiddenLines} unchanged lines", 18, y + 2, m_muted);

@@ -8,6 +8,8 @@
 //
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
+using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -46,6 +48,12 @@ public sealed class GitCommandRunner
 
         using var process = new Process { StartInfo = startInfo };
         process.Start();
+        using var cancellation = cancellationToken.Register(() =>
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { }
+            catch (Win32Exception) { }
+        });
 
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
@@ -82,11 +90,17 @@ public sealed class GitCommandRunner
 
         using var process = new Process { StartInfo = startInfo };
         process.Start();
+        using var cancellation = cancellationToken.Register(() =>
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { }
+            catch (Win32Exception) { }
+        });
 
-        var outputTask = process.StandardOutput.BaseStream.CopyToAsync(outputStream, cancellationToken);
-        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        var outputTask = process.StandardOutput.BaseStream.CopyToAsync(outputStream);
+        var errorTask = process.StandardError.ReadToEndAsync();
 
-        await process.WaitForExitAsync(cancellationToken);
+        await process.WaitForExitAsync();
 
         await outputTask;
         errorBuilder.Append(await errorTask);

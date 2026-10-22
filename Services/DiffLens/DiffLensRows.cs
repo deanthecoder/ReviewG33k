@@ -23,6 +23,8 @@ namespace ReviewG33k.Services.DiffLens;
 /// </remarks>
 internal static class DiffLensRows
 {
+    public const int MaxPreviewLines = 5000;
+
     public static int FindWorkingLine(IReadOnlyList<DiffLensRow> rows, int index)
     {
         if (index < 0)
@@ -88,6 +90,11 @@ internal static class DiffLensRows
             else
                 rows.Add(all[i]);
         }
+        if (rows.Count > MaxPreviewLines)
+        {
+            rows.RemoveRange(MaxPreviewLines, rows.Count - MaxPreviewLines);
+            rows.Add(new DiffLensRow(null, null, Notice: "Preview limited to 5,000 lines — double-click to open the full file."));
+        }
         return rows;
     }
 }
@@ -95,7 +102,7 @@ internal static class DiffLensRows
 /// <summary>
 /// Maps a displayed row to the original lines, or a collapsed unchanged region.
 /// </summary>
-internal sealed record DiffLensRow(DiffPiece Left, DiffPiece Right, int HiddenLines = 0)
+internal sealed record DiffLensRow(DiffPiece Left, DiffPiece Right, int HiddenLines = 0, string Notice = null)
 {
     public bool Changed => Left?.Type is ChangeType.Deleted or ChangeType.Modified || Right?.Type is ChangeType.Inserted or ChangeType.Modified;
     public int? OldLine => Left?.Position;

@@ -14,8 +14,13 @@ using AvaloniaEdit.Document;
 using System.Linq;
 using System.IO;
 using System.Xml;
+using AvaloniaEdit.Highlighting;
+using AvaloniaEdit.Highlighting.Xshd;
 using System.Threading.Tasks;
 using System.Threading;
+using DTC.Core;
+using Material.Icons;
+using Material.Icons.Avalonia;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -23,8 +28,6 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using AvaloniaEdit;
-using AvaloniaEdit.Highlighting;
-using AvaloniaEdit.Highlighting.Xshd;
 using Avalonia.Animation;
 using Avalonia.Threading;
 using ReviewG33k.Services.DiffLens;
@@ -68,6 +71,20 @@ internal sealed class DiffLensWindow : Window
     private bool m_isEditing;
     private int m_transitionVersion;
 
+    private readonly Button m_refresh = new()
+    {
+        Content = new MaterialIcon { Kind = MaterialIconKind.Refresh, Width = 18, Height = 18 },
+        Padding = new Thickness(8)
+    };
+    private readonly ProgressBar m_loadBar = new() { Width = 130, Height = 5, IsVisible = false };
+    private readonly Button m_cancelLoad = new() { Content = "×", IsVisible = false, Padding = new Thickness(8, 2) };
+    private CancellationTokenSource m_loadCancellation;
+    private ProgressToken m_loadProgress;
+    private bool m_closeAfterLoad;
+    private bool m_hasLoadedSnapshot;
+
+    private const string CanvasStatusHint = "Double-click to edit";
+
     private static string NavigationHint => OperatingSystem.IsMacOS()
         ? "Two-finger scroll: pan · Pinch or ⌘+scroll: zoom · Shift+scroll: long lines"
         : "Scroll or drag: pan · Ctrl+wheel: zoom · Shift+wheel: long lines";
@@ -91,7 +108,7 @@ internal sealed class DiffLensWindow : Window
         var surface = new Grid();
         surface.Children.Add(m_canvas);
         surface.Children.Add(m_editor);
-        if (m_review != null)
+        if (m_review?.Findings.Count > 0)
         {
             surface.ColumnDefinitions = new ColumnDefinitions("*,340");
             var findingsPanel = CreateFindingsPanel();
@@ -114,12 +131,24 @@ internal sealed class DiffLensWindow : Window
         };
         ToolTip.SetTip(fit, "Fit all changed files (middle-click).");
         actions.Children.Add(fit);
+        ToolTip.SetTip(m_refresh, "Refresh files from disk (F5)");
+        Avalonia.Automation.AutomationProperties.SetName(m_refresh, "Refresh files from disk");
+        m_refresh.Click += async (_, _) => await LoadSnapshotAsync();
+        actions.Children.Add(m_refresh);
         DockPanel.SetDock(actions, Dock.Left);
         actions.Margin = new Thickness(0, 0, 12, 0);
         m_status.VerticalAlignment = VerticalAlignment.Center;
         footer.Children.Add(actions);
         ToolTip.SetTip(footer, NavigationHint);
+        var loadingControls = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+        loadingControls.Children.Add(m_loadBar);
+        loadingControls.Children.Add(m_cancelLoad);
+        DockPanel.SetDock(loadingControls, Dock.Right);
+        footer.Children.Add(loadingControls);
         footer.Children.Add(m_status);
+        ToolTip.SetTip(m_cancelLoad, "Cancel loading");
+        Avalonia.Automation.AutomationProperties.SetName(m_cancelLoad, "Cancel loading");
+        m_cancelLoad.Click += (_, _) => m_loadProgress?.Cancel();
         Grid.SetRow(footer, 1);
         root.Children.Add(footer);
         Content = root;
@@ -155,6 +184,11 @@ internal sealed class DiffLensWindow : Window
                 await SaveAsync();
                 e.Handled = true;
             }
+            else if (e.Key == Key.F5 && e.KeyModifiers == KeyModifiers.None)
+            {
+                await LoadSnapshotAsync();
+                e.Handled = true;
+            }
             else if (e.Key == Key.Escape && m_isEditing)
             {
                 ToggleEditor();
@@ -166,7 +200,13 @@ internal sealed class DiffLensWindow : Window
             if (m_closeReady)
                 return;
             e.Cancel = true;
-            if (m_loading || m_isClosing)
+            if (m_loading)
+            {
+                m_closeAfterLoad = true;
+                m_loadCancellation?.Cancel();
+                return;
+            }
+            if (m_isClosing)
                 return;
             m_isClosing = true;
             SetBusy(true);
@@ -206,7 +246,7 @@ internal sealed class DiffLensWindow : Window
 
     private Control CreateFindingsPanel()
     {
-        var panel = new DockPanel { Margin = new Thickness(12) };
+        var panel = new DockPanel();
         var heading = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 0, 12) };
         heading.Children.Add(new TextBlock { Text = $"Review findings ({m_review.Findings.Count})", FontSize = 18 });
         heading.Children.Add(new TextBlock
@@ -241,7 +281,16 @@ internal sealed class DiffLensWindow : Window
             items.Children.Add(button);
         }
         panel.Children.Add(new ScrollViewer { Content = items, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
-        return panel;
+        return new Border
+        {
+            Background = Brush.Parse("#121C27"),
+            BorderBrush = Brush.Parse("#2A3948"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Margin = new Thickness(10, 12, 12, 0),
+            Padding = new Thickness(14),
+            Child = panel
+        };
     }
 
     private TextDocument GetDocument(DiffLensFile file)
@@ -372,11 +421,45 @@ internal sealed class DiffLensWindow : Window
             SetBusy(false);
             return;
         }
-        m_status.Text = "Loading...";
+        using var cancellation = new CancellationTokenSource();
+        m_loadCancellation = cancellation;
+        m_loadProgress = new ProgressToken(isCancelSupported: true);
+        m_loadProgress.Cancelled += (_, _) =>
+        {
+            cancellation.Cancel();
+            m_cancelLoad.IsEnabled = false;
+            m_status.Text = "Cancelling…";
+        };
+        m_loadBar.IsVisible = m_cancelLoad.IsVisible = true;
+        m_loadBar.IsIndeterminate = true;
+        m_cancelLoad.IsEnabled = true;
+        var progress = new Progress<DiffLensLoadProgress>(update =>
+        {
+            if (cancellation.IsCancellationRequested || !ReferenceEquals(m_loadCancellation, cancellation))
+                return;
+            m_loadProgress.IsIndeterminate = update.Total == 0;
+            if (update.Total > 0)
+                m_loadProgress.Progress = (int)(100L * update.Completed / update.Total);
+            m_loadBar.IsIndeterminate = m_loadProgress.IsIndeterminate;
+            m_loadBar.Value = m_loadProgress.Progress;
+            m_status.Text = update.Total == 0 ? update.Stage : $"{update.Stage}… {update.Completed:N0} / {update.Total:N0}";
+        });
+        m_status.Text = "Finding files…";
         try
         {
-            var changeSet = await Task.Run(() => new DiffLensFileLoader().LoadReviewSetAsync(m_repositoryPath, m_targetBranch, m_reviewMode, m_relativePath));
-            var cells = await Task.Run(() => changeSet.Entries.Select(entry => new DiffLensCell(entry)).ToArray());
+            var changeSet = await Task.Run(() => new DiffLensFileLoader(cancellation.Token, progress).LoadReviewSetAsync(m_repositoryPath, m_targetBranch, m_reviewMode, m_relativePath));
+            var cells = await Task.Run(() =>
+            {
+                var prepared = new List<DiffLensCell>();
+                foreach (var entry in changeSet.Entries)
+                {
+                    cancellation.Token.ThrowIfCancellationRequested();
+                    ((IProgress<DiffLensLoadProgress>)progress).Report(new DiffLensLoadProgress("Preparing canvas", prepared.Count, changeSet.Entries.Count));
+                    prepared.Add(new DiffLensCell(entry));
+                }
+                return prepared.ToArray();
+            }, cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
             m_files.Clear();
             m_documents.Clear();
             m_findingActions.Clear();
@@ -394,13 +477,27 @@ internal sealed class DiffLensWindow : Window
                 cell.Findings = m_review?.FindingsFor(changeSet.Root, m_targetBranch, m_reviewMode, cell.Entry.Path) ?? [];
             m_canvas.RepositoryRootPath = changeSet.Root;
             m_canvas.SetFiles(Path.GetFileName(changeSet.Root), cells);
-            m_status.Text = cells.Length == 0 ? "No files to review." : "Double-click to edit · Esc to return";
+            m_hasLoadedSnapshot = true;
+            m_status.Text = cells.Length == 0 ? "No files to review." : CanvasStatusHint;
+        }
+        catch (OperationCanceledException)
+        {
+            m_closeAfterLoad |= !m_hasLoadedSnapshot;
+            m_status.Text = "Loading cancelled.";
         }
         catch (Exception ex)
         {
             m_status.Text = $"Unable to load: {ex.Message}";
         }
-        finally { SetBusy(false); }
+        finally
+        {
+            m_loadCancellation = null;
+            m_loadProgress = null;
+            m_loadBar.IsVisible = m_cancelLoad.IsVisible = false;
+            SetBusy(false);
+            if (m_closeAfterLoad)
+                DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(1));
+        }
     }
 
     private void ToggleEditor(int? line = null)
@@ -438,6 +535,7 @@ internal sealed class DiffLensWindow : Window
         {
             m_canvas.SetFile(m_file.RelativePath, m_file.Baseline, m_editor.Text, false);
             m_canvas.Focus();
+            m_status.Text = CanvasStatusHint;
             m_autoSave.Stop();
             _ = SaveAsync();
         }
@@ -467,7 +565,7 @@ internal sealed class DiffLensWindow : Window
                 {
                     await file.SaveAsync(document.Text);
                     m_canvas.SetFile(path, file.Baseline, document.Text, false);
-                    m_status.Text = "Saved.";
+                    m_status.Text = m_isEditing ? "Saved." : CanvasStatusHint;
                 }
             }
             return true;
@@ -483,6 +581,7 @@ internal sealed class DiffLensWindow : Window
     private void SetBusy(bool busy)
     {
         m_loading = busy;
+        m_refresh.IsEnabled = !busy;
         m_canvas.IsHitTestVisible = !busy && !m_isEditing;
         m_editor.IsReadOnly = busy;
         UpdateView();

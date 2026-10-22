@@ -49,7 +49,7 @@ Persistent issue-type preferences for future scans. Use the cog button in the to
 
 ## DiffLens
 
-Explore the files from your selected local review mode on a zoomable folder canvas. **Local Uncommitted Changes** compares against `HEAD`; **Local Committed Changes** uses the selected base branch; whole-repository mode show their reviewable files. DiffLens uses the same file selection and exclusions as **Review Local**.
+Explore the files from your selected local review mode on a zoomable folder canvas. **Local Uncommitted Changes** compares against `HEAD`; **Local Committed Changes** uses the selected base branch; whole-repository mode shows the repository files. DiffLens displays all changed text files, regardless of extension, and shows non-editable cards for binary changes. Git-ignored untracked files remain excluded.
 
 ![DiffLens canvas with a selected file and issue markers](img/DiffLens.png)
 

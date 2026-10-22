@@ -37,9 +37,12 @@ internal sealed class DiffLensFile
         m_diskBytes = diskBytes;
         m_encoding = DetectEncoding(diskBytes ?? [], out m_preamble);
         WorkingText = diskBytes == null ? string.Empty : m_encoding.GetString(diskBytes, m_preamble.Length, diskBytes.Length - m_preamble.Length);
-        if (WorkingText.Contains('\0') || baseline.Contains('\0'))
-            throw new InvalidOperationException("Binary files are not supported by this text prototype.");
+        if (ContainsBinaryControls(WorkingText) || ContainsBinaryControls(baseline))
+            throw new InvalidOperationException("Binary file — no text preview.");
     }
+
+    private static bool ContainsBinaryControls(string text) =>
+        text.Any(c => char.IsControl(c) && c is not ('\t' or '\r' or '\n' or '\f'));
 
     public string FullPath { get; }
     public string RelativePath { get; }

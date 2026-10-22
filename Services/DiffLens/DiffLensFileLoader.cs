@@ -13,6 +13,8 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Threading;
+using DTC.Core.Extensions;
 
 namespace ReviewG33k.Services.DiffLens;
 
@@ -25,9 +27,25 @@ namespace ReviewG33k.Services.DiffLens;
 internal sealed class DiffLensFileLoader
 {
     private readonly GitCommandRunner m_git = new();
+    private readonly CancellationToken m_cancellation;
+    private readonly IProgress<DiffLensLoadProgress> m_progress;
+
+    public DiffLensFileLoader(CancellationToken cancellationToken = default, IProgress<DiffLensLoadProgress> progress = null)
+    {
+        m_cancellation = cancellationToken;
+        m_progress = progress;
+    }
+
+    private void Report(string stage, int completed = 0, int total = 0)
+    {
+        m_cancellation.ThrowIfCancellationRequested();
+        m_progress?.Report(new DiffLensLoadProgress(stage, completed, total));
+        m_cancellation.ThrowIfCancellationRequested();
+    }
 
     public async Task<DiffLensFile> LoadAsync(string repository, string target, string path)
     {
+        Report("Finding changed files…");
         var snapshot = await ResolveAsync(repository, target);
         path = string.IsNullOrWhiteSpace(path) ? snapshot.Paths.FirstOrDefault() : path;
         if (string.IsNullOrWhiteSpace(path))
@@ -37,11 +55,14 @@ internal sealed class DiffLensFileLoader
 
     public async Task<DiffLensChangeSet> LoadSetAsync(string repository, string target, string path = null)
     {
+        Report("Finding changed files…");
         var snapshot = await ResolveAsync(repository, target);
         var paths = string.IsNullOrWhiteSpace(path) ? snapshot.Paths : [path];
         var entries = new List<DiffLensEntry>();
+        Report("Loading files", 0, paths.Length);
         foreach (var relative in paths)
         {
+            Report("Loading files", entries.Count, paths.Length);
             try
             {
                 var file = await LoadFileAsync(snapshot.Root, snapshot.MergeBase, snapshot.Changes, relative);
@@ -53,83 +74,48 @@ internal sealed class DiffLensFileLoader
                 entries.Add(new DiffLensEntry(relative, null, ex.Message));
             }
         }
+        Report("Loading files", entries.Count, paths.Length);
         return new DiffLensChangeSet(snapshot.Root, snapshot.MergeBase, entries);
     }
 
     public async Task<DiffLensChangeSet> LoadReviewSetAsync(
         string repository, string target, CommandLineReviewMode mode, string path = null)
     {
+        Report("Finding files…");
+        if (!RepositoryUtilities.IsGitRepository(repository))
+            throw new InvalidOperationException("Choose a Git repository for DiffLens.");
         if (mode == CommandLineReviewMode.Tree)
             return await LoadTreeSetAsync(repository, path);
-        ICodeReviewChangedFileSource source = mode switch
+        if (mode == CommandLineReviewMode.Committed && !string.IsNullOrWhiteSpace(target) &&
+            target != "HEAD" && !target.StartsWith("refs/", StringComparison.Ordinal))
         {
-            CommandLineReviewMode.Uncommitted => new GitWorkingTreeChangedFileSource(m_git, repository),
-            CommandLineReviewMode.Committed => new GitBranchComparisonChangedFileSource(m_git, repository, target, fetchTargetBranch: true),
-            _ => new LocalRepositoryChangedFileSource(repository, RepositoryUtilities.IsGitRepository(repository) ? m_git : null)
-        };
-        var reviewFiles = (await source.LoadAsync()).Files;
-        var paths = reviewFiles.Select(file => file.Path)
-            .Where(relative => string.IsNullOrWhiteSpace(path) || relative == path)
-            .OrderBy(relative => relative, StringComparer.Ordinal).ToArray();
-        var root = Path.GetFullPath(repository);
-        var entries = new List<DiffLensEntry>();
-        if (!RepositoryUtilities.IsGitRepository(root))
-        {
-            foreach (var relative in paths)
-            {
-                try
-                {
-                    var fullPath = ResolveEditablePath(root, relative);
-                    var file = new DiffLensFile(fullPath, relative, "Working tree", string.Empty, await File.ReadAllBytesAsync(fullPath));
-                    entries.Add(new DiffLensEntry(relative, file, null));
-                }
-                catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or ArgumentException)
-                {
-                    entries.Add(new DiffLensEntry(relative, null, ex.Message));
-                }
-            }
-            return new DiffLensChangeSet(root, "Working tree", entries);
+            // Refresh the requested branch when possible; offline repositories still use local refs.
+            await m_git.RunAsync(repository, m_cancellation, "fetch", "--prune", "origin", $"+refs/heads/{target}:refs/remotes/origin/{target}");
         }
-
-        var snapshot = await ResolveAsync(root, mode == CommandLineReviewMode.Committed ? target : "HEAD");
-        foreach (var relative in paths)
-        {
-            try
-            {
-                var file = await LoadFileAsync(snapshot.Root, snapshot.MergeBase, snapshot.Changes, relative);
-                entries.Add(new DiffLensEntry(relative, file, null));
-            }
-            catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or ArgumentException)
-            {
-                entries.Add(new DiffLensEntry(relative, null, ex.Message));
-            }
-        }
-        return new DiffLensChangeSet(snapshot.Root, snapshot.MergeBase, entries);
+        return await LoadSetAsync(repository, mode == CommandLineReviewMode.Committed ? target : "HEAD", path);
     }
 
     private async Task<DiffLensChangeSet> LoadTreeSetAsync(string repository, string path)
     {
         var root = Path.GetFullPath(repository);
-        var isGit = RepositoryUtilities.IsGitRepository(root);
-        var source = new LocalRepositoryChangedFileSource(root, isGit ? m_git : null);
-        var files = (await source.EnumerateAnalyzableFilesAsync(new DirectoryInfo(root)))
-            .Select(file => Path.GetRelativePath(root, file.FullName).Replace('\\', '/'))
+        // Git supplies the scope, including tracked files normally excluded by scanner rules.
+        var paths = (await RunAsync(root, "ls-files", "--cached", "--others", "--exclude-standard", "-z"))
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        var files = paths.Distinct(StringComparer.Ordinal)
+            .Where(relative => File.Exists(Path.Combine(root, relative)))
             .Where(relative => string.IsNullOrWhiteSpace(path) || relative == path)
             .OrderBy(relative => relative, StringComparer.Ordinal).ToArray();
-        var revision = "Working tree";
-        var changes = new Dictionary<string, string>(StringComparer.Ordinal);
-        IReadOnlyDictionary<string, byte[]> baselines = new Dictionary<string, byte[]>();
-        if (isGit)
-        {
-            var snapshot = await ResolveAsync(root, "HEAD");
-            root = snapshot.Root;
-            revision = snapshot.MergeBase;
-            changes = snapshot.Changes.ToDictionary(change => change.NewPath, change => change.OldPath, StringComparer.Ordinal);
-            baselines = await GitBaselineBatchReader.ReadAsync(root, revision, files.Select(relative => changes.GetValueOrDefault(relative, relative)));
-        }
+        var snapshot = await ResolveAsync(root, "HEAD");
+        root = snapshot.Root;
+        var revision = snapshot.MergeBase;
+        var changes = snapshot.Changes.ToDictionary(change => change.NewPath, change => change.OldPath, StringComparer.Ordinal);
+        Report("Reading baseline files…");
+        var baselines = await GitBaselineBatchReader.ReadAsync(root, revision, files.Select(relative => changes.GetValueOrDefault(relative, relative)), m_cancellation);
         var entries = new List<DiffLensEntry>();
+        Report("Loading files", 0, files.Length);
         foreach (var relative in files)
         {
+            Report("Loading files", entries.Count, files.Length);
             try
             {
                 var baseline = baselines.GetValueOrDefault(changes.GetValueOrDefault(relative, relative));
@@ -141,6 +127,7 @@ internal sealed class DiffLensFileLoader
                 entries.Add(new DiffLensEntry(relative, null, ex.Message));
             }
         }
+        Report("Loading files", entries.Count, files.Length);
         return new DiffLensChangeSet(root, revision, entries);
     }
 
@@ -158,7 +145,7 @@ internal sealed class DiffLensFileLoader
         else
         {
             var reference = target.StartsWith("refs/", StringComparison.Ordinal) ? target : $"refs/remotes/origin/{target}";
-            if (!(await m_git.RunAsync(root, "show-ref", "--verify", "--quiet", reference)).IsSuccess)
+            if (!(await m_git.RunAsync(root, m_cancellation, "show-ref", "--verify", "--quiet", reference)).IsSuccess)
                 reference = $"refs/heads/{target}";
             mergeBase = (await RunAsync(root, "merge-base", "HEAD", reference)).Trim();
         }
@@ -178,13 +165,13 @@ internal sealed class DiffLensFileLoader
         var hasBaseline = baselineBytes != null;
         if (!baselineProvided)
         {
-            var exists = await m_git.RunAsync(root, "ls-tree", "-z", mergeBase, "--", oldPath);
+            var exists = await m_git.RunAsync(root, m_cancellation, "ls-tree", "-z", mergeBase, "--", oldPath);
             if (!exists.IsSuccess)
                 throw new IOException(exists.StandardError);
             hasBaseline = !string.IsNullOrEmpty(exists.StandardOutput);
             if (hasBaseline)
             {
-                var result = await m_git.RunBytesAsync(root, "show", $"{mergeBase}:{oldPath}");
+                var result = await m_git.RunBytesAsync(root, m_cancellation, "show", $"{mergeBase}:{oldPath}");
                 if (!result.IsSuccess)
                     throw new IOException(result.StandardError);
                 baselineBytes = result.StandardOutput;
@@ -192,10 +179,21 @@ internal sealed class DiffLensFileLoader
         }
         var baseline = baselineBytes == null ? string.Empty : GitChangedFileContent.DecodeText(baselineBytes)
             ?? throw new InvalidOperationException("The baseline is not supported text.");
-        var bytes = File.Exists(fullPath) ? await File.ReadAllBytesAsync(fullPath) : null;
+        var bytes = File.Exists(fullPath) ? await ReadWorkingBytesAsync(fullPath) : null;
         if (bytes == null && !hasBaseline)
             throw new FileNotFoundException("File is absent from both the branch base and working tree.", fullPath);
         return new DiffLensFile(fullPath, relative, mergeBase, baseline, bytes);
+    }
+
+    private async Task<byte[]> ReadWorkingBytesAsync(string fullPath)
+    {
+        var file = new FileInfo(fullPath);
+        var looksLikeText = file.Length == 0 || file.IsTextFile();
+        var bytes = await File.ReadAllBytesAsync(fullPath, m_cancellation);
+        // DTC.Core samples ASCII and known extensions. Keep valid Unicode and tiny text files too.
+        if (!looksLikeText && GitChangedFileContent.DecodeText(bytes) == null)
+            throw new InvalidOperationException("Binary file — no text preview.");
+        return bytes;
     }
 
     private static string ResolveEditablePath(string root, string path)
@@ -217,7 +215,7 @@ internal sealed class DiffLensFileLoader
 
     private async Task<string> RunAsync(string root, params string[] args)
     {
-        var result = await m_git.RunAsync(root, args);
+        var result = await m_git.RunAsync(root, m_cancellation, args);
         if (!result.IsSuccess)
             throw new InvalidOperationException(result.StandardError.Trim());
         return result.StandardOutput;
@@ -236,3 +234,11 @@ internal sealed class DiffLensFileLoader
         return result.ToArray();
     }
 }
+
+/// <summary>
+/// Reports the current stage and optional file count while loading a DiffLens snapshot.
+/// </summary>
+/// <remarks>
+/// A zero total represents a Git operation whose duration is not yet known.
+/// </remarks>
+internal sealed record DiffLensLoadProgress(string Stage, int Completed, int Total);

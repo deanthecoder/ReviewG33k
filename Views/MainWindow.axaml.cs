@@ -60,7 +60,7 @@ public partial class MainWindow : Window
                 ? LocalBaseBranchService.NormalizeBranchName(m_viewModel.LocalBaseBranch) ?? "main"
                 : "HEAD";
             var review = m_diffLensReview?.Matches(m_viewModel.LocalRepositoryPath, baseBranch, DiffLensReviewMode) == true ? m_diffLensReview : null;
-            new DiffLens.DiffLensWindow(["--repo", m_viewModel.LocalRepositoryPath, "--base", baseBranch], review, DiffLensReviewMode).Show(this);
+            await new DiffLens.DiffLensWindow(["--repo", m_viewModel.LocalRepositoryPath, "--base", baseBranch], review, DiffLensReviewMode).ShowDialog(this);
         }
         catch (Exception ex)
         {
@@ -350,7 +350,7 @@ public partial class MainWindow : Window
                 var snapshot = Services.DiffLens.DiffLensReviewSnapshot.Create(reviewSnapshot.Root,
                     reviewSnapshot.BaseBranch, scannedRoot, findings, reviewSnapshot.Mode);
                 m_diffLensReview = snapshot;
-                new DiffLens.DiffLensWindow(["--repo", snapshot.Root, "--base", snapshot.BaseBranch], snapshot).Show(owner);
+                _ = new DiffLens.DiffLensWindow(["--repo", snapshot.Root, "--base", snapshot.BaseBranch], snapshot).ShowDialog(owner);
             });
         await resultsWindow.ShowDialog(this);
     }
