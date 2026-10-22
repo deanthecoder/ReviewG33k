@@ -48,6 +48,7 @@ internal sealed class DiffLensWindow : Window
     private readonly DiffLensControl m_canvas = new();
     private readonly TextEditor m_editor = new()
     {
+        Options = { ConvertTabsToSpaces = true, IndentationSize = 4 },
         ShowLineNumbers = true, FontFamily = new FontFamily("Cascadia Mono,Consolas,monospace"), FontSize = 16,
         Background = Brush.Parse("#151E29"), Foreground = Brush.Parse("#D7E3EE"), IsVisible = false
     };

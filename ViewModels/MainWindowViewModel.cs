@@ -73,6 +73,7 @@ public sealed class MainWindowViewModel : ViewModelBase
     private CommandBase m_openPullRequestCommandImpl;
     private CommandBase m_openSolutionCommandImpl;
 
+    public ObservableCollection<LocalRepositoryOption> LocalRepositoryOptions { get; } = [];
     public ObservableCollection<string> LocalBaseBranchOptions { get; } = [];
     public ICommand BrowseRepositoryRootCommand { get; private set; }
     public ICommand BrowseLocalRepositoryCommand { get; private set; }

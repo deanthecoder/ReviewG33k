@@ -34,6 +34,8 @@ namespace ReviewG33k.Views;
 public partial class MainWindow : Window
 {
     private Services.DiffLens.DiffLensReviewSnapshot m_diffLensReview;
+    private CancellationTokenSource m_repositoryDiscoveryCancellation;
+    private bool m_isClosing;
 
     private async void DiffLensButton_OnClick(object sender, RoutedEventArgs e)
     {
@@ -143,7 +145,6 @@ public partial class MainWindow : Window
             (title, message) => DialogService.Instance.ShowMessage(title, message, null));
         PullRequestUrlTextBox.AddHandler(DragDrop.DragOverEvent, PullRequestUrlTextBox_OnDragOver);
         PullRequestUrlTextBox.AddHandler(DragDrop.DropEvent, PullRequestUrlTextBox_OnDrop);
-        LocalRepositoryFolderTextBox.LostFocus += LocalRepositoryFolderTextBox_OnLostFocus;
         LogListBox.AddHandler(PointerPressedEvent, LogListBox_OnPointerPressed, RoutingStrategies.Bubble);
         Opened += MainWindow_OnOpened;
         Activated += MainWindow_OnActivated;
@@ -682,14 +683,106 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private async void LocalRepositoryFolderTextBox_OnLostFocus(object sender, RoutedEventArgs e)
+    private void LocalRepositoryComboBox_OnDropDownOpened(object sender, EventArgs e)
     {
+        if (m_repositoryDiscoveryCancellation == null)
+            RefreshLocalRepositories();
+    }
+
+    private async void LocalRepositoryComboBox_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (LocalRepositoryComboBox.SelectedItem is not LocalRepositoryOption option ||
+            RepositoryUtilities.AreSameRepoPath(option.FullPath, m_viewModel.LocalRepositoryPath))
+            return;
+        m_viewModel.LocalRepositoryPath = option.FullPath;
         if (!m_viewModel.IsLocalFolderReviewMode)
             await TryAutoDetectLocalBaseBranchAsync(logWhenUpdated: true);
     }
 
+    private async void RefreshLocalRepositories(bool debounce = false)
+    {
+        m_repositoryDiscoveryCancellation?.Cancel();
+        var cancellation = new CancellationTokenSource();
+        m_repositoryDiscoveryCancellation = cancellation;
+        var token = cancellation.Token;
+        var rootPath = m_viewModel.RepositoryRootPath;
+        // Keep existing choices during a refresh, but discard them when the root is edited.
+        if (debounce)
+            m_viewModel.LocalRepositoryOptions.Clear();
+        SyncLocalRepositorySelection();
+        try
+        {
+            if (debounce)
+                await Task.Delay(300, token);
+            var found = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            await Task.Run(() =>
+            {
+                foreach (var path in LocalRepositoryDiscoveryService.Discover(rootPath, token))
+                {
+                    found.Add(path);
+                    var option = LocalRepositoryOption.Create(path, rootPath);
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (token.IsCancellationRequested || m_isClosing || m_viewModel.LocalRepositoryOptions.Any(item => RepositoryUtilities.AreSameRepoPath(item.FullPath, path)))
+                            return;
+                        var index = 0;
+                        while (index < m_viewModel.LocalRepositoryOptions.Count &&
+                               StringComparer.OrdinalIgnoreCase.Compare(m_viewModel.LocalRepositoryOptions[index].DisplayName, option.DisplayName) < 0)
+                            index++;
+                        m_viewModel.LocalRepositoryOptions.Insert(index, option);
+                    });
+                }
+            }, token);
+            token.ThrowIfCancellationRequested();
+            foreach (var stale in m_viewModel.LocalRepositoryOptions.Where(item => !found.Contains(item.FullPath) &&
+                         !RepositoryUtilities.AreSameRepoPath(item.FullPath, m_viewModel.LocalRepositoryPath)).ToArray())
+                m_viewModel.LocalRepositoryOptions.Remove(stale);
+        }
+        catch (OperationCanceledException)
+        {
+            // A new root or a closing window supersedes this scan.
+        }
+        catch (Exception ex)
+        {
+            if (!m_isClosing)
+                AppendLog($"Unable to discover local repositories: {ex.Message}");
+        }
+        finally
+        {
+            if (ReferenceEquals(m_repositoryDiscoveryCancellation, cancellation))
+                m_repositoryDiscoveryCancellation = null;
+            cancellation.Dispose();
+        }
+    }
+
+    private void SyncLocalRepositorySelection()
+    {
+        var path = m_viewModel.LocalRepositoryPath;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            LocalRepositoryComboBox.SelectedItem = null;
+            return;
+        }
+        var option = m_viewModel.LocalRepositoryOptions.FirstOrDefault(item => RepositoryUtilities.AreSameRepoPath(item.FullPath, path));
+        if (option == null)
+        {
+            // Keep saved paths and folders chosen with Browse available outside the scanned root too.
+            try
+            {
+                option = LocalRepositoryOption.Create(path, m_viewModel.RepositoryRootPath);
+            }
+            catch (ArgumentException)
+            {
+                return;
+            }
+            m_viewModel.LocalRepositoryOptions.Add(option);
+        }
+        LocalRepositoryComboBox.SelectedItem = option;
+    }
+
     private async void MainWindow_OnOpened(object sender, EventArgs e)
     {
+        RefreshLocalRepositories();
         await EnsureGitIsAvailableOnStartupAsync();
         if (m_viewModel.IsGitAvailable)
         {
@@ -705,6 +798,8 @@ public partial class MainWindow : Window
 
     private void MainWindow_OnClosing(object sender, WindowClosingEventArgs e)
     {
+        m_isClosing = true;
+        m_repositoryDiscoveryCancellation?.Cancel();
         m_viewModel.PropertyChanged -= ViewModel_OnPropertyChanged;
         m_busyActionCancellation?.Cancel();
         m_busyActionCancellation?.Dispose();
@@ -730,9 +825,13 @@ public partial class MainWindow : Window
 
         if (e.PropertyName == nameof(MainWindowViewModel.RepositoryRootPath))
         {
+            RefreshLocalRepositories(debounce: true);
             UpdateActionButtonStates();
             return;
         }
+
+        if (e.PropertyName == nameof(MainWindowViewModel.LocalRepositoryPath))
+            SyncLocalRepositorySelection();
 
         if (e.PropertyName == nameof(MainWindowViewModel.LocalRepositoryPath) ||
             e.PropertyName == nameof(MainWindowViewModel.LocalBaseBranch) ||
@@ -776,6 +875,8 @@ public partial class MainWindow : Window
             m_localBaseBranchService,
             logWhenUpdated,
             AppendLog);
+        // Rebuilding the options can clear the control's selection during two-way binding updates.
+        LocalBaseBranchComboBox.SelectedItem = m_viewModel.LocalBaseBranch;
         if (didUpdateSelection)
             InvalidateLocalReviewChangedFilesCache();
     }
