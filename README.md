@@ -53,7 +53,7 @@ Explore the files from your selected local review mode on a zoomable folder canv
 
 ![DiffLens canvas with a selected file and issue markers](img/DiffLens.png)
 
-- **Navigate:** scroll or drag to pan. On Mac, pinch or **⌘+scroll** to zoom; **Ctrl+wheel** also works. **Shift+scroll** moves long lines horizontally. Click a folder label to fit that group, or use **Fit all** (middle-click also works).
+- **Navigate:** scroll or drag to pan. On Mac, pinch or **⌘+scroll** to zoom; **Ctrl+wheel** also works. **Shift+scroll** moves long lines horizontally. Click a folder label to fit that group, or use **Fit all** (middle-click also works). Middle-click a file header to animate that file into view.
 - **Scope:** the top-left picker switches between all local changes, staged changes (HEAD to index), unstaged changes (index to disk, including untracked files), the entire branch (merge base to disk), and individual commits (first-parent comparison). Staged/unstaged choices appear when both exist; an explicitly selected scope remains available if it becomes empty. Commit entries show subject, hash, and date. The original whole-repository review scope remains available when opened from that mode.
 - **Compare:** use each file's corner buttons, or **U** / **S**, to switch between unified and side-by-side diffs. The selected file has an amber border and header.
 - **Edit:** double-click a line to open its working-file editor (staged and commit snapshots open read-only); **Esc** returns to the canvas. Edits and undo/redo save automatically, retaining encoding, line endings, and each file's undo history. Saves refuse to overwrite external changes and retain unsaved edits if saving fails.

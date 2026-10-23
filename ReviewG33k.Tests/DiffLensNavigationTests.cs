@@ -8,6 +8,38 @@ namespace ReviewG33k.Tests;
 [TestFixture]
 public sealed class DiffLensNavigationTests
 {
+    [TestCase(true)]
+    [TestCase(false)]
+    public void MiddleClickFitsFileHeaderOrWholeCanvas(bool header)
+    {
+        var canvas = new DiffLensControl();
+        canvas.Measure(new Size(1200, 800));
+        canvas.Arrange(new Rect(0, 0, 1200, 800));
+        var cells = new[]
+        {
+            new DiffLensCell(new DiffLensEntry("first.cpp", null, "preview")),
+            new DiffLensCell(new DiffLensEntry("second.cpp", null, "preview"))
+        };
+        canvas.SetFiles("repo", cells);
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var offset = (Vector)typeof(DiffLensControl).GetField("m_offset", flags)!.GetValue(canvas)!;
+        var point = (cells[1].Position + new Vector(100, header ? 20 : 100)) * canvas.Zoom + offset;
+        var pointer = new Pointer(1, PointerType.Mouse, true);
+        canvas.RaiseEvent(new PointerPressedEventArgs(canvas, pointer, canvas, point, 0,
+            new PointerPointProperties(Avalonia.Input.RawInputModifiers.MiddleMouseButton, PointerUpdateKind.MiddleButtonPressed), KeyModifiers.None));
+        canvas.RaiseEvent(new PointerReleasedEventArgs(canvas, pointer, canvas, point, 0,
+            new PointerPointProperties(), KeyModifiers.None, MouseButton.Middle));
+        var target = (double)typeof(DiffLensControl).GetField("m_fitEndZoom", flags)!.GetValue(canvas)!;
+        if (header)
+        {
+            Assert.That(canvas.SelectedPath, Is.EqualTo("second.cpp"));
+            Assert.That(target, Is.EqualTo(Math.Min(1140 / cells[1].Bounds.Width, 740 / cells[1].Bounds.Height)).Within(0.001));
+        }
+        else
+            Assert.That(target, Is.EqualTo(canvas.Zoom).Within(0.001));
+        canvas.StopAnimations();
+    }
+
     [TestCase(false)]
     [TestCase(true)]
     public void ClickingAddedLineTargetsItsWorkingLine(bool split)

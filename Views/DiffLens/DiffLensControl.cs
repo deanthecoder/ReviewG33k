@@ -17,6 +17,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
+using DTC.Core;
 using Avalonia.Threading;
 using System.Diagnostics;
 using DiffPlex.DiffBuilder.Model;
@@ -37,23 +39,29 @@ internal sealed class DiffLensControl : Control
     private const double HeaderHeight = 68;
     private const double RowHeight = 22;
     private const double TextZoomThreshold = 0.2;
-    private readonly Dictionary<(string Text, double Size, IBrush Brush), FormattedText> m_textCache = new();
-    private readonly IBrush m_gridBrush = Brush.Parse("#24303E");
-    private readonly IBrush m_accentBrush = Brush.Parse("#66DCC1");
-    private readonly IBrush m_modeSelectedBrush = Brush.Parse("#28544C");
-    private readonly IBrush m_modeBrush = Brush.Parse("#202E3D");
-    private readonly Pen m_folderPen = new(Brush.Parse("#63816D"), 1);
-    private readonly Pen m_borderPen = new(Brush.Parse("#36546A"), 1);
-    private readonly Pen m_selectedPen = new(Brush.Parse("#E9BC70"), 1.5);
+    private LruCache<(string Text, double Size, IBrush Brush), FormattedText> m_textCache = new(8192);
+    private LruCache<(string Path, double Size, double Width), FormattedText> m_titleCache = new(1024);
+    private readonly LruCache<(bool Accent, double Thickness), ImmutablePen> m_iconPens = new(32);
+    private readonly Func<(string Text, double Size, IBrush Brush), FormattedText> m_createText;
+    private readonly Func<(string Path, double Size, double Width), FormattedText> m_createTitle;
+    private readonly Func<(bool Accent, double Thickness), ImmutablePen> m_createIconPen;
+    private readonly Func<(DiffLensHighlightedText Syntax, int Line, string Text), FormattedText> m_createCode;
+    private readonly IImmutableBrush m_gridBrush = Brush.Parse("#24303E").ToImmutable();
+    private readonly IImmutableBrush m_accentBrush = Brush.Parse("#66DCC1").ToImmutable();
+    private readonly IImmutableBrush m_modeSelectedBrush = Brush.Parse("#28544C").ToImmutable();
+    private readonly IImmutableBrush m_modeBrush = Brush.Parse("#202E3D").ToImmutable();
+    private readonly ImmutablePen m_folderPen = new(Brush.Parse("#63816D").ToImmutable(), 1);
+    private readonly ImmutablePen m_borderPen = new(Brush.Parse("#36546A").ToImmutable(), 1);
+    private readonly ImmutablePen m_selectedPen = new(Brush.Parse("#E9BC70").ToImmutable(), 1.5);
     private readonly Typeface m_font = new("Cascadia Mono,Consolas,monospace");
-    private readonly IBrush m_background = Brush.Parse("#0C1219");
-    private readonly IBrush m_card = Brush.Parse("#151E29");
-    private readonly IBrush m_selectedCard = Brush.Parse("#29251B");
-    private readonly IBrush m_findingMarker = Brush.Parse("#E9BC70");
-    private readonly IBrush m_text = Brush.Parse("#D7E3EE");
-    private readonly IBrush m_muted = Brush.Parse("#8194A8");
-    private readonly IBrush m_added = Brush.Parse("#173C31");
-    private readonly IBrush m_removed = Brush.Parse("#44282E");
+    private readonly IImmutableBrush m_background = Brush.Parse("#0C1219").ToImmutable();
+    private readonly IImmutableBrush m_card = Brush.Parse("#151E29").ToImmutable();
+    private readonly IImmutableBrush m_selectedCard = Brush.Parse("#29251B").ToImmutable();
+    private readonly IImmutableBrush m_findingMarker = Brush.Parse("#E9BC70").ToImmutable();
+    private readonly IImmutableBrush m_text = Brush.Parse("#D7E3EE").ToImmutable();
+    private readonly IImmutableBrush m_muted = Brush.Parse("#8194A8").ToImmutable();
+    private readonly IImmutableBrush m_added = Brush.Parse("#173C31").ToImmutable();
+    private readonly IImmutableBrush m_removed = Brush.Parse("#44282E").ToImmutable();
     private IReadOnlyList<DiffLensCell> m_cells = [];
     private DiffLensFolder m_root;
     private int? m_previousDetail;
@@ -62,6 +70,7 @@ internal sealed class DiffLensControl : Control
     private Vector m_offset = new(60, 45);
     private Point? m_drag;
     private Point? m_middleClickOrigin;
+    private DiffLensCell m_middleClickFile;
     private double m_zoom = 0.6;
     private double m_horizontalScroll;
     private string m_hoverHint;
@@ -77,6 +86,13 @@ internal sealed class DiffLensControl : Control
 
     public DiffLensControl()
     {
+        m_createText = key => new FormattedText(key.Text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, m_font, key.Size, key.Brush);
+        m_createTitle = key => new FormattedText(Path.GetFileName(key.Path), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, m_font, key.Size, m_text)
+        {
+            MaxTextWidth = key.Width, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis
+        };
+        m_createIconPen = key => new ImmutablePen(key.Accent ? m_accentBrush : m_muted, key.Thickness);
+        m_createCode = CreateCodeText;
         ClipToBounds = true;
         Focusable = true;
         // The whole canvas is one control; manage hover as the pointer crosses drawn rows.
@@ -139,8 +155,9 @@ internal sealed class DiffLensControl : Control
 
     public void SetFiles(string rootName, IReadOnlyList<DiffLensCell> cells, bool preserveReview = true)
     {
-        m_textCache.Clear();
-        m_codeCache.Clear();
+        m_textCache = new(8192);
+        m_codeCache = new(8192);
+        m_titleCache = new(1024);
         var previousCells = m_cells.ToDictionary(cell => cell.Entry.Path);
         foreach (var cell in cells)
             if (preserveReview && previousCells.TryGetValue(cell.Entry.Path, out var previous))
@@ -159,8 +176,8 @@ internal sealed class DiffLensControl : Control
             return;
         m_fitTimer.Stop();
         var position = cell.Position;
+        // Replacing this cell's syntax snapshots invalidates only its code-cache keys.
         cell.Update(baseline, working);
-        m_codeCache.Clear();
         m_root = DiffLensLayout.Build(m_root.Name, m_cells);
         m_offset += (position - cell.Position) * m_zoom;
         m_previousDetail = null;
@@ -175,11 +192,12 @@ internal sealed class DiffLensControl : Control
             FitBounds(m_root, animate);
     }
 
-    private void FitBounds(DiffLensFolder folder, bool animate = true)
+    private void FitBounds(DiffLensFolder folder, bool animate = true) => FitBounds(folder.Bounds, animate);
+
+    private void FitBounds(Rect bounds, bool animate = true, double maximumZoom = 0.72)
     {
         HideHoverHint();
-        var bounds = folder.Bounds;
-        var zoom = Math.Clamp(Math.Min((Bounds.Width - 60) / bounds.Width, (Bounds.Height - 60) / bounds.Height), 0.001, 0.72);
+        var zoom = Math.Clamp(Math.Min((Bounds.Width - 60) / bounds.Width, (Bounds.Height - 60) / bounds.Height), 0.001, maximumZoom);
         var offset = new Vector((Bounds.Width - bounds.Width * zoom) / 2 - bounds.X * zoom,
             (Bounds.Height - bounds.Height * zoom) / 2 - bounds.Y * zoom);
         m_fitTimer.Stop();
@@ -252,10 +270,10 @@ internal sealed class DiffLensControl : Control
 
     private Rect FolderReviewButton(DiffLensFolder folder)
     {
-        var size = Math.Min(26, 32 * m_zoom);
-        var gap = 6 * m_zoom;
-        return new Rect(m_offset.X + folder.Bounds.Right * m_zoom - gap - size,
-            m_offset.Y + folder.Bounds.Top * m_zoom + gap, size, size);
+        var size = Math.Min(18, 32 * m_zoom);
+        var title = FolderTitle(folder);
+        return new Rect(m_offset.X + folder.Bounds.Left * m_zoom + 6,
+            m_offset.Y + folder.Bounds.Top * m_zoom + 3 + Math.Max(0, (title.Height - size) / 2), size, size);
     }
 
     private void MarkFolderReviewed(DiffLensFolder folder)
@@ -354,11 +372,28 @@ internal sealed class DiffLensControl : Control
         }
     }
 
+    private void DrawGroupCollapse(DrawingContext context, Rect bounds, bool reviewed)
+    {
+        context.FillRectangle(reviewed ? m_modeSelectedBrush : m_modeBrush, bounds, 2);
+        var icon = bounds.Deflate(bounds.Width * 0.18);
+        var pen = m_iconPens.GetOrAdd((reviewed, Math.Min(1.3, m_zoom * 2)), m_createIconPen);
+        for (var corner = 0; corner < 4; corner++)
+        {
+            var dx = (corner & 1) == 0 ? -1 : 1;
+            var dy = (corner & 2) == 0 ? -1 : 1;
+            var tip = icon.Center + new Vector(dx * icon.Width * 0.13, dy * icon.Height * 0.13);
+            var tail = icon.Center + new Vector(dx * icon.Width / 2, dy * icon.Height / 2);
+            context.DrawLine(pen, tail, tip);
+            context.DrawLine(pen, tip, tip + new Vector(dx * icon.Width * 0.25, 0));
+            context.DrawLine(pen, tip, tip + new Vector(0, dy * icon.Height * 0.25));
+        }
+    }
+
     private void DrawReviewTick(DrawingContext context, Rect bounds, bool reviewed)
     {
         context.FillRectangle(reviewed ? m_modeSelectedBrush : m_modeBrush, bounds, 2);
         var icon = bounds.Deflate(bounds.Width * 0.24);
-        var pen = new Pen(reviewed ? m_accentBrush : m_muted, Math.Min(2, m_zoom * 3));
+        var pen = m_iconPens.GetOrAdd((reviewed, Math.Min(2, m_zoom * 3)), m_createIconPen);
         var elbow = new Point(icon.Left + icon.Width * 0.35, icon.Bottom);
         context.DrawLine(pen, new Point(icon.Left, icon.Center.Y), elbow);
         context.DrawLine(pen, elbow, new Point(icon.Right, icon.Top));
@@ -373,13 +408,14 @@ internal sealed class DiffLensControl : Control
             var bounds = ReviewButton(cell);
             DrawReviewTick(context, bounds, cell.IsReviewed);
         }
-        foreach (var split in new[] { false, true })
+        for (var mode = 0; mode < 2; mode++)
         {
+            var split = mode == 1;
             var bounds = ModeButton(cell, split);
             var selected = (cell.Detail >= 3) == split;
             context.FillRectangle(selected ? m_modeSelectedBrush : m_modeBrush, bounds, 2);
             var icon = bounds.Deflate(bounds.Width * 0.24);
-            var pen = new Pen(selected ? m_accentBrush : m_muted, Math.Min(1.3, m_zoom * 2));
+            var pen = m_iconPens.GetOrAdd((selected, Math.Min(1.3, m_zoom * 2)), m_createIconPen);
             context.DrawRectangle(pen, icon);
             if (split)
                 context.DrawLine(pen, new Point(icon.Center.X, icon.Top), new Point(icon.Center.X, icon.Bottom));
@@ -412,10 +448,12 @@ internal sealed class DiffLensControl : Control
             if (label.Height < 7 || !label.Intersects(new Rect(Bounds.Size)))
                 continue;
             var tick = FolderReviewButton(folder);
-            using (context.PushClip(new Rect(label.Position, new Size(Math.Max(0, tick.Left - label.Left - 6), label.Height))))
-                DrawText(context, $"{folder.Name}  ·  {folder.FileCount} files", label.X + 6, label.Y + 3, m_muted, Math.Min(14, 38 * m_zoom));
-            if (32 * m_zoom >= 6 && folder.ReviewableFiles.Any())
-                DrawReviewTick(context, tick, folder.IsReviewed);
+            var showTick = 32 * m_zoom >= 6 && folder.ReviewableFiles.Any();
+            var titleLeft = showTick ? tick.Right + 6 : label.Left + 6;
+            using (context.PushClip(new Rect(titleLeft, label.Top, Math.Max(0, label.Right - titleLeft - 6), label.Height)))
+                context.DrawText(FolderTitle(folder), new Point(titleLeft, label.Y + 3));
+            if (showTick)
+                DrawGroupCollapse(context, tick, folder.IsReviewed);
         }
         var progress = m_previousDetail == null ? 1 : Math.Clamp(m_fadeClock.Elapsed.TotalMilliseconds / 180, 0, 1);
         foreach (var cell in m_cells)
@@ -448,6 +486,9 @@ internal sealed class DiffLensControl : Control
 
         }
     }
+
+    private FormattedText FolderTitle(DiffLensFolder folder) => m_textCache.GetOrAdd(
+        ($"{folder.Name}  ·  {folder.FileCount} files", Math.Min(14, 38 * m_zoom), m_muted), m_createText);
 
     private Rect FolderLabel(DiffLensFolder folder) => new(folder.Bounds.Position * m_zoom + m_offset,
         new Size(folder.Bounds.Width * m_zoom, DiffLensLayout.FolderHeader * m_zoom));
@@ -506,12 +547,7 @@ internal sealed class DiffLensControl : Control
         var titleBounds = new Rect(offset.X + 2, offset.Y + 1, Math.Max(1, ModeButton(cell, false).Left - offset.X - 6), Math.Max(1, HeaderHeight * m_zoom - 2));
         using (context.PushClip(titleBounds))
         {
-            var title = new FormattedText(System.IO.Path.GetFileName(cell.Entry.Path), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, m_font, titleSize, m_text)
-            {
-                MaxTextWidth = Math.Max(1, titleBounds.Width - 12),
-                MaxLineCount = 1,
-                Trimming = TextTrimming.CharacterEllipsis
-            };
+            var title = m_titleCache.GetOrAdd((cell.Entry.Path, titleSize, Math.Max(1, Math.Round(titleBounds.Width - 12, 2))), m_createTitle);
             context.DrawText(title, new Point(titleBounds.X + 6, titleBounds.Y + Math.Min(6, m_zoom * 6)));
         }
         if (!cell.IsReviewed && cell.Detail >= 3 && m_zoom >= 0.45)
@@ -574,7 +610,7 @@ internal sealed class DiffLensControl : Control
             context.FillRectangle(m_muted, new Rect(x + 70, y, Math.Min(width - 80, length * 8.4), 1 / m_zoom));
     }
 
-    private readonly Dictionary<(DiffLensCell Cell, bool OldSide, int Line), FormattedText> m_codeCache = new();
+    private LruCache<(DiffLensHighlightedText Syntax, int Line, string Text), FormattedText> m_codeCache = new(8192);
 
     private void DrawCode(DrawingContext context, DiffLensCell cell, DiffPiece piece, bool oldSide, double x, double y)
     {
@@ -584,33 +620,25 @@ internal sealed class DiffLensControl : Control
             DrawText(context, piece.Text.Replace("\t", "    "), x, y, m_text);
             return;
         }
-        var key = (cell, oldSide, lineNumber);
-        if (!m_codeCache.TryGetValue(key, out var formatted))
-        {
-            if (m_codeCache.Count >= 8192)
-                m_codeCache.Clear();
-            formatted = new FormattedText(piece.Text.Replace("\t", "    "), CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight, m_font, 14, m_text);
-            var line = syntax.Line(lineNumber);
-            if (line != null)
-                foreach (var section in line.Sections)
-                    if (section.Color.Foreground is { } foreground)
-                        formatted.SetForegroundBrush(foreground.GetBrush(null), section.Offset - line.DocumentLine.Offset, section.Length);
-            m_codeCache[key] = formatted;
-        }
+        var formatted = m_codeCache.GetOrAdd((syntax, lineNumber, piece.Text), m_createCode);
         context.DrawText(formatted, new Point(x, y));
+    }
+
+    private FormattedText CreateCodeText((DiffLensHighlightedText Syntax, int Line, string Text) key)
+    {
+        var formatted = new FormattedText(key.Text.Replace("\t", "    "), CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, m_font, 14, m_text);
+        var line = key.Syntax.Line(key.Line);
+        if (line != null)
+            foreach (var section in line.Sections)
+                if (section.Color.Foreground is { } foreground)
+                    formatted.SetForegroundBrush(foreground.GetBrush(null).ToImmutable(), section.Offset - line.DocumentLine.Offset, section.Length);
+        return formatted;
     }
 
     private void DrawText(DrawingContext context, string text, double x, double y, IBrush brush, double size = 14)
     {
-        var key = (text, size, brush);
-        if (!m_textCache.TryGetValue(key, out var formatted))
-        {
-            // Bound retained layout data when exploring large or repeatedly edited repositories.
-            if (m_textCache.Count >= 8192)
-                m_textCache.Clear();
-            m_textCache[key] = formatted = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, m_font, size, brush);
-        }
+        var formatted = m_textCache.GetOrAdd((text, size, brush), m_createText);
         context.DrawText(formatted, new Point(x, y));
     }
 
@@ -692,6 +720,7 @@ internal sealed class DiffLensControl : Control
         {
             m_drag = e.GetPosition(this);
             m_middleClickOrigin = e.GetCurrentPoint(this).Properties.IsMiddleButtonPressed ? m_drag : null;
+            m_middleClickFile = m_middleClickOrigin != null && cell != null && local.Y < cell.Position.Y + HeaderHeight ? cell : null;
             e.Pointer.Capture(this);
             e.Handled = true;
         }
@@ -761,12 +790,21 @@ internal sealed class DiffLensControl : Control
     {
         var fit = e.InitialPressMouseButton == MouseButton.Middle &&
                   m_middleClickOrigin is { } origin && ((Vector)(e.GetPosition(this) - origin)).Length <= 4;
+        var file = m_middleClickFile;
         m_drag = null;
         m_middleClickOrigin = null;
+        m_middleClickFile = null;
         e.Pointer.Capture(null);
         if (fit)
         {
-            Fit();
+            if (file != null)
+            {
+                SelectedPath = file.Entry.Path;
+                ViewChanged?.Invoke(this, EventArgs.Empty);
+                FitBounds(file.Bounds, maximumZoom: 2.5);
+            }
+            else
+                Fit();
             e.Handled = true;
         }
         // Control raises ContextRequested here for a right-button release.
@@ -790,6 +828,7 @@ internal sealed class DiffLensControl : Control
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         base.OnPointerCaptureLost(e);
+        m_middleClickFile = null;
         m_drag = null;
         m_middleClickOrigin = null;
     }
