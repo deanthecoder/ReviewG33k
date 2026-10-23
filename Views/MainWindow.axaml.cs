@@ -41,8 +41,15 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (m_viewModel.IsPullRequestReviewMode ||
-                string.IsNullOrWhiteSpace(m_viewModel.LocalRepositoryPath))
+            if (m_viewModel.IsPullRequestReviewMode)
+            {
+                if (!m_viewModel.CanOpenDiffLens)
+                    return;
+                await new DiffLens.DiffLensWindow(["--repo", m_viewModel.LatestReviewWorktreePath,
+                    "--base", m_viewModel.LatestPullRequestBaseBranch], m_diffLensReview, CommandLineReviewMode.Committed).ShowDialog(this);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(m_viewModel.LocalRepositoryPath))
             {
                 var path = await BrowseFolderAsync("Choose a repository for DiffLens", m_viewModel.LocalRepositoryPath);
                 if (string.IsNullOrWhiteSpace(path))
@@ -296,6 +303,10 @@ public partial class MainWindow : Window
                     : "HEAD",
                 applyResult.ReviewWorktreePath ?? m_viewModel.LocalRepositoryPath, applyResult.Report.Findings, DiffLensReviewMode);
         }
+        if (applyResult.Report != null && m_viewModel.IsPullRequestReviewMode &&
+            !string.IsNullOrWhiteSpace(applyResult.PullRequestBaseBranch) && RepositoryUtilities.IsGitRepository(applyResult.ReviewWorktreePath))
+            m_diffLensReview = Services.DiffLens.DiffLensReviewSnapshot.Create(applyResult.ReviewWorktreePath,
+                applyResult.PullRequestBaseBranch, applyResult.ReviewWorktreePath, applyResult.Report.Findings, CommandLineReviewMode.Committed);
         if (applyResult.HasReportFindings)
             await ShowReviewResultsWindowAsync(applyResult.Report);
     }

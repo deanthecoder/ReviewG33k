@@ -143,6 +143,16 @@ public sealed class MainWindowReviewWorkflowServiceTests
         });
     }
 
+    [TestCase(true, "OPEN", "main")]
+    [TestCase(false, "MERGED", "HEAD^")]
+    public void PullRequestDiffLensUsesReviewedComparison(bool open, string state, string expectedBase)
+    {
+        var result = CreateService().BuildApplyResult(
+            CreatePullRequestPreparationResult(open, new CodeSmellReport(), state), @"C:\unrelated");
+        Assert.That(result.PullRequestBaseBranch, Is.EqualTo(expectedBase));
+        Assert.That(result.ReviewWorktreePath, Is.EqualTo(@"C:\repo\CodeReview\PR98"));
+    }
+
     private static MainWindowReviewWorkflowService CreateService()
     {
         var gitRunner = new GitCommandRunner();

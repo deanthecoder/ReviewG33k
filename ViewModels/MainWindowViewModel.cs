@@ -177,7 +177,11 @@ public sealed class MainWindowViewModel : ViewModelBase
     public string PullRequestUrl
     {
         get => m_pullRequestUrl;
-        set => SetField(ref m_pullRequestUrl, NormalizePullRequestUrl(value));
+        set
+        {
+            if (SetField(ref m_pullRequestUrl, NormalizePullRequestUrl(value)))
+                OnActionStateChanged();
+        }
     }
 
     public string PullRequestMetadataText
@@ -231,6 +235,13 @@ public sealed class MainWindowViewModel : ViewModelBase
     internal BitbucketPullRequestReference LatestPullRequest { get; private set; }
 
     internal string LatestReviewWorktreePath => m_latestReviewWorktreePath;
+
+    internal string LatestPullRequestBaseBranch { get; private set; }
+
+    public bool CanOpenDiffLens => !IsBusy && (!IsPullRequestReviewMode ||
+        (CurrentPullRequestMatchesLatestReview() &&
+         !string.IsNullOrWhiteSpace(LatestPullRequestBaseBranch) &&
+         RepositoryUtilities.IsGitRepository(LatestReviewWorktreePath)));
 
     internal string LatestSolutionPath => m_latestSolutionPath;
 
@@ -531,6 +542,8 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         m_latestReviewWorktreePath = applyResult.ReviewWorktreePath;
         m_latestSolutionPath = applyResult.SolutionPath;
+        LatestPullRequestBaseBranch = applyResult.PullRequestBaseBranch;
+        OnActionStateChanged();
     }
 
     internal async Task<PullRequestPreviewResult> RefreshPullRequestPreviewAsync(
@@ -760,6 +773,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanOpenPullRequest));
         OnPropertyChanged(nameof(CanPostPullRequestReviewStamp));
         OnPropertyChanged(nameof(CanOpenSolution));
+        OnPropertyChanged(nameof(CanOpenDiffLens));
         OnPropertyChanged(nameof(CanCancelProcessing));
         OnPropertyChanged(nameof(ShowCancelStoppingText));
         RaiseCommandCanExecuteChanged();

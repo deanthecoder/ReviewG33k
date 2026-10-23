@@ -103,6 +103,19 @@ public sealed class DiffLensTests
     }
 
     [Test]
+    public async Task MergedPullRequestComparisonUsesFirstParentInsteadOfTargetBranch()
+    {
+        await File.WriteAllTextAsync(Path.Combine(m_root, "sample.cs"), "// Merged PR change\n");
+        await Git("add", ".");
+        await Git("commit", "-m", "Merge PR");
+        var loader = new DiffLensFileLoader();
+        var catalog = await loader.GetScopesAsync(m_root, "HEAD^");
+        var set = await loader.LoadScopeAsync(m_root, catalog.Target, new DiffLensScope("branch", "PR"));
+        Assert.That(set.Entries.Single().File.Baseline, Does.Contain("class Sample"));
+        Assert.That(set.Entries.Single().File.WorkingText, Is.EqualTo("// Merged PR change\n"));
+    }
+
+    [Test]
     public async Task CleanRepositoryHidesLocalScopesButKeepsAnExplicitSelectionAsync()
     {
         var loader = new DiffLensFileLoader();

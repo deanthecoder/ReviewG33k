@@ -20,6 +20,43 @@ namespace ReviewG33k.Tests;
 public sealed class MainWindowViewModelTests
 {
     [Test]
+    public void DiffLensRequiresMatchingPreparedPullRequestWorkspace()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(root, ".git"));
+        try
+        {
+            const string url = "https://bitbucket.example.com/projects/PROJ/repos/repo/pull-requests/42";
+            var vm = new MainWindowViewModel(new Settings()) { ReviewModeIndex = 0, PullRequestUrl = url };
+            Assert.That(vm.CanOpenDiffLens, Is.False);
+            var changed = new List<string>();
+            vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+            vm.ApplyReviewWorkflowResult(new MainWindowReviewWorkflowApplyResult(
+                MainWindowReviewPreparationMode.PullRequest,
+                new BitbucketPullRequestReference("bitbucket.example.com", "PROJ", "repo", 42, url),
+                "Example", "OPEN", root, null, "Complete", null, false, new CodeSmellReport(), null, null, "develop"));
+            Assert.That(vm.CanOpenDiffLens, Is.True);
+            Assert.That(vm.LatestPullRequestBaseBranch, Is.EqualTo("develop"));
+            Assert.That(changed, Does.Contain(nameof(vm.CanOpenDiffLens)));
+            vm.IsBusy = true;
+            Assert.That(vm.CanOpenDiffLens, Is.False);
+            vm.IsBusy = false;
+            vm.PullRequestUrl = url.Replace("42", "43");
+            Assert.That(vm.CanOpenDiffLens, Is.False);
+            vm.PullRequestUrl = url;
+            Assert.That(vm.CanOpenDiffLens, Is.True);
+            vm.ClearPullRequestReviewContext();
+            Assert.That(vm.CanOpenDiffLens, Is.False);
+            vm.ReviewModeIndex = 2;
+            Assert.That(vm.CanOpenDiffLens, Is.True);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Test]
     public void RetiredSavedModeFallsBackToEntireRepository()
     {
         var viewModel = new MainWindowViewModel(new Settings { ReviewModeIndex = 4 });

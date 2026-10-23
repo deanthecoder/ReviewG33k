@@ -312,8 +312,8 @@
                                 <Button Grid.Column="4" Content="DiffLens"
                                         HorizontalAlignment="Left" Margin="8,0,12,0"
                                         Classes="neon" Padding="12,8"
-                                        IsEnabled="{Binding !IsBusy}"
-                                        ToolTip.Tip="Explore changes and the latest local review findings"
+                                        IsEnabled="{Binding CanOpenDiffLens}"
+                                        ToolTip.Tip="Explore changes and review findings (review the PR first)"
                                         Click="DiffLensButton_OnClick" />
                                 <Button x:Name="OpenSolutionButton"
                                         Grid.Column="5"

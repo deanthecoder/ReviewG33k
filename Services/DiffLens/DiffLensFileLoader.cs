@@ -137,10 +137,10 @@ internal sealed partial class DiffLensFileLoader
         if (string.IsNullOrWhiteSpace(target))
             throw new InvalidOperationException("Choose a target branch, such as main.");
         string mergeBase;
-        if (target == "HEAD")
+        if (target == "HEAD" || target == "HEAD^")
         {
             // Comparing the index and working tree to HEAD excludes already committed branch changes.
-            mergeBase = (await RunAsync(root, "rev-parse", "HEAD")).Trim();
+            mergeBase = (await RunAsync(root, "rev-parse", target)).Trim();
         }
         else
         {

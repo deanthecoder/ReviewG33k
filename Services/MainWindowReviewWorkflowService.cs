@@ -133,7 +133,8 @@ internal sealed class MainWindowReviewWorkflowService
             notifyNonOpenPullRequest,
             report,
             null,
-            null);
+            null,
+            isPullRequestOpen == false && report != null ? "HEAD^" : executionResult?.Metadata?.TargetBranch);
     }
 
     private static MainWindowReviewWorkflowApplyResult BuildLocalCommittedApplyResult(
@@ -213,7 +214,8 @@ internal sealed record MainWindowReviewWorkflowApplyResult(
     bool NotifyNonOpenPullRequest,
     CodeSmellReport Report,
     MainWindowLocalFindingCacheUpdate? LocalFindingCacheUpdate,
-    string ResolvedLocalBaseBranch)
+    string ResolvedLocalBaseBranch,
+    string PullRequestBaseBranch = null)
 {
     public bool HasReportFindings => Report?.Findings.Count > 0;
 }
