@@ -24,7 +24,7 @@ namespace ReviewG33k.Services.DiffLens;
 /// <remarks>
 /// Uses HEAD for uncommitted changes, resolves branch refs without fetching, and preserves rename paths.
 /// </remarks>
-internal sealed class DiffLensFileLoader
+internal sealed partial class DiffLensFileLoader
 {
     private readonly GitCommandRunner m_git = new();
     private readonly CancellationToken m_cancellation;

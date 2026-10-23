@@ -43,6 +43,75 @@ public sealed class DiffLensTests
         Directory.Delete(m_root, true);
     }
 
+    [Test]
+    public async Task ComparisonScopesSeparateIndexWorkingTreeAndCommitSnapshotsAsync()
+    {
+        var path = Path.Combine(m_root, "sample.cs");
+        var original = await File.ReadAllTextAsync(path);
+        await File.WriteAllTextAsync(path, "staged version\n");
+        await Git("add", "sample.cs");
+        await File.WriteAllTextAsync(path, "working version\n");
+        await File.WriteAllTextAsync(Path.Combine(m_root, "new.glsl"), "void main() {}\n");
+        var loader = new DiffLensFileLoader();
+        var catalog = await loader.GetScopesAsync(m_root, "main");
+        Assert.That(catalog.Scopes.Select(s => s.Id), Does.Contain("staged").And.Contain("unstaged"));
+        var staged = await loader.LoadScopeAsync(m_root, "main", new DiffLensScope("staged", "Staged"));
+        var stagedFile = staged.Entries.Single().File;
+        Assert.That(stagedFile.Baseline, Is.EqualTo(original));
+        Assert.That(stagedFile.WorkingText, Is.EqualTo("staged version\n"));
+        Assert.That(stagedFile.CanEdit, Is.False);
+        Assert.ThrowsAsync<InvalidOperationException>(() => stagedFile.SaveAsync("do not write"));
+        var unstaged = await loader.LoadScopeAsync(m_root, "main", new DiffLensScope("unstaged", "Unstaged"));
+        var workingFile = unstaged.Entries.Single(e => e.Path == "sample.cs").File;
+        Assert.That(workingFile.Baseline, Is.EqualTo("staged version\n"));
+        Assert.That(workingFile.WorkingText, Is.EqualTo("working version\n"));
+        Assert.That(workingFile.CanEdit, Is.True);
+        Assert.That(unstaged.Entries.Select(e => e.Path), Does.Contain("new.glsl"));
+        await Git("commit", "-m", "Staged snapshot");
+        var sha = (await m_git.RunAsync(m_root, "rev-parse", "HEAD")).StandardOutput.Trim();
+        var commit = await loader.LoadScopeAsync(m_root, "main", new DiffLensScope(sha, "Commit", sha));
+        Assert.That(commit.Entries.Single().File.WorkingText, Is.EqualTo("staged version\n"));
+        Assert.That(commit.Entries.Single().File.CanEdit, Is.False);
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo("working version\n"));
+        catalog = await loader.GetScopesAsync(m_root, "main");
+        Assert.That(catalog.Scopes.Where(s => s.Commit != null).Select(s => s.Commit), Is.EqualTo(new[] { sha }));
+        Assert.That(catalog.Scopes.Select(s => s.Id), Does.Not.Contain("staged").And.Not.Contain("unstaged"));
+        catalog = await loader.GetScopesAsync(m_root, "main", new DiffLensScope("staged", "Staged"));
+        Assert.That(catalog.Scopes.Select(s => s.Id), Does.Contain("staged"));
+        Assert.That((await loader.LoadScopeAsync(m_root, "main", new DiffLensScope("staged", "Staged"))).Entries, Is.Empty);
+    }
+
+    [Test]
+    public async Task CommitScopeHandlesRenamesDeletionsAndRootCommitsAsync()
+    {
+        var loader = new DiffLensFileLoader();
+        var rootSha = (await m_git.RunAsync(m_root, "rev-parse", "HEAD")).StandardOutput.Trim();
+        var rootCommit = await loader.LoadScopeAsync(m_root, "main", new DiffLensScope(rootSha, "Root", rootSha));
+        Assert.That(rootCommit.Entries.Single().File.Baseline, Is.Empty);
+        Assert.That(rootCommit.Entries.Single().File.WorkingText, Does.Contain("class Sample"));
+        await Git("mv", "sample.cs", "renamed.cpp");
+        await Git("commit", "-m", "Rename");
+        var renameSha = (await m_git.RunAsync(m_root, "rev-parse", "HEAD")).StandardOutput.Trim();
+        var rename = await loader.LoadScopeAsync(m_root, "main", new DiffLensScope(renameSha, "Rename", renameSha));
+        Assert.That(rename.Entries.Single().Path, Is.EqualTo("renamed.cpp"));
+        Assert.That(rename.Entries.Single().File.Baseline, Is.EqualTo(rename.Entries.Single().File.WorkingText));
+        await Git("rm", "renamed.cpp");
+        var deletion = await loader.LoadScopeAsync(m_root, "main", new DiffLensScope("staged", "Staged"));
+        Assert.That(deletion.Entries.Single().File.WorkingText, Is.Empty);
+        Assert.That(deletion.Entries.Single().File.IsReadOnly, Is.True);
+        Assert.That(deletion.Entries.Single().File.Baseline, Does.Contain("class Sample"));
+    }
+
+    [Test]
+    public async Task CleanRepositoryHidesLocalScopesButKeepsAnExplicitSelectionAsync()
+    {
+        var loader = new DiffLensFileLoader();
+        var catalog = await loader.GetScopesAsync(m_root, "main");
+        Assert.That(catalog.Scopes.Select(s => s.Id), Is.EqualTo(new[] { "branch" }));
+        catalog = await loader.GetScopesAsync(m_root, "main", new DiffLensScope("local", "All local changes"));
+        Assert.That(catalog.Scopes.Select(s => s.Id), Does.Contain("local"));
+    }
+
     private sealed class LoadProgress(Action<DiffLensLoadProgress> report) : IProgress<DiffLensLoadProgress>
     {
         public void Report(DiffLensLoadProgress value) => report(value);

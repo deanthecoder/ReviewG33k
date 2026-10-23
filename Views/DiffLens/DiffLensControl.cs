@@ -137,18 +137,18 @@ internal sealed class DiffLensControl : Control
 
     private int FindingLine(CodeSmellFinding finding) => FindingLineResolver?.Invoke(finding) ?? finding.LineNumber;
 
-    public void SetFiles(string rootName, IReadOnlyList<DiffLensCell> cells)
+    public void SetFiles(string rootName, IReadOnlyList<DiffLensCell> cells, bool preserveReview = true)
     {
         m_textCache.Clear();
         m_codeCache.Clear();
         var previousCells = m_cells.ToDictionary(cell => cell.Entry.Path);
         foreach (var cell in cells)
-            if (previousCells.TryGetValue(cell.Entry.Path, out var previous))
+            if (preserveReview && previousCells.TryGetValue(cell.Entry.Path, out var previous))
                 cell.RestoreReviewState(previous);
         m_previousDetail = null;
         m_cells = cells;
         m_root = DiffLensLayout.Build(rootName, cells);
-        SelectedPath = cells.FirstOrDefault(cell => cell.Entry.File?.CanEdit == true)?.Entry.Path;
+        SelectedPath = cells.FirstOrDefault(cell => cell.Entry.File != null)?.Entry.Path;
         Fit(false);
     }
 

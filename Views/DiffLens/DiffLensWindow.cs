@@ -20,6 +20,8 @@ using Material.Icons;
 using Material.Icons.Avalonia;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
+using System.Globalization;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -80,6 +82,23 @@ internal sealed class DiffLensWindow : Window
     private bool m_closeAfterLoad;
     private bool m_hasLoadedSnapshot;
 
+    private readonly ComboBox m_scopePicker = new() { MinWidth = 360, MaxWidth = 760, MinHeight = 36, Height = 36, VerticalContentAlignment = VerticalAlignment.Center };
+    private readonly TextBlock m_scopeNote = new() { VerticalAlignment = VerticalAlignment.Center, Foreground = Brush.Parse("#E9BC70") };
+    private readonly Grid m_surface = new();
+    private Control m_findingsPanel;
+    private DiffLensScope m_scope;
+    private string m_scopeTarget;
+    private bool m_settingScope;
+
+    private bool ScopeMatchesReview => m_review != null && m_scope?.Id == (m_reviewMode switch
+    {
+        CommandLineReviewMode.Committed => "branch",
+        CommandLineReviewMode.Tree => "tree",
+        _ => "local"
+    });
+
+    private string ViewHint => m_scope?.IsReadOnly == true ? "Double-click to inspect · Read-only snapshot" : CanvasStatusHint;
+
     private const string CanvasStatusHint = "Double-click to edit";
 
     private static string NavigationHint => OperatingSystem.IsMacOS()
@@ -101,21 +120,21 @@ internal sealed class DiffLensWindow : Window
         m_targetBranch = Argument(args, "--base") ?? "HEAD";
         m_relativePath = Argument(args, "--file");
         Title = $"ReviewG33k DiffLens — {m_repositoryPath} ({m_targetBranch})";
-        var root = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
-        var surface = new Grid();
+        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
+        var surface = m_surface;
         surface.Children.Add(m_canvas);
         surface.Children.Add(m_editor);
         if (m_review?.Findings.Count > 0)
         {
             surface.ColumnDefinitions = new ColumnDefinitions("*,340");
-            var findingsPanel = CreateFindingsPanel();
+            var findingsPanel = m_findingsPanel = CreateFindingsPanel();
             Grid.SetColumn(findingsPanel, 1);
             surface.Children.Add(findingsPanel);
         }
         m_canvas.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(180) } };
         m_editor.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(180) } };
         m_editor.Opacity = 0;
-        Grid.SetRow(surface, 0);
+        Grid.SetRow(surface, 1);
         root.Children.Add(surface);
         var footer = new DockPanel { Margin = new Thickness(12, 8) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -131,7 +150,48 @@ internal sealed class DiffLensWindow : Window
         ToolTip.SetTip(m_refresh, "Refresh files from disk (F5)");
         Avalonia.Automation.AutomationProperties.SetName(m_refresh, "Refresh files from disk");
         m_refresh.Click += async (_, _) => await LoadSnapshotAsync();
-        actions.Children.Add(m_refresh);
+        var comparisons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(12, 8) };
+        m_scopePicker.SelectionBoxItemTemplate = new FuncDataTemplate<DiffLensScope>((scope, _) => new TextBlock
+        {
+            Text = scope?.Label, FontSize = 13, FontWeight = FontWeight.SemiBold,
+            Foreground = Brush.Parse("#E9BC70"), TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        m_scopePicker.ItemTemplate = new FuncDataTemplate<DiffLensScope>((scope, _) =>
+        {
+            if (scope == null)
+                return new TextBlock();
+            var item = new StackPanel { Spacing = 3, Margin = new Thickness(0, 3), MaxWidth = 680 };
+            if (scope.Commit != null)
+            {
+                var date = DateTime.TryParseExact(scope.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var parsed) ? parsed.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) : scope.Date;
+                item.Children.Add(new TextBlock
+                {
+                    Text = $"{date}  ·  {scope.ShortHash ?? scope.Commit[..Math.Min(7, scope.Commit.Length)]}",
+                    FontSize = 11, Foreground = Brush.Parse("#91A3B8")
+                });
+            }
+            item.Children.Add(new TextBlock
+            {
+                Text = scope.Label, FontSize = 13, FontWeight = FontWeight.SemiBold,
+                Foreground = Brush.Parse("#E9BC70"), TextTrimming = TextTrimming.CharacterEllipsis
+            });
+            ToolTip.SetTip(item, scope.Commit == null ? scope.Label : $"{scope.Label}\n{scope.Commit}");
+            return item;
+        });
+        comparisons.Children.Add(m_scopePicker);
+        m_refresh.Height = 36;
+        m_refresh.VerticalAlignment = VerticalAlignment.Center;
+        comparisons.Children.Add(m_refresh);
+        comparisons.Children.Add(m_scopeNote);
+        root.Children.Add(comparisons);
+        ToolTip.SetTip(m_scopePicker, "Choose the Git comparison. Commit views compare against their first parent.");
+        m_scopePicker.SelectionChanged += async (_, _) =>
+        {
+            if (!m_settingScope && m_scopePicker.SelectedItem is DiffLensScope selected && selected.Id != m_scope?.Id)
+                await LoadSnapshotAsync(selected);
+        };
         DockPanel.SetDock(actions, Dock.Left);
         actions.Margin = new Thickness(0, 0, 12, 0);
         m_status.VerticalAlignment = VerticalAlignment.Center;
@@ -146,7 +206,7 @@ internal sealed class DiffLensWindow : Window
         ToolTip.SetTip(m_cancelLoad, "Cancel loading");
         Avalonia.Automation.AutomationProperties.SetName(m_cancelLoad, "Cancel loading");
         m_cancelLoad.Click += (_, _) => m_loadProgress?.Cancel();
-        Grid.SetRow(footer, 1);
+        Grid.SetRow(footer, 2);
         root.Children.Add(footer);
         Content = root;
         m_canvas.FindingLineResolver = finding => m_findingActions.TryGetValue(finding.FilePath, out var actions)
@@ -168,7 +228,7 @@ internal sealed class DiffLensWindow : Window
         };
         m_editor.TextChanged += (_, _) =>
         {
-            if (m_settingText || m_file == null)
+            if (m_settingText || m_file?.CanEdit != true)
                 return;
             m_autoSave.Stop();
             m_autoSave.Start();
@@ -407,7 +467,7 @@ internal sealed class DiffLensWindow : Window
             SelectFile(m_canvas.SelectedPath);
     }
 
-    private async Task LoadSnapshotAsync()
+    private async Task LoadSnapshotAsync(DiffLensScope requested = null)
     {
         if (m_loading || m_isClosing || m_isClosed)
             return;
@@ -415,6 +475,9 @@ internal sealed class DiffLensWindow : Window
         m_autoSave.Stop();
         if (!await SaveAsync())
         {
+            m_settingScope = true;
+            m_scopePicker.SelectedItem = (m_scopePicker.ItemsSource as IEnumerable<DiffLensScope>)?.FirstOrDefault(s => s.Id == m_scope?.Id);
+            m_settingScope = false;
             SetBusy(false);
             return;
         }
@@ -444,7 +507,34 @@ internal sealed class DiffLensWindow : Window
         m_status.Text = "Finding files…";
         try
         {
-            var changeSet = await Task.Run(() => new DiffLensFileLoader(cancellation.Token, progress).LoadReviewSetAsync(m_repositoryPath, m_targetBranch, m_reviewMode, m_relativePath));
+            var result = await Task.Run(async () =>
+            {
+                var loader = new DiffLensFileLoader(cancellation.Token, progress);
+                var retained = requested ?? m_scope;
+                if (retained == null && (m_review != null || m_reviewMode != CommandLineReviewMode.Uncommitted))
+                    retained = m_reviewMode switch
+                    {
+                        CommandLineReviewMode.Tree => new DiffLensScope("tree", "Entire repository"),
+                        CommandLineReviewMode.Committed => new DiffLensScope("branch", "Entire branch"),
+                        _ => new DiffLensScope("local", "All local changes")
+                    };
+                var catalog = await loader.GetScopesAsync(m_repositoryPath, m_scopeTarget ?? m_targetBranch, retained);
+                if (m_review != null || m_reviewMode == CommandLineReviewMode.Tree)
+                {
+                    var original = m_reviewMode switch
+                    {
+                        CommandLineReviewMode.Tree => new DiffLensScope("tree", "Entire repository"),
+                        CommandLineReviewMode.Committed => new DiffLensScope("branch", "Entire branch"),
+                        _ => new DiffLensScope("local", "All local changes")
+                    };
+                    if (catalog.Scopes.All(s => s.Id != original.Id))
+                        catalog.Scopes.Insert(0, original);
+                }
+                var scope = retained == null ? catalog.Scopes.First() : catalog.Scopes.First(s => s.Id == retained.Id);
+                var loaded = await loader.LoadScopeAsync(m_repositoryPath, catalog.Target, scope, m_relativePath);
+                return (Catalog: catalog, Scope: scope, ChangeSet: loaded);
+            });
+            var changeSet = result.ChangeSet;
             var cells = await Task.Run(() =>
             {
                 var prepared = new List<DiffLensCell>();
@@ -457,6 +547,22 @@ internal sealed class DiffLensWindow : Window
                 return prepared.ToArray();
             }, cancellation.Token);
             cancellation.Token.ThrowIfCancellationRequested();
+            var sameScope = m_scope?.Id == result.Scope.Id;
+            m_scope = result.Scope;
+            m_scopeTarget = result.Catalog.Target;
+            m_settingScope = true;
+            m_scopePicker.ItemsSource = result.Catalog.Scopes;
+            m_scopePicker.SelectedItem = result.Catalog.Scopes.First(s => s.Id == m_scope.Id);
+            m_settingScope = false;
+            m_refresh.IsVisible = m_scope.Commit == null;
+            Title = $"ReviewG33k DiffLens — {m_repositoryPath} ({m_scope.Label})";
+            if (m_findingsPanel != null)
+            {
+                m_findingsPanel.IsVisible = ScopeMatchesReview;
+                m_surface.ColumnDefinitions = new ColumnDefinitions(ScopeMatchesReview ? "*,340" : "*");
+            }
+            m_scopeNote.Text = m_review?.Findings.Count > 0 && !ScopeMatchesReview
+                ? "Findings belong to the original review comparison" : string.Empty;
             m_files.Clear();
             m_documents.Clear();
             m_findingActions.Clear();
@@ -471,11 +577,11 @@ internal sealed class DiffLensWindow : Window
             m_canvas.Opacity = 1;
             m_canvas.IsHitTestVisible = true;
             foreach (var cell in cells)
-                cell.Findings = m_review?.FindingsFor(changeSet.Root, m_targetBranch, m_reviewMode, cell.Entry.Path) ?? [];
+                cell.Findings = ScopeMatchesReview ? m_review.FindingsFor(changeSet.Root, m_targetBranch, m_reviewMode, cell.Entry.Path) : [];
             m_canvas.RepositoryRootPath = changeSet.Root;
-            m_canvas.SetFiles(Path.GetFileName(changeSet.Root), cells);
+            m_canvas.SetFiles(Path.GetFileName(changeSet.Root), cells, preserveReview: sameScope);
             m_hasLoadedSnapshot = true;
-            m_status.Text = cells.Length == 0 ? "No files to review." : CanvasStatusHint;
+            m_status.Text = cells.Length == 0 ? $"No files in {m_scope.Label}." : ViewHint;
         }
         catch (OperationCanceledException)
         {
@@ -488,6 +594,9 @@ internal sealed class DiffLensWindow : Window
         }
         finally
         {
+            m_settingScope = true;
+            m_scopePicker.SelectedItem = (m_scopePicker.ItemsSource as IEnumerable<DiffLensScope>)?.FirstOrDefault(s => s.Id == m_scope?.Id);
+            m_settingScope = false;
             m_loadCancellation = null;
             m_loadProgress = null;
             m_loadBar.IsVisible = m_cancelLoad.IsVisible = false;
@@ -499,9 +608,10 @@ internal sealed class DiffLensWindow : Window
 
     private void ToggleEditor(int? line = null)
     {
-        if (m_file?.CanEdit != true || m_loading || m_isClosing || m_isClosed)
+        if (m_file == null || (!m_file.CanEdit && !m_file.IsReadOnly) || m_loading || m_isClosing || m_isClosed)
             return;
         m_isEditing = !m_isEditing;
+        m_editor.IsReadOnly = !m_file.CanEdit;
         var version = ++m_transitionVersion;
         m_editor.IsVisible = true;
         m_canvas.IsVisible = true;
@@ -526,13 +636,13 @@ internal sealed class DiffLensWindow : Window
                     m_editor.ScrollToLine(targetLine);
                 }
             }, DispatcherPriority.Loaded);
-            m_status.Text = "Edits save automatically · Esc to return";
+            m_status.Text = m_file.CanEdit ? "Edits save automatically · Esc to return" : "Read-only snapshot · Esc to return";
         }
         else
         {
             m_canvas.SetFile(m_file.RelativePath, m_file.Baseline, m_editor.Text, false);
             m_canvas.Focus();
-            m_status.Text = CanvasStatusHint;
+            m_status.Text = ViewHint;
             m_autoSave.Stop();
             _ = SaveAsync();
         }
@@ -558,6 +668,8 @@ internal sealed class DiffLensWindow : Window
             foreach (var (path, document) in m_documents.ToArray())
             {
                 var file = m_files[path];
+                if (!file.CanEdit)
+                    continue;
                 while (document.Text != file.WorkingText)
                 {
                     await file.SaveAsync(document.Text);
@@ -579,8 +691,9 @@ internal sealed class DiffLensWindow : Window
     {
         m_loading = busy;
         m_refresh.IsEnabled = !busy;
+        m_scopePicker.IsEnabled = !busy;
         m_canvas.IsHitTestVisible = !busy && !m_isEditing;
-        m_editor.IsReadOnly = busy;
+        m_editor.IsReadOnly = busy || m_file?.CanEdit != true;
         UpdateView();
     }
 

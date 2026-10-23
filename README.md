@@ -54,11 +54,12 @@ Explore the files from your selected local review mode on a zoomable folder canv
 ![DiffLens canvas with a selected file and issue markers](img/DiffLens.png)
 
 - **Navigate:** scroll or drag to pan. On Mac, pinch or **⌘+scroll** to zoom; **Ctrl+wheel** also works. **Shift+scroll** moves long lines horizontally. Click a folder label to fit that group, or use **Fit all** (middle-click also works).
+- **Scope:** the top-left picker switches between all local changes, staged changes (HEAD to index), unstaged changes (index to disk, including untracked files), the entire branch (merge base to disk), and individual commits (first-parent comparison). Staged/unstaged choices appear when both exist; an explicitly selected scope remains available if it becomes empty. Commit entries show subject, hash, and date. The original whole-repository review scope remains available when opened from that mode.
 - **Compare:** use each file's corner buttons, or **U** / **S**, to switch between unified and side-by-side diffs. The selected file has an amber border and header.
-- **Edit:** double-click a line to open its working-file editor; **Esc** returns to the canvas. Edits and undo/redo save automatically, retaining encoding, line endings, and each file's undo history. Saves refuse to overwrite external changes and retain unsaved edits if saving fails.
+- **Edit:** double-click a line to open its working-file editor (staged and commit snapshots open read-only); **Esc** returns to the canvas. Edits and undo/redo save automatically, retaining encoding, line endings, and each file's undo history. Saves refuse to overwrite external changes and retain unsaved edits if saving fails.
 - **Act on findings:** run a local review first, then open DiffLens from the main window or **Open in DiffLens** in Review Results. The latter includes the ticked findings. Hover an amber margin marker for its issue text, or right-click a marker or finding to **Copy fix instructions** or **Add TODO above this line**. TODO insertion writes an undoable C# comment containing the rule ID and issue message; it avoids duplicates and refuses changed or deleted target lines.
 
-The view loads once when opened. Reopen it to load fresh files, and rerun Review to update findings after edits. DiffLens does not run AI fixes itself. Pull-request findings are not currently integrated.
+Use **Refresh** or **F5** to reload local comparisons; immutable commit views hide the refresh button. Findings are shown only for the original review comparison, and return when you switch back. Rerun Review to update findings after edits. DiffLens does not run AI fixes itself. Pull-request findings are not currently integrated.
 
 Launch directly with `ReviewG33k --difflens --repo <path>` for uncommitted changes, or add `--base main` for a branch comparison. Use `--file <relative-path>` to restrict the view to one reviewable file.
 

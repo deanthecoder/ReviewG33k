@@ -28,8 +28,9 @@ internal sealed class DiffLensFile
     private readonly Encoding m_encoding;
     private readonly byte[] m_preamble;
 
-    public DiffLensFile(string fullPath, string relativePath, string baseRevision, string baseline, byte[] diskBytes)
+    public DiffLensFile(string fullPath, string relativePath, string baseRevision, string baseline, byte[] diskBytes, bool readOnly = false)
     {
+        IsReadOnly = readOnly;
         FullPath = fullPath;
         RelativePath = relativePath;
         BaseRevision = baseRevision;
@@ -49,10 +50,13 @@ internal sealed class DiffLensFile
     public string BaseRevision { get; }
     public string Baseline { get; }
     public string WorkingText { get; private set; }
-    public bool CanEdit => m_diskBytes != null;
+    public bool IsReadOnly { get; }
+    public bool CanEdit => m_diskBytes != null && !IsReadOnly;
 
     public async Task SaveAsync(string text)
     {
+        if (IsReadOnly)
+            throw new InvalidOperationException("This Git snapshot is read-only.");
         if (!CanEdit)
             throw new InvalidOperationException("The working file is deleted. This prototype does not recreate deleted files.");
 
