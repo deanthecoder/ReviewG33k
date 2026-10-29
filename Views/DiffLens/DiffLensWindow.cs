@@ -145,7 +145,7 @@ internal sealed class DiffLensWindow : Window
                 ToggleEditor();
             m_canvas.Fit();
         };
-        ToolTip.SetTip(fit, "Fit all changed files (middle-click).");
+        ToolTip.SetTip(fit, "Fit all changed files.");
         actions.Children.Add(fit);
         ToolTip.SetTip(m_refresh, "Refresh files from disk (F5)");
         Avalonia.Automation.AutomationProperties.SetName(m_refresh, "Refresh files from disk");

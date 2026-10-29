@@ -8,35 +8,58 @@ namespace ReviewG33k.Tests;
 [TestFixture]
 public sealed class DiffLensNavigationTests
 {
+    private static readonly System.Reflection.BindingFlags Private = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+    private static T Field<T>(DiffLensControl canvas, string name) => (T)typeof(DiffLensControl).GetField(name, Private)!.GetValue(canvas)!;
+
+    private static void Click(DiffLensControl canvas, Point point, bool middle = false, int count = 1)
+    {
+        var pointer = new Pointer(1, PointerType.Mouse, true);
+        canvas.RaiseEvent(new PointerPressedEventArgs(canvas, pointer, canvas, point, 0,
+            new PointerPointProperties(middle ? RawInputModifiers.MiddleMouseButton : RawInputModifiers.LeftMouseButton,
+                middle ? PointerUpdateKind.MiddleButtonPressed : PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, count));
+        canvas.RaiseEvent(new PointerReleasedEventArgs(canvas, pointer, canvas, point, 0,
+            new PointerPointProperties(), KeyModifiers.None, middle ? MouseButton.Middle : MouseButton.Left));
+    }
+
     [TestCase(true)]
     [TestCase(false)]
-    public void MiddleClickFitsFileHeaderOrWholeCanvas(bool header)
+    public void OnlyLeftClickFitsFileHeaderAndResizePreservesFileFocus(bool middle)
     {
         var canvas = new DiffLensControl();
         canvas.Measure(new Size(1200, 800));
         canvas.Arrange(new Rect(0, 0, 1200, 800));
-        var cells = new[]
-        {
-            new DiffLensCell(new DiffLensEntry("first.cpp", null, "preview")),
-            new DiffLensCell(new DiffLensEntry("second.cpp", null, "preview"))
-        };
+        var cells = new[] { new DiffLensCell(new DiffLensEntry("first.cpp", null, "preview")),
+            new DiffLensCell(new DiffLensEntry("second.cpp", null, "preview")) };
         canvas.SetFiles("repo", cells);
-        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
-        var offset = (Vector)typeof(DiffLensControl).GetField("m_offset", flags)!.GetValue(canvas)!;
-        var point = (cells[1].Position + new Vector(100, header ? 20 : 100)) * canvas.Zoom + offset;
-        var pointer = new Pointer(1, PointerType.Mouse, true);
-        canvas.RaiseEvent(new PointerPressedEventArgs(canvas, pointer, canvas, point, 0,
-            new PointerPointProperties(Avalonia.Input.RawInputModifiers.MiddleMouseButton, PointerUpdateKind.MiddleButtonPressed), KeyModifiers.None));
-        canvas.RaiseEvent(new PointerReleasedEventArgs(canvas, pointer, canvas, point, 0,
-            new PointerPointProperties(), KeyModifiers.None, MouseButton.Middle));
-        var target = (double)typeof(DiffLensControl).GetField("m_fitEndZoom", flags)!.GetValue(canvas)!;
-        if (header)
-        {
-            Assert.That(canvas.SelectedPath, Is.EqualTo("second.cpp"));
-            Assert.That(target, Is.EqualTo(Math.Min(1140 / cells[1].Bounds.Width, 740 / cells[1].Bounds.Height)).Within(0.001));
-        }
-        else
-            Assert.That(target, Is.EqualTo(canvas.Zoom).Within(0.001));
+        var point = (cells[1].Position + new Vector(100, 20)) * canvas.Zoom + Field<Vector>(canvas, "m_offset");
+        Click(canvas, point, middle);
+        Assert.That(Field<string>(canvas, "m_fitFilePath"), middle ? Is.Null : Is.EqualTo("second.cpp"));
+        canvas.Measure(new Size(900, 600));
+        canvas.Arrange(new Rect(0, 0, 900, 600));
+        Assert.That(Field<Avalonia.Threading.DispatcherTimer>(canvas, "m_resizeTimer").IsEnabled, Is.True);
+        typeof(DiffLensControl).GetMethod("RefitAfterResize", Private)!.Invoke(canvas, null);
+        var target = middle ? Field<DiffLensFolder>(canvas, "m_root").Bounds : cells[1].Bounds;
+        Assert.That(Field<double>(canvas, "m_fitEndZoom"), Is.EqualTo(Math.Min(middle ? 0.72 : 2.5,
+            Math.Min(840 / target.Width, 540 / target.Height))).Within(0.001));
+        canvas.StopAnimations();
+    }
+
+    [Test]
+    public void BackgroundDoubleClickFitsInnermostGroupOrEverything()
+    {
+        var canvas = new DiffLensControl();
+        canvas.Measure(new Size(1200, 800));
+        canvas.Arrange(new Rect(0, 0, 1200, 800));
+        canvas.SetFiles("repo", [new DiffLensCell(new DiffLensEntry("src/nested/file.cpp", null, "preview"))]);
+        var root = Field<DiffLensFolder>(canvas, "m_root");
+        var nested = root.Descendants.Single(f => f.RelativePath == "src/nested");
+        var point = (nested.Bounds.BottomRight - new Vector(2, 2)) * canvas.Zoom + Field<Vector>(canvas, "m_offset");
+        Click(canvas, point, count: 2);
+        Assert.That(Field<string>(canvas, "m_fitFolderPath"), Is.EqualTo("src/nested"));
+        typeof(DiffLensControl).GetMethod("RefitAfterResize", Private)!.Invoke(canvas, null);
+        Assert.That(Field<string>(canvas, "m_fitFolderPath"), Is.EqualTo("src/nested"));
+        Click(canvas, new Point(-10, -10), count: 2);
+        Assert.That(Field<string>(canvas, "m_fitFolderPath"), Is.EqualTo(root.RelativePath));
         canvas.StopAnimations();
     }
 

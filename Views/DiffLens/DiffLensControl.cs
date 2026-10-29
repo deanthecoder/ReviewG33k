@@ -69,8 +69,9 @@ internal sealed class DiffLensControl : Control
     public string SelectedPath { get; private set; }
     private Vector m_offset = new(60, 45);
     private Point? m_drag;
-    private Point? m_middleClickOrigin;
-    private DiffLensCell m_middleClickFile;
+    private string m_fitFilePath;
+    private string m_fitFolderPath;
+    private readonly DispatcherTimer m_resizeTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private double m_zoom = 0.6;
     private double m_horizontalScroll;
     private string m_hoverHint;
@@ -93,6 +94,13 @@ internal sealed class DiffLensControl : Control
         };
         m_createIconPen = key => new ImmutablePen(key.Accent ? m_accentBrush : m_muted, key.Thickness);
         m_createCode = CreateCodeText;
+        m_resizeTimer.Tick += (_, _) => RefitAfterResize();
+        SizeChanged += (_, _) =>
+        {
+            m_resizeTimer.Stop();
+            if (m_root != null && Bounds.Width > 0 && Bounds.Height > 0)
+                m_resizeTimer.Start();
+        };
         ClipToBounds = true;
         Focusable = true;
         // The whole canvas is one control; manage hover as the pointer crosses drawn rows.
@@ -140,6 +148,7 @@ internal sealed class DiffLensControl : Control
 
     public void StopAnimations()
     {
+        m_resizeTimer.Stop();
         HideHoverHint();
         m_fitTimer.Stop();
         m_fadeTimer.Stop();
@@ -192,10 +201,33 @@ internal sealed class DiffLensControl : Control
             FitBounds(m_root, animate);
     }
 
-    private void FitBounds(DiffLensFolder folder, bool animate = true) => FitBounds(folder.Bounds, animate);
+    private void FitBounds(DiffLensFolder folder, bool animate = true)
+    {
+        m_fitFilePath = null;
+        m_fitFolderPath = folder.RelativePath;
+        FitBounds(folder.Bounds, animate);
+    }
+
+    private void FitFile(DiffLensCell cell)
+    {
+        m_fitFilePath = cell.Entry.Path;
+        m_fitFolderPath = null;
+        FitBounds(cell.Bounds, maximumZoom: 2.5);
+    }
+
+    private void RefitAfterResize()
+    {
+        m_resizeTimer.Stop();
+        var cell = m_cells.FirstOrDefault(item => item.Entry.Path == m_fitFilePath);
+        if (cell != null)
+            FitFile(cell);
+        else if (m_root != null)
+            FitBounds(m_root.Descendants.FirstOrDefault(folder => folder.RelativePath == m_fitFolderPath) ?? m_root);
+    }
 
     private void FitBounds(Rect bounds, bool animate = true, double maximumZoom = 0.72)
     {
+        m_resizeTimer.Stop();
         HideHoverHint();
         var zoom = Math.Clamp(Math.Min((Bounds.Width - 60) / bounds.Width, (Bounds.Height - 60) / bounds.Height), 0.001, maximumZoom);
         var offset = new Vector((Bounds.Width - bounds.Width * zoom) / 2 - bounds.X * zoom,
@@ -692,6 +724,14 @@ internal sealed class DiffLensControl : Control
                     e.Handled = true;
                     return;
                 }
+                if (local.Y < cell.Position.Y + HeaderHeight)
+                {
+                    m_drag = null;
+                    e.Pointer.Capture(null);
+                    FitFile(cell);
+                    e.Handled = true;
+                    return;
+                }
                 if (e.ClickCount == 2)
                 {
                     m_drag = null;
@@ -704,6 +744,18 @@ internal sealed class DiffLensControl : Control
             }
             else
             {
+                if (e.ClickCount == 2)
+                {
+                    var group = m_root?.Descendants.Reverse().FirstOrDefault(item => item.Bounds.Contains(local));
+                    m_drag = null;
+                    e.Pointer.Capture(null);
+                    if (group != null)
+                        FitBounds(group);
+                    else
+                        Fit();
+                    e.Handled = true;
+                    return;
+                }
                 var folder = m_root?.Descendants.Reverse().FirstOrDefault(item => FolderLabel(item).Contains(e.GetPosition(this)));
                 if (folder != null)
                 {
@@ -719,8 +771,6 @@ internal sealed class DiffLensControl : Control
         if (e.GetCurrentPoint(this).Properties.IsMiddleButtonPressed || e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             m_drag = e.GetPosition(this);
-            m_middleClickOrigin = e.GetCurrentPoint(this).Properties.IsMiddleButtonPressed ? m_drag : null;
-            m_middleClickFile = m_middleClickOrigin != null && cell != null && local.Y < cell.Position.Y + HeaderHeight ? cell : null;
             e.Pointer.Capture(this);
             e.Handled = true;
         }
@@ -762,13 +812,6 @@ internal sealed class DiffLensControl : Control
             return;
         }
         var point = e.GetPosition(this);
-        if (m_middleClickOrigin is { } origin)
-        {
-            // Ignore small hand movements when clicking the wheel.
-            if (((Vector)(point - origin)).Length <= 4)
-                return;
-            m_middleClickOrigin = null;
-        }
         m_offset += point - start;
         m_drag = point;
         InvalidateVisual();
@@ -788,25 +831,8 @@ internal sealed class DiffLensControl : Control
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
-        var fit = e.InitialPressMouseButton == MouseButton.Middle &&
-                  m_middleClickOrigin is { } origin && ((Vector)(e.GetPosition(this) - origin)).Length <= 4;
-        var file = m_middleClickFile;
         m_drag = null;
-        m_middleClickOrigin = null;
-        m_middleClickFile = null;
         e.Pointer.Capture(null);
-        if (fit)
-        {
-            if (file != null)
-            {
-                SelectedPath = file.Entry.Path;
-                ViewChanged?.Invoke(this, EventArgs.Empty);
-                FitBounds(file.Bounds, maximumZoom: 2.5);
-            }
-            else
-                Fit();
-            e.Handled = true;
-        }
         // Control raises ContextRequested here for a right-button release.
         base.OnPointerReleased(e);
     }
@@ -828,8 +854,6 @@ internal sealed class DiffLensControl : Control
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         base.OnPointerCaptureLost(e);
-        m_middleClickFile = null;
         m_drag = null;
-        m_middleClickOrigin = null;
     }
 }
